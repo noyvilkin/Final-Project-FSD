@@ -15,6 +15,7 @@ const qstashClient = QSTASH_TOKEN ? new Client({ token: QSTASH_TOKEN }) : null;
 const TOPIC_ROUTES: Record<string, string> = {
   "file-ingested": "/api/v1/internal/extract-text",
   "analysis-requested": "/api/v1/internal/analyze-ai",
+  "results-generated": "/api/v1/internal/generate-results",
 };
 
 export interface PublishResult {

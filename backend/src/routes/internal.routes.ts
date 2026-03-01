@@ -68,4 +68,35 @@ router.post(
   })
 );
 
+router.post(
+  "/generate-results",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { userId, analysisId, resultType } = req.body as {
+      userId?: string;
+      analysisId?: string;
+      resultType?: string;
+    };
+
+    appLogger.info("[internal] generate-results invoked", {
+      userId,
+      analysisId,
+      resultType,
+    });
+
+    if (!userId || !analysisId) {
+      res.status(400).json({ error: "userId and analysisId are required" });
+      return;
+    }
+
+    // TODO: compile final results, store in DB, notify user
+    appLogger.info("[internal] Results generation started", {
+      userId,
+      analysisId,
+      resultType,
+    });
+
+    res.status(200).json({ status: "accepted", analysisId });
+  })
+);
+
 export default router;
