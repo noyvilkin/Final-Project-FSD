@@ -1,0 +1,12 @@
+import { Routes, Route, Navigate } from "react-router-dom";
+import MyProfile from "../pages/MyProfile";
+
+export default function AppRouter() {
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/profile" replace />} />
+      <Route path="/profile" element={<MyProfile />} />
+      <Route path="*" element={<div>404</div>} />
+    </Routes>
+  );
+}
