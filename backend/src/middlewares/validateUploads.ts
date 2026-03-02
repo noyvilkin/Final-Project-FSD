@@ -3,9 +3,9 @@ import type { Request, Response, NextFunction } from "express";
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
 const allowedMimeByField: Record<string, string[]> = {
-  documents: ["application/pdf"],
-  assignments: ["application/zip", "application/x-zip-compressed"],
-  media: ["image/*", "video/*"],
+  resumes: ["application/pdf"],
+  assignments: ["application/zip", "application/x-zip-compressed", "application/pdf"],
+  interviews: ["image/*", "video/*", "application/pdf"],
 };
 
 const isAllowedMime = (mimeType: string, allowed: string[]) => {
