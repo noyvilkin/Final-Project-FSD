@@ -1,7 +1,7 @@
 import "dotenv/config";
 import app from "./app.js";
-import { connectToDatabase } from "./services/database.js";
-import { appLogger } from "./services/logger.js";
+import { connectToDatabase } from "./common/services/database.js";
+import { appLogger } from "./common/services/logger.js";
 
 const port = Number(process.env.PORT) || 4000;
 

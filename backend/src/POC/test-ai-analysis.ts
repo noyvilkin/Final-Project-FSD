@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { AIAnalysisService } from "../services/aiAnalysisService.js";
-import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
-import { connectToDatabase } from "../services/database.js";
+import { AIAnalysisService } from "../features/assignment/services/aiAnalysisService.js";
+import { AssignmentFeedback } from "../features/assignment/models/assignmentFeedback.model.js";
+import { connectToDatabase } from "../common/services/database.js";
 
 interface TestAssignmentData {
   requirementsText: string;
