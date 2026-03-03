@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { appLogger } from "./logger.js";
 
-export const connectToDatabase = async () => {
+export const connectToDatabase = async (): Promise<void> => {
   const uri = process.env.MONGODB_URI;
 
   if (!uri) {
