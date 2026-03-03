@@ -49,7 +49,7 @@ export class AIAnalysisService {
       
       this.geminiClient = new GeminiClient({
         apiKey,
-        model: 'gemini-2.5-flash-preview-05-20',
+        model: 'gemini-2.5-flash',
         temperature: 0.3,
         maxOutputTokens: 3072,
         rateLimiter: {

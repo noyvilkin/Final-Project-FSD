@@ -1,4 +1,5 @@
-// @ts-ignore - pdf-parse module compatibility issue
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse');
 import { appLogger } from './logger.js';
 
