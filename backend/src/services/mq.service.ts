@@ -16,6 +16,7 @@ const TOPIC_ROUTES: Record<string, string> = {
   "file-ingested": "/api/v1/internal/extract-text",
   "analysis-requested": "/api/v1/internal/analyze-ai",
   "results-generated": "/api/v1/internal/generate-results",
+  "assignment-analysis": "/api/v1/internal/analyze-assignment",
 };
 
 export interface PublishResult {

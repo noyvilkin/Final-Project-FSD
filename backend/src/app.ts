@@ -12,6 +12,7 @@ import commentRoutes from "./routes/comment_routes.js";
 import postRoutes from "./routes/post_routes.js";
 import uploadRouter from "./routes/upload.js";
 import userRoutes from "./routes/user_routes.js";
+import assignmentRoutes from "./routes/assignment.routes.js";
 import internalRoutes from "./routes/internal.routes.js";
 
 const app: Express = express();
@@ -43,6 +44,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/post", postRoutes);
 app.use("/api/comment", commentRoutes);
+app.use("/api/assignments", assignmentRoutes);
 
 app.use("/api/v1/internal", internalRoutes);
 

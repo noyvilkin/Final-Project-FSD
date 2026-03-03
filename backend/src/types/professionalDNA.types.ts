@@ -38,3 +38,30 @@ export interface IGapAnalysis {
   gaps: string[];
   recommendations: IRecommendation[];
 }
+
+// Assignment-related interfaces
+export interface AssignmentMetadata {
+  detectedLanguage?: string;
+  detectedFrameworks?: string[];
+  projectScope?: 'small' | 'medium' | 'large';
+  totalFiles?: number;
+  totalLines?: number;
+  requirements?: string;
+  sourceCodeContent?: { [filePath: string]: string };
+  extractedRequirements?: string;
+  sourceCodeSummary?: string;
+  scanMetadata?: {
+    frameworks?: string[];
+    buildSystem?: string;
+    hasTests?: boolean;
+    hasDocumentation?: boolean;
+    qualityScore?: number;
+    complexity?: {
+      linesOfCode: number;
+      cyclomaticComplexity: number;
+      testCoverage: number;
+    };
+    projectType?: 'web-frontend' | 'web-backend' | 'mobile' | 'desktop' | 'library' | 'data-science' | 'game' | 'other';
+    recommendations?: string[];
+  };
+}
