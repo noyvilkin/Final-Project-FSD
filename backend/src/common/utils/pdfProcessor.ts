@@ -1,11 +1,9 @@
 import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-let pdfParse = require('pdf-parse');
-// Handle both default export and direct export
-if (pdfParse && typeof pdfParse.default === 'function') {
-  pdfParse = pdfParse.default;
-}
 import { appLogger } from '../services/logger.js';
+
+// Load pdf-parse using require (CommonJS module)
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 
 export interface PdfExtractionResult {
   success: boolean;
