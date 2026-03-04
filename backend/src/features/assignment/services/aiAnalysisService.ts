@@ -118,9 +118,11 @@ export class AIAnalysisService {
       const geminiPayload: GeminiPayload = {
         system_instruction: {
           parts: [{
-            text: `You are an expert programming instructor providing detailed assignment feedback. 
-                   Analyze student code and provide constructive, actionable feedback in JSON format.
-                   Be encouraging but honest about areas for improvement.`
+            text: `You are a strict university professor grading programming assignments. 
+                   Provide honest, critical evaluation. Do NOT be lenient.
+                   When requirements are ignored or core features are missing, assign low scores.
+                   Intentional deviations from specifications result in failing grades.
+                   Always respond with valid JSON only, no markdown code blocks or extra text.`
           }]
         },
         contents: [{
@@ -197,11 +199,24 @@ export class AIAnalysisService {
   }
 
   /**
-   * Builds the complete analysis prompt for Gemini
+   * Builds the complete analysis prompt for Gemini with strict grading criteria
    */
   private static buildAnalysisPrompt(payload: UnifiedAnalysisPayload): string {
     return `
-Please analyze the following programming assignment and provide detailed feedback in JSON format.
+You are a strict university professor grading programming assignments. Provide honest, critical evaluation.
+
+**GRADING CRITERIA (0-100 scale):**
+- 90-100: Excellent - Meets ALL requirements, no significant issues
+- 80-89: Good - Meets most requirements, minor issues only
+- 70-79: Satisfactory - Meets basic requirements, several issues
+- 60-69: Passing - Missing requirements, significant issues
+- Below 60: Failing - Does not meet requirements, critical issues
+
+**IMPORTANT - Penalize heavily for:**
+- Intentional deviations from stated requirements
+- Missing core functionality (persistence, error handling, validation)
+- No tests or documentation
+- Ignoring assignment specifications
 
 **Assignment Requirements:**
 ${payload.requirements}
@@ -215,38 +230,38 @@ ${payload.sourceCode}
 - Total Files: ${payload.metadata.totalFiles || 0}
 - Total Lines: ${payload.metadata.totalLines || 0}
 
-**Required JSON Response Format:**
+**Required JSON Response Format (respond ONLY with valid JSON, no other text):**
 {
   "codeQuality": {
-    "score": 85,
-    "strengths": ["Good variable naming", "Clean function structure"],
-    "weaknesses": ["Missing error handling", "No input validation"]
+    "score": 60,
+    "strengths": ["List actual strengths"],
+    "weaknesses": ["List significant weaknesses"]
   },
   "functionalCorrectness": {
-    "score": 78,
-    "meetsRequirements": true,
-    "missingFeatures": ["Edge case handling", "Input validation"]
+    "score": 50,
+    "meetsRequirements": false,
+    "missingFeatures": ["List missing required features"]
   },
   "bestPractices": {
-    "score": 82,
-    "followsConventions": true,
-    "suggestions": ["Add comments for complex logic", "Use constants for magic numbers"]
+    "score": 55,
+    "followsConventions": false,
+    "suggestions": ["Concrete improvements needed"]
   },
   "overall": {
-    "score": 82,
-    "grade": "B",
-    "summary": "Good implementation with room for improvement in error handling and edge cases."
+    "score": 55,
+    "grade": "F",
+    "summary": "Honest assessment: What's wrong and what needs fixing."
   }
 }
 
-Please provide specific, actionable feedback that will help the student improve their coding skills.
+Grade strictly. Do NOT be generous with intentional deviations from specifications. Failing grades reflect work that ignores requirements.
     `.trim();
   }
 
   /**
-   * Parses the AI response into structured feedback
+   * Parses the AI response into structured feedback (public for reuse in POC/tests)
    */
-  private static parseAIResponse(rawResponse: string): AIAnalysisResult['feedback'] {
+  public static parseAIResponse(rawResponse: string): AIAnalysisResult['feedback'] {
     try {
       // Extract JSON from the response (in case there's extra text)
       const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
