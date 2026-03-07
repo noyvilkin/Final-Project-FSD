@@ -115,6 +115,7 @@ router.post(
           // For now, assume userId is in request context (you may need to add auth middleware)
           // This is a placeholder - you'll need to get the actual user ID from your auth system
           const userId = req.headers['x-user-id'] as string || 'anonymous';
+          const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
           
           const categorizedFiles = AssignmentService.categorizeUploadedFiles(assignmentFiles);
           
@@ -122,7 +123,7 @@ router.post(
             const assignmentResult = await AssignmentService.createAssignment(userId, {
               requirements: categorizedFiles.requirements,
               solution: categorizedFiles.solution
-            });
+            }, notes);
 
             response.assignment = {
               id: assignmentResult.assignmentId,
@@ -139,7 +140,9 @@ router.post(
         } catch (error) {
           appLogger.error('Assignment creation failed during upload:', error);
           // Don't fail the entire upload, just log the error
-          response.assignmentError = 'Failed to create assignment record';
+          response.assignmentError = error instanceof Error
+            ? error.message
+            : 'Failed to create assignment record';
         }
       }
 

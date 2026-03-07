@@ -83,6 +83,7 @@ export interface IAssignmentFeedback extends Document {
   userId: Types.ObjectId;
   requirementsFileKey: string;
   solutionFileKey: string;
+  userNotes?: string;
   metadata: IMetadata;
   status: 'pending' | 'scanning' | 'processing' | 'completed' | 'failed';
   feedback?: IFeedback;
@@ -167,6 +168,7 @@ const AssignmentFeedbackSchema = new Schema<IAssignmentFeedback>(
     userId:              { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     requirementsFileKey: { type: String, default: '' },
     solutionFileKey:     { type: String, required: true },
+    userNotes:           { type: String, trim: true, maxlength: 5000 },
     metadata:            { type: MetadataSchema, default: {} },
     status: {
       type: String,
