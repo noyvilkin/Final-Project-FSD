@@ -55,12 +55,22 @@ export type StoragePath = "resumes" | "assignments" | "interviews";
 type UploadInput = {
   file: Express.Multer.File;
   path: StoragePath;
+  userId?: string;
+  assignmentId?: string;
 };
 
-export const uploadFileToS3 = async ({ file, path }: UploadInput) => {
+export const uploadFileToS3 = async ({ file, path, userId, assignmentId }: UploadInput) => {
   await getBucketReady();
 
-  const key = `${path}/${randomUUID()}-${sanitizeName(file.originalname)}`;
+  let key: string;
+  
+  // For assignments, organize by userId and assignmentId
+  if (path === 'assignments' && userId && assignmentId) {
+    key = `${path}/${userId}/${assignmentId}/${randomUUID()}-${sanitizeName(file.originalname)}`;
+  } else {
+    // For other paths or if userId/assignmentId not provided, use simple structure
+    key = `${path}/${randomUUID()}-${sanitizeName(file.originalname)}`;
+  }
 
   await s3.send(
     new PutObjectCommand({

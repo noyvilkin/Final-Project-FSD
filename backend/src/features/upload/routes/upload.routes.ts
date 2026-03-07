@@ -48,8 +48,21 @@ router.post(
 
     const uploadTasks: Promise<any>[] = [];
     const zipScanResults: Record<string, ZipScanResult> = {};
+    
+    // Pre-generate assignment ID and get user ID for assignment uploads
+    const userId = req.headers['x-user-id'] as string || 'anonymous';
+    let assignmentId: string | undefined = undefined;
+    
+    // Check if this is an assignment upload
+    const hasAssignmentFiles = files['assignments'] && files['assignments'].length > 0;
+    if (hasAssignmentFiles) {
+      // Pre-generate assignment ID using MongoDB ObjectId format
+      const { Types } = await import('mongoose');
+      assignmentId = new Types.ObjectId().toString();
+      appLogger.info('Pre-generated assignment ID for upload', { assignmentId, userId });
+    }
 
-    // Upload all files to S3 first
+    // Upload all files to S3 with userId and assignmentId for organization
     for (const [field, list] of Object.entries(files)) {
       const path = FIELD_TO_PATH[field];
       if (!path) continue;
@@ -74,19 +87,22 @@ router.post(
                 });
               }
               
-              // Upload file to S3
-              return uploadFileToS3({ file, path });
+              // Upload file to S3 with userId and assignmentId
+              return uploadFileToS3({ file, path, userId, assignmentId });
             })
             .catch((error) => {
               appLogger.error(`ZIP processing failed for ${file.originalname}:`, error);
               // Continue with normal file upload even if ZIP processing fails
-              return uploadFileToS3({ file, path });
+              return uploadFileToS3({ file, path, userId, assignmentId });
             });
             
           uploadTasks.push(scanTask);
         } else {
-          // Normal file upload
-          uploadTasks.push(uploadFileToS3({ file, path }));
+          // Normal file upload (with userId/assignmentId for assignments)
+          const uploadParams = field === 'assignments' 
+            ? { file, path, userId, assignmentId }
+            : { file, path };
+          uploadTasks.push(uploadFileToS3(uploadParams));
         }
       }
     }
@@ -109,12 +125,9 @@ router.post(
         file.key.startsWith('assignments/')
       );
 
-      if (assignmentFiles.length > 0) {
-        // This is an assignment upload - create assignment and trigger analysis
+      if (assignmentFiles.length > 0 && assignmentId) {
+        // This is an assignment upload - create assignment with the pre-generated ID
         try {
-          // For now, assume userId is in request context (you may need to add auth middleware)
-          // This is a placeholder - you'll need to get the actual user ID from your auth system
-          const userId = req.headers['x-user-id'] as string || 'anonymous';
           const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
           
           const categorizedFiles = AssignmentService.categorizeUploadedFiles(assignmentFiles);
@@ -123,7 +136,7 @@ router.post(
             const assignmentResult = await AssignmentService.createAssignment(userId, {
               requirements: categorizedFiles.requirements,
               solution: categorizedFiles.solution
-            }, notes);
+            }, notes, assignmentId);
 
             response.assignment = {
               id: assignmentResult.assignmentId,

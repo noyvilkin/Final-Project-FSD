@@ -68,7 +68,8 @@ export class AssignmentService {
       requirements?: UploadedFile;
       solution?: UploadedFile;
     },
-    userNotes?: string
+    userNotes?: string,
+    preGeneratedId?: string
   ): Promise<AssignmentCreationResult> {
     try {
       // Validate required files
@@ -86,15 +87,23 @@ export class AssignmentService {
         });
       }
 
-      // Create assignment record
-      const assignment = new AssignmentFeedback({
+      // Use pre-generated ID if provided, otherwise MongoDB will auto-generate
+      const assignmentData: any = {
         userId: resolvedUserId,
         requirementsFileKey: files.requirements?.key || '',
         solutionFileKey: files.solution.key,
         userNotes: userNotes?.trim() ? userNotes.trim() : undefined,
         metadata: {},
         status: 'pending'
-      });
+      };
+
+      if (preGeneratedId) {
+        assignmentData._id = new Types.ObjectId(preGeneratedId);
+        appLogger.info('Creating assignment with pre-generated ID', { assignmentId: preGeneratedId });
+      }
+
+      // Create assignment record
+      const assignment = new AssignmentFeedback(assignmentData);
 
       const savedAssignment = await assignment.save();
       const assignmentId = savedAssignment._id.toString();
