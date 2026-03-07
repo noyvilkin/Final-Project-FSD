@@ -1,6 +1,6 @@
 import { Receiver } from "@upstash/qstash";
 import type { Request, Response, NextFunction } from "express";
-import { appLogger } from "../services/logger.js";
+import { appLogger } from "../services/logger.js"
 
 const CURRENT_KEY = process.env.QSTASH_CURRENT_SIGNING_KEY;
 const NEXT_KEY = process.env.QSTASH_NEXT_SIGNING_KEY;

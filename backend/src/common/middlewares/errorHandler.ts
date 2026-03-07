@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { appLogger } from "../services/logger.js";
+import { appLogger } from "../services/logger.js"
 
 export const errorHandler = (
   err: unknown,
