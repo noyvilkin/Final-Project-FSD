@@ -137,8 +137,29 @@ export class AIAnalysisService {
       const client = this.getGeminiClient();
       const rawResponse = await client.generate(geminiPayload);
       
+      // Log raw response for debugging
+      appLogger.info("[AIAnalysisService] Raw AI response received", {
+        assignmentId,
+        responseLength: rawResponse.length,
+        responsePreview: rawResponse.substring(0, 200)
+      });
+      
       // Parse the response
       const feedback = this.parseAIResponse(rawResponse);
+      
+      // Check if parsing returned error feedback (score of 0 indicates parse failure)
+      if (feedback && feedback.overall.score === 0 && feedback.overall.summary.includes('failed')) {
+        appLogger.error("[AIAnalysisService] AI response parsing failed", {
+          assignmentId,
+          rawResponse: rawResponse.substring(0, 1000)
+        });
+        
+        return {
+          success: false,
+          error: `Failed to parse AI response. Raw: ${rawResponse.substring(0, 500)}`,
+          feedback  // Include the error feedback structure
+        };
+      }
       
       appLogger.info("[AIAnalysisService] AI analysis completed", {
         assignmentId,
@@ -263,9 +284,15 @@ Grade strictly. Do NOT be generous with intentional deviations from specificatio
    */
   public static parseAIResponse(rawResponse: string): AIAnalysisResult['feedback'] {
     try {
+      // Remove markdown code blocks if present
+      let cleanedResponse = rawResponse;
+      
+      // Remove ```json and ``` markers
+      cleanedResponse = cleanedResponse.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+      
       // Extract JSON from the response (in case there's extra text)
-      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-      const jsonText = jsonMatch ? jsonMatch[0] : rawResponse;
+      const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+      const jsonText = jsonMatch ? jsonMatch[0] : cleanedResponse;
       
       const parsed = JSON.parse(jsonText);
       
@@ -328,7 +355,7 @@ Grade strictly. Do NOT be generous with intentional deviations from specificatio
   /**
    * Saves AI analysis results to the assignment document
    */
-  static async saveAnalysisResults(assignmentId: string, analysisResult: AIAnalysisResult): Promise<void> {
+  static async saveAnalysisResults(assignmentId: string, analysisResult: AIAnalysisResult, rawAIResponse?: string): Promise<void> {
     try {
       const updateData: any = {
         status: analysisResult.success ? 'completed' : 'failed',
@@ -340,7 +367,11 @@ Grade strictly. Do NOT be generous with intentional deviations from specificatio
       }
 
       if (analysisResult.error) {
-        updateData.processingErrors = [analysisResult.error];
+        const errors = [analysisResult.error];
+        if (rawAIResponse) {
+          errors.push(`Raw AI Response (first 1000 chars): ${rawAIResponse.substring(0, 1000)}`);
+        }
+        updateData.processingErrors = errors;
       }
 
       await AssignmentFeedback.findByIdAndUpdate(assignmentId, updateData);

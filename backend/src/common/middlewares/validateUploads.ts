@@ -6,7 +6,14 @@ const MAX_ZIP_SIZE_BYTES = 50 * 1024 * 1024; // 50MB for ZIP files
 
 const allowedMimeByField: Record<string, string[]> = {
   resumes: ["application/pdf"],
-  assignments: ["application/zip", "application/x-zip-compressed", "application/pdf"],
+  assignments: [
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+  ],
   interviews: ["image/*", "video/*", "application/pdf"],
 };
 

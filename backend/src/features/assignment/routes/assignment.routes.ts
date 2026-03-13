@@ -43,6 +43,9 @@ router.get(
       assignment: {
         id: assignment._id,
         status: assignment.status,
+        requirementsFileKey: assignment.requirementsFileKey,
+        solutionFileKey: assignment.solutionFileKey,
+        userNotes: assignment.userNotes,
         metadata: assignment.metadata,
         feedback: assignment.feedback,
         createdAt: assignment.createdAt,
@@ -83,6 +86,9 @@ router.get(
       assignments: assignments.map(assignment => ({
         id: assignment._id,
         status: assignment.status,
+        requirementsFileKey: assignment.requirementsFileKey,
+        solutionFileKey: assignment.solutionFileKey,
+        userNotes: assignment.userNotes,
         metadata: assignment.metadata,
         feedback: assignment.feedback,
         createdAt: assignment.createdAt,
