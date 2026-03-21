@@ -1,6 +1,5 @@
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { appLogger } from "../../../common/services/logger.js";
-import { publishEvent } from "../../../common/services/mq.service.js";
 
 export interface AssignmentResultsSummary {
   assignmentId: string;
@@ -110,24 +109,23 @@ export class ResultsService {
   }
 
   /**
-   * Triggers final results compilation after AI analysis completion
+   * Generates and returns the results summary directly (no queue involved).
    */
-  static async triggerResultsGeneration(assignmentId: string, userId: string): Promise<void> {
+  static async triggerResultsGeneration(assignmentId: string, _userId: string): Promise<AssignmentResultsSummary | null> {
     try {
-      appLogger.info("[ResultsService] Triggering results generation", { assignmentId });
+      appLogger.info("[ResultsService] Generating results", { assignmentId });
 
-      await publishEvent("results-generated", { 
-        assignmentId, 
-        userId 
-      });
+      const summary = await this.generateResultsSummary(assignmentId);
 
-      appLogger.info("[ResultsService] Results generation queued successfully", { assignmentId });
+      appLogger.info("[ResultsService] Results generation completed", { assignmentId });
+      return summary;
 
     } catch (error) {
-      appLogger.error("[ResultsService] Failed to trigger results generation", {
+      appLogger.error("[ResultsService] Results generation failed", {
         assignmentId,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
+      return null;
     }
   }
 
