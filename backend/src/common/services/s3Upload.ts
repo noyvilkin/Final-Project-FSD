@@ -1,5 +1,6 @@
 import {
   CreateBucketCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
@@ -27,6 +28,9 @@ const s3 = new S3Client({
     secretAccessKey: S3_SECRET_KEY,
   },
 });
+
+export const getS3Client = (): S3Client => s3;
+export const getS3Bucket = (): string => S3_BUCKET;
 
 const ensureBucket = async (bucket: string): Promise<void> => {
   try {
@@ -90,4 +94,44 @@ export const uploadFileToS3 = async ({ file, path, userId, assignmentId }: Uploa
     mimeType: file.mimetype,
     size: file.size,
   };
+};
+
+const streamToBuffer = async (stream: unknown): Promise<Buffer> => {
+  if (!stream || typeof stream !== "object" || !(Symbol.asyncIterator in (stream as object))) {
+    throw new Error("[s3] Invalid stream response from S3");
+  }
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+};
+
+/**
+ * Retrieve a raw Buffer from Minio/S3 for a given object key.
+ */
+export const fetchBlobAsBuffer = async (
+  fileKey: string,
+  bucket: string = S3_BUCKET
+): Promise<Buffer> => {
+  await getBucketReady();
+
+  const response = await s3.send(
+    new GetObjectCommand({ Bucket: bucket, Key: fileKey })
+  );
+
+  const buffer = await streamToBuffer(response.Body);
+  appLogger.info("[s3] Blob fetched", { bucket, key: fileKey, bytes: buffer.length });
+  return buffer;
+};
+
+/**
+ * Retrieve an object from Minio/S3 and return its content as a UTF-8 string.
+ */
+export const fetchBlobAsText = async (
+  fileKey: string,
+  bucket: string = S3_BUCKET
+): Promise<string> => {
+  const buffer = await fetchBlobAsBuffer(fileKey, bucket);
+  return buffer.toString("utf-8");
 };
