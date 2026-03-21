@@ -45,6 +45,32 @@ export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
 }
 
+// ── Resume Optimization ────────────────────────────────────────────
+
+export function optimizeResume({ professionalDNAId, jobDescription, selectedBulletIndices }) {
+  return request("/api/resume/optimize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ professionalDNAId, jobDescription, selectedBulletIndices }),
+  });
+}
+
+export function acceptBullet({ professionalDNAId, experienceIndex, finalBullet }) {
+  return request("/api/resume/accept-bullet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ professionalDNAId, experienceIndex, finalBullet }),
+  });
+}
+
+export function getMatchScore({ professionalDNAId, jobDescription }) {
+  return request("/api/resume/score", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ professionalDNAId, jobDescription }),
+  });
+}
+
 export const apiConfig = {
   baseUrl: API_BASE_URL,
 };

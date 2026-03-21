@@ -13,13 +13,14 @@
     "test:ai": "tsx src/POC/simple-test.ts",
     "test:ai-full": "tsx src/POC/test-ai-analysis.ts",
     "poc": "tsx src/features/assignment/POC/poc-assignment-test.ts",
-    "poc:test": "tsx src/features/assignment/POC/poc-assignment-test.ts"
+    "poc:test": "tsx src/features/assignment/POC/poc-assignment-test.ts",
+    "poc:optimize": "tsx src/features/resume/POC/poc-optimization-test.ts",
+    "seed:dna": "tsx src/features/resume/POC/seed-dna.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.986.0",
     "@types/pdf-parse": "^1.1.5",
     "@types/yauzl": "^2.10.3",
-    "@upstash/qstash": "^2.9.0",
     "canvas": "^3.2.1",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.6",

@@ -1,6 +1,5 @@
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { appLogger } from "../../../common/services/logger.js";
-import { publishEvent } from "../../../common/services/mq.service.js";
 
 export interface AssignmentResultsSummary {
   assignmentId: string;
@@ -110,23 +109,28 @@ export class ResultsService {
   }
 
   /**
-   * Triggers final results compilation after AI analysis completion
+   * Triggers final results compilation after AI analysis completion.
+   * Runs inline instead of via a message queue.
    */
-  static async triggerResultsGeneration(assignmentId: string, userId: string): Promise<void> {
+  static async triggerResultsGeneration(assignmentId: string, _userId: string): Promise<void> {
     try {
-      appLogger.info("[ResultsService] Triggering results generation", { assignmentId });
+      appLogger.info("[ResultsService] Generating results inline", { assignmentId });
 
-      await publishEvent("results-generated", { 
-        assignmentId, 
-        userId 
-      });
+      const summary = await this.generateResultsSummary(assignmentId);
 
-      appLogger.info("[ResultsService] Results generation queued successfully", { assignmentId });
-
+      if (summary) {
+        appLogger.info("[ResultsService] Results generated successfully", {
+          assignmentId,
+          grade: summary.overallGrade,
+          score: summary.overallScore,
+        });
+      } else {
+        appLogger.warn("[ResultsService] Could not generate results summary", { assignmentId });
+      }
     } catch (error) {
-      appLogger.error("[ResultsService] Failed to trigger results generation", {
+      appLogger.error("[ResultsService] Failed to generate results", {
         assignmentId,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }

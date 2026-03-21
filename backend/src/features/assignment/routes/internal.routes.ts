@@ -1,13 +1,11 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { verifyQStash } from "../../../common/middlewares/verifyQStash.js";
 import { asyncHandler } from "../../../common/middlewares/asyncHandler.js";
 import { appLogger } from "../../../common/services/logger.js";
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { AssignmentAnalysisService } from "../services/assignmentAnalysisService.js";
 import { AIAnalysisService } from "../services/aiAnalysisService.js";
 import { ZipProcessor } from "../../../common/utils/zipProcessor.js";
-import { publishEvent } from "../../../common/services/mq.service.js";
 import { ResultsService } from "../services/resultsService.js";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
@@ -16,8 +14,6 @@ const s3Client = new S3Client({
 });
 
 const router = Router();
-
-router.use(verifyQStash);
 
 router.post(
   "/extract-text",
@@ -322,24 +318,23 @@ router.post(
         errorsCount: analysisResult.errors.length
       });
 
-      // If analysis successful, trigger AI analysis
+      // If analysis successful, run AI analysis directly
       if (analysisResult.success) {
         appLogger.info("[internal] Assignment ready for AI analysis", { assignmentId });
-        
+
         try {
-          // Trigger AI analysis via QStash
-          await publishEvent("analysis-requested", { 
-            assignmentId, 
-            userId 
-          });
-          
-          appLogger.info("[internal] AI analysis queued successfully", { assignmentId });
-        } catch (queueError) {
-          appLogger.error("[internal] Failed to queue AI analysis", {
+          const aiResult = await AIAnalysisService.analyzeAssignmentWithAI(assignmentId);
+          await AIAnalysisService.saveAnalysisResults(assignmentId, aiResult);
+          appLogger.info("[internal] AI analysis completed inline", { assignmentId });
+
+          if (aiResult.success) {
+            await ResultsService.triggerResultsGeneration(assignmentId, userId!);
+          }
+        } catch (aiError) {
+          appLogger.error("[internal] Inline AI analysis failed", {
             assignmentId,
-            error: queueError instanceof Error ? queueError.message : 'Unknown queue error'
+            error: aiError instanceof Error ? aiError.message : 'Unknown error',
           });
-          // Don't fail the whole request if queuing fails
         }
       }
 

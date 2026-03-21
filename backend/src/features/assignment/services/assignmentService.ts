@@ -1,5 +1,4 @@
 import { AssignmentFeedback, type IAssignmentFeedback } from '../models/assignmentFeedback.model.js';
-import { publishEvent } from '../../../common/services/mq.service.js';
 import { appLogger } from '../../../common/services/logger.js';
 import { Types } from 'mongoose';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -160,38 +159,18 @@ export class AssignmentService {
   }
 
   /**
-   * Trigger the assignment analysis pipeline via QStash
+   * Trigger the assignment analysis pipeline (local processing).
    */
   private static async triggerAssignmentAnalysis(
     assignmentId: string,
-    userId: string,
+    _userId: string,
     files: { requirements?: UploadedFile; solution?: UploadedFile }
   ): Promise<void> {
-    // Update status to scanning
     await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
       status: 'scanning'
     });
 
-    // Publish event to trigger analysis
-    const payload = {
-      assignmentId,
-      userId,
-      solutionFileKey: files.solution?.key,
-      requirementsFileKey: files.requirements?.key || null,
-      bucket: files.solution?.bucket,
-      solutionMimeType: files.solution?.mimeType
-    };
-
-    try {
-      await publishEvent('file-ingested', payload);
-    } catch (error) {
-      appLogger.warn('QStash publish failed, running local analysis fallback', {
-        assignmentId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-
-      await this.runLocalAnalysisFallback(assignmentId, files);
-    }
+    await this.runLocalAnalysisFallback(assignmentId, files);
   }
 
   private static async runLocalAnalysisFallback(

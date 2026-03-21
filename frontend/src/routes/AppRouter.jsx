@@ -4,6 +4,7 @@ import MyProfile from "../pages/MyProfile";
 import AssignmentSubmission from "../pages/AssignmentSubmission";
 import AssignmentResults from "../pages/AssignmentResults";
 import AssignmentProcessing from "../pages/AssignmentProcessing";
+import OptimizationDashboard from "../pages/OptimizationDashboard";
 
 export default function AppRouter() {
   return (
@@ -51,6 +52,15 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <AssignmentProcessing />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/cv"
+        element={
+          <ProtectedRoute>
+            <OptimizationDashboard />
           </ProtectedRoute>
         }
       />
