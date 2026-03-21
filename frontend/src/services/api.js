@@ -63,6 +63,36 @@ export function getResumeScore({ userId, jobDescriptionText }) {
   });
 }
 
+// ── Optimization History ────────────────────────────────────────────
+
+export function getOptimizationHistory(userId) {
+  return request(`/api/resume/history?userId=${encodeURIComponent(userId)}`);
+}
+
+export function getOptimizationRun(runId, userId) {
+  return request(
+    `/api/resume/history/${runId}?userId=${encodeURIComponent(userId)}`
+  );
+}
+
+export async function getOptimizationArtifact(runId, userId) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/resume/history/${runId}/artifact?userId=${encodeURIComponent(userId)}`,
+    { credentials: "include" }
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to fetch artifact: ${response.status}`);
+  }
+  return response.text();
+}
+
+export function deleteOptimizationRun(runId, userId) {
+  return request(
+    `/api/resume/history/${runId}?userId=${encodeURIComponent(userId)}`,
+    { method: "DELETE" }
+  );
+}
+
 export const apiConfig = {
   baseUrl: API_BASE_URL,
 };

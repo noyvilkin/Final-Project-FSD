@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -282,11 +283,13 @@ function ScorePanel({ hybridScore }) {
 
 export default function ResumeOptimization() {
   const { userId: authUserId } = useAuth();
+  const navigate = useNavigate();
   const [manualUserId, setManualUserId] = useState("");
   const [jdText, setJdText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [runMeta, setRunMeta] = useState(null);
 
   const effectiveUserId = authUserId || manualUserId.trim();
 
@@ -305,6 +308,7 @@ export default function ResumeOptimization() {
         jobDescriptionText: jdText,
       });
       setData(response.data);
+      if (response.run) setRunMeta(response.run);
     } catch (err) {
       setError(err.message || "Optimization failed");
     } finally {
@@ -350,6 +354,19 @@ export default function ResumeOptimization() {
       subtitle="AI-powered ATS alignment"
       showBack
     >
+      {/* History link */}
+      {!data && effectiveUserId && (
+        <div className="mb-4 flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/cv/history")}
+          >
+            View History
+          </Button>
+        </div>
+      )}
+
       {/* JD input phase */}
       {!data && (
         <div className="space-y-4">
@@ -428,16 +445,27 @@ export default function ResumeOptimization() {
                 {acceptedCount}/{totalCount} suggestions accepted
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setData(null);
-                setJdText("");
-              }}
-            >
-              New Analysis
-            </Button>
+            <div className="flex gap-2">
+              {runMeta?._id && (
+                <Button
+                  size="sm"
+                  onClick={() => navigate(`/cv/history/${runMeta._id}`)}
+                >
+                  View Saved Run
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setData(null);
+                  setJdText("");
+                  setRunMeta(null);
+                }}
+              >
+                New Analysis
+              </Button>
+            </div>
           </div>
 
           {/* General advice */}

@@ -1,5 +1,6 @@
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
@@ -134,4 +135,59 @@ export const fetchBlobAsText = async (
 ): Promise<string> => {
   const buffer = await fetchBlobAsBuffer(fileKey, bucket);
   return buffer.toString("utf-8");
+};
+
+/**
+ * Upload a raw string or Buffer to MinIO/S3 under any bucket + key.
+ * Creates the bucket on-the-fly if it doesn't exist.
+ */
+export const uploadBlob = async (
+  key: string,
+  body: string | Buffer,
+  contentType: string = "text/markdown",
+  bucket: string = S3_BUCKET
+): Promise<{ bucket: string; key: string; url: string }> => {
+  await ensureBucketByName(bucket);
+
+  const buffer = typeof body === "string" ? Buffer.from(body, "utf-8") : body;
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    })
+  );
+
+  appLogger.info("[s3] Blob uploaded", { bucket, key, bytes: buffer.length });
+  return { bucket, key, url: `${S3_ENDPOINT}/${bucket}/${key}` };
+};
+
+/**
+ * Delete a single object from MinIO/S3.
+ */
+export const deleteBlob = async (
+  key: string,
+  bucket: string = S3_BUCKET
+): Promise<void> => {
+  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  appLogger.info("[s3] Blob deleted", { bucket, key });
+};
+
+const bucketCache = new Set<string>();
+
+const ensureBucketByName = async (bucket: string): Promise<void> => {
+  if (bucket === S3_BUCKET) {
+    await getBucketReady();
+    return;
+  }
+  if (bucketCache.has(bucket)) return;
+  try {
+    await s3.send(new HeadBucketCommand({ Bucket: bucket }));
+  } catch {
+    await s3.send(new CreateBucketCommand({ Bucket: bucket }));
+    appLogger.info("[s3] Bucket created", { bucket });
+  }
+  bucketCache.add(bucket);
 };
