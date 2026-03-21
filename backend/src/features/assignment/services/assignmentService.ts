@@ -1,8 +1,7 @@
 import { AssignmentFeedback, type IAssignmentFeedback } from '../models/assignmentFeedback.model.js';
-import { publishEvent } from '../../../common/services/mq.service.js';
 import { appLogger } from '../../../common/services/logger.js';
 import { Types } from 'mongoose';
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { fetchBlobAsBuffer } from '../../../common/services/s3Upload.js';
 import { AssignmentAnalysisService } from './assignmentAnalysisService.js';
 import { AIAnalysisService } from './aiAnalysisService.js';
 import { ZipProcessor } from '../../../common/utils/zipProcessor.js';
@@ -22,43 +21,6 @@ export interface UploadedFile {
 }
 
 export class AssignmentService {
-  private static s3Client: S3Client | null = null;
-
-  private static getS3Client(): S3Client {
-    if (this.s3Client) {
-      return this.s3Client;
-    }
-
-    const endpoint = process.env.S3_ENDPOINT;
-    const accessKeyId = process.env.S3_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
-
-    if (!endpoint || !accessKeyId || !secretAccessKey) {
-      throw new Error('Missing S3 configuration for local analysis fallback');
-    }
-
-    this.s3Client = new S3Client({
-      endpoint,
-      region: 'us-east-1',
-      forcePathStyle: true,
-      credentials: { accessKeyId, secretAccessKey }
-    });
-
-    return this.s3Client;
-  }
-
-  private static async streamToBuffer(stream: unknown): Promise<Buffer> {
-    if (!stream || typeof stream !== 'object' || !(Symbol.asyncIterator in (stream as object))) {
-      throw new Error('Invalid stream response from S3');
-    }
-
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of stream as AsyncIterable<Uint8Array>) {
-      chunks.push(chunk);
-    }
-    return Buffer.concat(chunks);
-  }
-
   /**
    * Create a new assignment and trigger analysis if both files are provided
    */
@@ -120,15 +82,12 @@ export class AssignmentService {
       let analysisTriggered = false;
       if (files.solution) {
         try {
-          await this.triggerAssignmentAnalysis(assignmentId, resolvedUserId.toString(), files);
+          await this.runAnalysisPipeline(assignmentId, resolvedUserId.toString(), files);
           analysisTriggered = true;
-          
-          appLogger.info('Assignment analysis triggered', {
-            assignmentId,
-            userId
-          });
+
+          appLogger.info('Assignment analysis completed', { assignmentId, userId });
         } catch (error) {
-          appLogger.error('Failed to trigger assignment analysis', {
+          appLogger.error('Assignment analysis pipeline failed', {
             assignmentId,
             userId,
             error: error instanceof Error ? error.message : 'Unknown error'
@@ -138,7 +97,7 @@ export class AssignmentService {
           await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
             status: 'failed',
             metadata: {
-              processingErrors: ['Failed to trigger analysis pipeline']
+              processingErrors: ['Analysis pipeline failed']
             }
           });
         }
@@ -146,7 +105,7 @@ export class AssignmentService {
 
       return {
         assignmentId,
-        status: analysisTriggered ? 'analysis-queued' : 'uploaded',
+        status: analysisTriggered ? 'processing' : 'uploaded',
         analysisTriggered
       };
 
@@ -160,75 +119,38 @@ export class AssignmentService {
   }
 
   /**
-   * Trigger the assignment analysis pipeline via QStash
+   * Full analysis pipeline: download → scan → analyse → AI feedback.
+   * Runs as a direct awaited call – no message queue involved.
    */
-  private static async triggerAssignmentAnalysis(
+  private static async runAnalysisPipeline(
     assignmentId: string,
-    userId: string,
-    files: { requirements?: UploadedFile; solution?: UploadedFile }
-  ): Promise<void> {
-    // Update status to scanning
-    await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
-      status: 'scanning'
-    });
-
-    // Publish event to trigger analysis
-    const payload = {
-      assignmentId,
-      userId,
-      solutionFileKey: files.solution?.key,
-      requirementsFileKey: files.requirements?.key || null,
-      bucket: files.solution?.bucket,
-      solutionMimeType: files.solution?.mimeType
-    };
-
-    try {
-      await publishEvent('file-ingested', payload);
-    } catch (error) {
-      appLogger.warn('QStash publish failed, running local analysis fallback', {
-        assignmentId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-
-      await this.runLocalAnalysisFallback(assignmentId, files);
-    }
-  }
-
-  private static async runLocalAnalysisFallback(
-    assignmentId: string,
+    _userId: string,
     files: { requirements?: UploadedFile; solution?: UploadedFile }
   ): Promise<void> {
     if (!files.solution) {
-      throw new Error('Solution file is required for local analysis fallback');
+      throw new Error('Solution file is required');
     }
 
     const bucket = files.solution.bucket;
     if (!bucket) {
-      throw new Error('Missing bucket information for local analysis fallback');
+      throw new Error('Missing bucket information');
     }
 
-    // Local fallback currently supports ZIP-based source code analysis.
+    await AssignmentFeedback.findByIdAndUpdate(assignmentId, { status: 'scanning' });
+
     const isZipSolution =
       files.solution.mimeType === 'application/zip' ||
       files.solution.mimeType === 'application/x-zip-compressed';
 
     if (!isZipSolution) {
-      throw new Error('Local analysis fallback requires a ZIP solution file');
+      throw new Error('Analysis currently requires a ZIP solution file');
     }
 
-    const s3Client = this.getS3Client();
-
-    const solutionObject = await s3Client.send(
-      new GetObjectCommand({ Bucket: bucket, Key: files.solution.key })
-    );
-    const solutionBuffer = await this.streamToBuffer(solutionObject.Body);
+    const solutionBuffer = await fetchBlobAsBuffer(files.solution.key, bucket);
 
     let requirementsBuffer: Buffer | undefined;
     if (files.requirements?.key) {
-      const requirementsObject = await s3Client.send(
-        new GetObjectCommand({ Bucket: bucket, Key: files.requirements.key })
-      );
-      requirementsBuffer = await this.streamToBuffer(requirementsObject.Body);
+      requirementsBuffer = await fetchBlobAsBuffer(files.requirements.key, bucket);
     }
 
     const zipScanResult = await ZipProcessor.scanZipFile(solutionBuffer);
@@ -246,9 +168,10 @@ export class AssignmentService {
       return acc;
     }, {});
 
-    const totalLines = zipScanResult.sourceFiles.reduce((sum, file) => {
-      return sum + file.content.split('\n').length;
-    }, 0);
+    const totalLines = zipScanResult.sourceFiles.reduce(
+      (sum, file) => sum + file.content.split('\n').length,
+      0
+    );
 
     const metadataUpdate = {
       ...analysisResult.metadata,
@@ -272,13 +195,13 @@ export class AssignmentService {
     const aiResult = await AIAnalysisService.analyzeAssignmentWithAI(assignmentId);
     await AIAnalysisService.saveAnalysisResults(assignmentId, aiResult);
 
-    appLogger.info('Local analysis fallback completed', {
+    appLogger.info('Analysis pipeline completed', {
       assignmentId,
       aiSuccess: aiResult.success
     });
 
     if (!aiResult.success) {
-      throw new Error(aiResult.error || 'AI analysis failed in local fallback');
+      throw new Error(aiResult.error || 'AI analysis failed');
     }
   }
 
@@ -341,7 +264,7 @@ export class AssignmentService {
     files: UploadedFile[]
   ): { requirements?: UploadedFile; solution?: UploadedFile } {
     const categorized: { requirements?: UploadedFile; solution?: UploadedFile } = {};
-    
+
     for (const file of files) {
       const filename = file.key.toLowerCase();
       if (filename.includes('requirement') || filename.includes('spec')) {
@@ -353,6 +276,7 @@ export class AssignmentService {
         categorized.solution = file;
       }
     }
-    
+
     return categorized;
-  }}
+  }
+}

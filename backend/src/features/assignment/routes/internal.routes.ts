@@ -1,23 +1,15 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { verifyQStash } from "../../../common/middlewares/verifyQStash.js";
 import { asyncHandler } from "../../../common/middlewares/asyncHandler.js";
 import { appLogger } from "../../../common/services/logger.js";
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { AssignmentAnalysisService } from "../services/assignmentAnalysisService.js";
 import { AIAnalysisService } from "../services/aiAnalysisService.js";
 import { ZipProcessor } from "../../../common/utils/zipProcessor.js";
-import { publishEvent } from "../../../common/services/mq.service.js";
 import { ResultsService } from "../services/resultsService.js";
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION ?? "us-east-1",
-});
+import { fetchBlobAsBuffer } from "../../../common/services/s3Upload.js";
 
 const router = Router();
-
-router.use(verifyQStash);
 
 router.post(
   "/extract-text",
@@ -69,57 +61,52 @@ router.post(
     try {
       // Update status to processing AI analysis
       await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
-        status: 'processing'
+        status: "processing",
       });
 
       // Perform AI analysis
-      const analysisResult = await AIAnalysisService.analyzeAssignmentWithAI(assignmentId);
-      
+      const analysisResult =
+        await AIAnalysisService.analyzeAssignmentWithAI(assignmentId);
+
       // Save analysis results
       await AIAnalysisService.saveAnalysisResults(assignmentId, analysisResult);
 
       appLogger.info("[internal] AI analysis completed", {
         assignmentId,
         success: analysisResult.success,
-        overallScore: analysisResult.feedback?.overall?.score
+        overallScore: analysisResult.feedback?.overall?.score,
       });
 
       // If AI analysis successful, trigger results generation
       if (analysisResult.success) {
-        try {
-          await ResultsService.triggerResultsGeneration(assignmentId, userId);
-          appLogger.info("[internal] Results generation queued", { assignmentId });
-        } catch (error) {
-          appLogger.warn("[internal] Failed to queue results generation", {
-            assignmentId,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          });
-        }
+        await ResultsService.triggerResultsGeneration(assignmentId, userId);
+        appLogger.info("[internal] Results generated", { assignmentId });
       }
 
-      res.status(200).json({ 
-        status: "completed", 
+      res.status(200).json({
+        status: "completed",
         assignmentId,
         analysisSuccess: analysisResult.success,
-        overallScore: analysisResult.feedback?.overall?.score
+        overallScore: analysisResult.feedback?.overall?.score,
       });
-
     } catch (error) {
       appLogger.error("[internal] AI analysis failed", {
         assignmentId,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : "Unknown error",
       });
 
       // Update status to failed
       await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
-        status: 'failed',
-        processingErrors: [error instanceof Error ? error.message : 'AI analysis failed']
+        status: "failed",
+        processingErrors: [
+          error instanceof Error ? error.message : "AI analysis failed",
+        ],
       }).catch(() => {}); // Ignore DB update errors here
 
-      res.status(500).json({ 
-        status: "failed", 
+      res.status(500).json({
+        status: "failed",
         assignmentId,
-        error: "AI analysis processing failed" 
+        error: "AI analysis processing failed",
       });
     }
   })
@@ -146,16 +133,17 @@ router.post(
     try {
       // Fetch the completed assignment with all analysis data
       const assignment = await AssignmentFeedback.findById(assignmentId);
-      
+
       if (!assignment) {
         res.status(404).json({ error: "Assignment not found" });
         return;
       }
 
-      if (assignment.status !== 'completed' || !assignment.aiFeedback) {
-        res.status(400).json({ 
-          error: "Assignment analysis not completed or AI feedback missing",
-          currentStatus: assignment.status 
+      if (assignment.status !== "completed" || !assignment.aiFeedback) {
+        res.status(400).json({
+          error:
+            "Assignment analysis not completed or AI feedback missing",
+          currentStatus: assignment.status,
         });
         return;
       }
@@ -171,18 +159,21 @@ router.post(
           codeQuality: {
             score: assignment.aiFeedback.codeQuality.score,
             strengths: assignment.aiFeedback.codeQuality.strengths,
-            improvements: assignment.aiFeedback.codeQuality.weaknesses
+            improvements: assignment.aiFeedback.codeQuality.weaknesses,
           },
           functionalCorrectness: {
             score: assignment.aiFeedback.functionalCorrectness.score,
-            meetsRequirements: assignment.aiFeedback.functionalCorrectness.meetsRequirements,
-            missingFeatures: assignment.aiFeedback.functionalCorrectness.missingFeatures
+            meetsRequirements:
+              assignment.aiFeedback.functionalCorrectness.meetsRequirements,
+            missingFeatures:
+              assignment.aiFeedback.functionalCorrectness.missingFeatures,
           },
           bestPractices: {
             score: assignment.aiFeedback.bestPractices.score,
-            followsConventions: assignment.aiFeedback.bestPractices.followsConventions,
-            suggestions: assignment.aiFeedback.bestPractices.suggestions
-          }
+            followsConventions:
+              assignment.aiFeedback.bestPractices.followsConventions,
+            suggestions: assignment.aiFeedback.bestPractices.suggestions,
+          },
         },
         metadata: {
           language: assignment.metadata?.detectedLanguage,
@@ -190,32 +181,31 @@ router.post(
           totalFiles: assignment.metadata?.totalFiles,
           totalLines: assignment.metadata?.totalLines,
           analysisCompletedAt: assignment.aiAnalysisCompletedAt,
-          createdAt: assignment.createdAt
-        }
+          createdAt: assignment.createdAt,
+        },
       };
 
       appLogger.info("[internal] Results generation completed", {
         assignmentId,
         finalGrade: assignment.aiFeedback.overall.grade,
-        finalScore: assignment.aiFeedback.overall.score
+        finalScore: assignment.aiFeedback.overall.score,
       });
 
-      res.status(200).json({ 
-        status: "completed", 
+      res.status(200).json({
+        status: "completed",
         assignmentId,
-        results 
+        results,
       });
-
     } catch (error) {
       appLogger.error("[internal] Results generation failed", {
         assignmentId,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : "Unknown error",
       });
 
-      res.status(500).json({ 
-        status: "failed", 
+      res.status(500).json({
+        status: "failed",
         assignmentId,
-        error: "Results generation failed" 
+        error: "Results generation failed",
       });
     }
   })
@@ -224,12 +214,12 @@ router.post(
 router.post(
   "/analyze-assignment",
   asyncHandler(async (req: Request, res: Response) => {
-    const { 
-      assignmentId, 
-      userId, 
-      requirementsFileKey, 
+    const {
+      assignmentId,
+      userId,
+      requirementsFileKey,
       solutionFileKey,
-      bucket = process.env.S3_BUCKET_NAME
+      bucket = process.env.S3_BUCKET_NAME,
     } = req.body as {
       assignmentId?: string;
       userId?: string;
@@ -242,12 +232,12 @@ router.post(
       assignmentId,
       userId,
       requirementsFileKey,
-      solutionFileKey
+      solutionFileKey,
     });
 
     if (!assignmentId || !userId || !solutionFileKey) {
-      res.status(400).json({ 
-        error: "assignmentId, userId, and solutionFileKey are required" 
+      res.status(400).json({
+        error: "assignmentId, userId, and solutionFileKey are required",
       });
       return;
     }
@@ -255,58 +245,34 @@ router.post(
     try {
       // Update status to scanning
       await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
-        status: 'scanning'
+        status: "scanning",
       });
 
       // Download files from S3
-      const downloadPromises = [];
-      
-      // Download solution file (ZIP)
-      downloadPromises.push(
-        s3Client.send(new GetObjectCommand({ 
-          Bucket: bucket, 
-          Key: solutionFileKey 
-        }))
-      );
+      const solutionBuffer = await fetchBlobAsBuffer(solutionFileKey, bucket);
 
-      // Download requirements file (PDF) if provided
-      let requirementsIndex = -1;
-      if (requirementsFileKey) {
-        requirementsIndex = downloadPromises.length;
-        downloadPromises.push(
-          s3Client.send(new GetObjectCommand({ 
-            Bucket: bucket, 
-            Key: requirementsFileKey 
-          }))
-        );
-      }
-
-      const downloadResults = await Promise.all(downloadPromises);
-      
-      // Convert solution file to buffer
-      const solutionResponse = downloadResults[0];
-      const solutionBuffer = await streamToBuffer(solutionResponse.Body);
-      
-      // Convert requirements file to buffer if exists
       let requirementsBuffer: Buffer | undefined;
-      if (requirementsIndex >= 0) {
-        const requirementsResponse = downloadResults[requirementsIndex];
-        requirementsBuffer = await streamToBuffer(requirementsResponse.Body);
+      if (requirementsFileKey) {
+        requirementsBuffer = await fetchBlobAsBuffer(
+          requirementsFileKey,
+          bucket
+        );
       }
 
       // Process ZIP file
       const zipScanResult = await ZipProcessor.scanZipFile(solutionBuffer);
-      
+
       // Perform comprehensive analysis
-      const analysisResult = await AssignmentAnalysisService.analyzeAssignment({
-        zipScanResult,
-        pdfBuffer: requirementsBuffer
-      });
+      const analysisResult =
+        await AssignmentAnalysisService.analyzeAssignment({
+          zipScanResult,
+          pdfBuffer: requirementsBuffer,
+        });
 
       // Update assignment with results
       const updateData: any = {
         metadata: analysisResult.metadata,
-        status: analysisResult.success ? 'processing' : 'failed'
+        status: analysisResult.success ? "processing" : "failed",
       };
 
       if (analysisResult.errors.length > 0) {
@@ -319,72 +285,55 @@ router.post(
         assignmentId,
         success: analysisResult.success,
         detectedLanguage: analysisResult.metadata.detectedLanguage,
-        errorsCount: analysisResult.errors.length
+        errorsCount: analysisResult.errors.length,
       });
 
       // If analysis successful, trigger AI analysis
       if (analysisResult.success) {
-        appLogger.info("[internal] Assignment ready for AI analysis", { assignmentId });
-        
-        try {
-          // Trigger AI analysis via QStash
-          await publishEvent("analysis-requested", { 
-            assignmentId, 
-            userId 
-          });
-          
-          appLogger.info("[internal] AI analysis queued successfully", { assignmentId });
-        } catch (queueError) {
-          appLogger.error("[internal] Failed to queue AI analysis", {
-            assignmentId,
-            error: queueError instanceof Error ? queueError.message : 'Unknown queue error'
-          });
-          // Don't fail the whole request if queuing fails
+        appLogger.info("[internal] Running AI analysis directly", {
+          assignmentId,
+        });
+
+        const aiResult =
+          await AIAnalysisService.analyzeAssignmentWithAI(assignmentId);
+        await AIAnalysisService.saveAnalysisResults(assignmentId, aiResult);
+
+        if (aiResult.success) {
+          await ResultsService.triggerResultsGeneration(assignmentId, userId);
         }
+
+        appLogger.info("[internal] Full pipeline completed", {
+          assignmentId,
+          aiSuccess: aiResult.success,
+        });
       }
 
-      res.status(200).json({ 
-        status: "accepted", 
+      res.status(200).json({
+        status: "accepted",
         assignmentId,
-        analysisSuccess: analysisResult.success 
+        analysisSuccess: analysisResult.success,
       });
-
     } catch (error) {
       appLogger.error("[internal] Assignment analysis failed", {
         assignmentId,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : "Unknown error",
       });
 
       // Update status to failed
       await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
-        status: 'failed',
-        processingErrors: [error instanceof Error ? error.message : 'Analysis failed']
+        status: "failed",
+        processingErrors: [
+          error instanceof Error ? error.message : "Analysis failed",
+        ],
       }).catch(() => {}); // Ignore DB update errors here
 
-      res.status(500).json({ 
-        status: "failed", 
+      res.status(500).json({
+        status: "failed",
         assignmentId,
-        error: "Analysis processing failed" 
+        error: "Analysis processing failed",
       });
     }
   })
 );
-
-/**
- * Helper function to convert stream to buffer
- */
-async function streamToBuffer(stream: any): Promise<Buffer> {
-  if (!stream) {
-    throw new Error('Stream is undefined');
-  }
-  
-  const chunks: Uint8Array[] = [];
-  
-  for await (const chunk of stream) {
-    chunks.push(chunk);
-  }
-  
-  return Buffer.concat(chunks);
-}
 
 export default router;
