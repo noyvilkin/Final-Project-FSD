@@ -45,6 +45,19 @@ export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
 }
 
+// ── Resume Upload (PDF → Professional DNA) ─────────────────────────
+
+export function uploadResume(file, userId) {
+  const formData = new FormData();
+  formData.append("resume", file);
+  if (userId) formData.append("userId", userId);
+
+  return request("/api/resume/upload", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 // ── Resume Optimization ─────────────────────────────────────────────
 
 export function optimizeResume({ userId, jobDescriptionText }) {

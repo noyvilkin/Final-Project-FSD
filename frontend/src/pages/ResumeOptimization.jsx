@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Progress } from "../components/ui/progress";
 import { useAuth } from "../context/AuthContext";
-import { optimizeResume } from "../services/api";
+import { optimizeResume, uploadResume } from "../services/api";
 
 // ── Confidence helpers ──────────────────────────────────────────────
 
@@ -291,12 +291,33 @@ export default function ResumeOptimization() {
   const [data, setData] = useState(null);
   const [runMeta, setRunMeta] = useState(null);
 
-  const effectiveUserId = authUserId || manualUserId.trim();
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+
+  const effectiveUserId =
+    authUserId || uploadResult?.userId || manualUserId.trim();
+
+  const handleResumeUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+    try {
+      const res = await uploadResume(file);
+      setUploadResult(res.data);
+      setManualUserId(res.data.userId);
+    } catch (err) {
+      setError(err.message || "Resume upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleOptimize = async () => {
     if (!jdText.trim()) return;
     if (!effectiveUserId) {
-      setError("Please enter a User ID or log in first.");
+      setError("Please upload a resume or enter a User ID.");
       return;
     }
 
@@ -380,20 +401,68 @@ export default function ResumeOptimization() {
             </p>
 
             {!authUserId && (
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  User ID (MongoDB ObjectId)
-                </label>
-                <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="e.g. 665f1a2b3c4d5e6f7a8b9c0d"
-                  value={manualUserId}
-                  onChange={(e) => setManualUserId(e.target.value)}
-                  disabled={loading}
-                />
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Not logged in — enter your userId manually, or use any string to test with an empty profile.
-                </p>
+              <div className="mb-4 space-y-3">
+                {/* Resume upload option */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Upload Your Resume (PDF)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-3 text-sm cursor-pointer transition-colors ${
+                        uploading
+                          ? "border-gray-200 bg-gray-50 text-gray-400 cursor-wait"
+                          : uploadResult
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                          : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/30 text-gray-500"
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={handleResumeUpload}
+                        disabled={uploading || loading}
+                      />
+                      {uploading ? (
+                        <>
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+                          Parsing resume with AI...
+                        </>
+                      ) : uploadResult ? (
+                        <>
+                          Loaded: {uploadResult.candidateName || "Resume"} —{" "}
+                          {uploadResult.skillCount} skills, {uploadResult.experienceCount} roles
+                        </>
+                      ) : (
+                        "Click to upload a PDF resume"
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 border-t border-gray-200" />
+                  <span className="text-[10px] font-medium text-gray-400 uppercase">or</span>
+                  <div className="flex-1 border-t border-gray-200" />
+                </div>
+
+                {/* Manual userId option */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Enter User ID
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder="e.g. 665f1a2b3c4d5e6f7a8b9c0d"
+                    value={manualUserId}
+                    onChange={(e) => {
+                      setManualUserId(e.target.value);
+                      if (uploadResult) setUploadResult(null);
+                    }}
+                    disabled={loading || uploading}
+                  />
+                </div>
               </div>
             )}
 

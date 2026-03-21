@@ -1,13 +1,60 @@
 import { Router, Request, Response } from 'express';
 import { Types } from 'mongoose';
+import multer from 'multer';
 import { ResumeOptimizationService } from '../services/resumeOptimizationService.js';
 import { GeminiOptimizationService } from '../services/geminiOptimizationService.js';
 import { HybridScoringService } from '../services/hybridScoringService.js';
 import { CvReconstructionService } from '../services/cvReconstructionService.js';
+import { ResumeParsingService } from '../services/resumeParsingService.js';
 import { OptimizationRun } from '../models/optimizationRun.model.js';
 import { appLogger } from '../../../common/services/logger.js';
 
 const router = Router();
+
+const resumeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype === 'application/pdf');
+  },
+});
+
+// ── POST /api/resume/upload ─────────────────────────────────────
+// Upload a resume PDF → Gemini extracts Professional DNA → User + DNA stored.
+router.post(
+  '/upload',
+  resumeUpload.single('resume'),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ success: false, error: 'A PDF file is required (field: "resume")' });
+        return;
+      }
+
+      const existingUserId = req.body.userId as string | undefined;
+
+      appLogger.info('[ResumeUpload] Parsing uploaded resume', {
+        size: req.file.size,
+        existingUserId: existingUserId || 'none',
+      });
+
+      const result = await ResumeParsingService.parseAndStore(
+        req.file.buffer,
+        existingUserId
+      );
+
+      res.status(201).json({ success: true, data: result });
+    } catch (err) {
+      appLogger.error('[ResumeUpload] Upload failed', {
+        error: err instanceof Error ? err.message : 'Unknown',
+      });
+      res.status(500).json({
+        success: false,
+        error: err instanceof Error ? err.message : 'Resume upload failed',
+      });
+    }
+  }
+);
 
 // ── POST /api/resume/optimize ───────────────────────────────────
 // Full pipeline: ingest → align → Gemini → reconstruct CV → MinIO → MongoDB
