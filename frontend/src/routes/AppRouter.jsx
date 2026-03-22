@@ -5,6 +5,8 @@ import AssignmentSubmission from "../pages/AssignmentSubmission";
 import AssignmentResults from "../pages/AssignmentResults";
 import AssignmentProcessing from "../pages/AssignmentProcessing";
 import ResumeOptimization from "../pages/ResumeOptimization";
+import OptimizationHistory from "../pages/OptimizationHistory";
+import OptimizationRunDetail from "../pages/OptimizationRunDetail";
 
 export default function AppRouter() {
   return (
@@ -61,6 +63,24 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <ResumeOptimization />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/cv/history"
+        element={
+          <ProtectedRoute>
+            <OptimizationHistory />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/cv/history/:runId"
+        element={
+          <ProtectedRoute>
+            <OptimizationRunDetail />
           </ProtectedRoute>
         }
       />

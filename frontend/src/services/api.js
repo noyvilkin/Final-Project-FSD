@@ -45,6 +45,19 @@ export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
 }
 
+// ── Resume Upload (PDF → Professional DNA) ─────────────────────────
+
+export function uploadResume(file, userId) {
+  const formData = new FormData();
+  formData.append("resume", file);
+  if (userId) formData.append("userId", userId);
+
+  return request("/api/resume/upload", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 // ── Resume Optimization ─────────────────────────────────────────────
 
 export function optimizeResume({ userId, jobDescriptionText }) {
@@ -61,6 +74,41 @@ export function getResumeScore({ userId, jobDescriptionText }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userId, jobDescriptionText }),
   });
+}
+
+// ── Optimization History ────────────────────────────────────────────
+
+export function getOptimizationHistory(userId) {
+  return request(`/api/resume/history?userId=${encodeURIComponent(userId)}`);
+}
+
+export function getOptimizationRun(runId, userId) {
+  return request(
+    `/api/resume/history/${runId}?userId=${encodeURIComponent(userId)}`
+  );
+}
+
+export async function getOptimizationArtifact(runId, userId, acceptedBullets = []) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/resume/history/${runId}/artifact`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, acceptedBullets }),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to fetch artifact: ${response.status}`);
+  }
+  return response.text();
+}
+
+export function deleteOptimizationRun(runId, userId) {
+  return request(
+    `/api/resume/history/${runId}?userId=${encodeURIComponent(userId)}`,
+    { method: "DELETE" }
+  );
 }
 
 export const apiConfig = {

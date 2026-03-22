@@ -8,6 +8,7 @@ export interface IProfessionalDNA extends Document {
   experience: IExperience[];
   education: IEducation[];
   gapAnalysis?: IGapAnalysis;
+  rawResumeText?: string;
   analysisStatus: 'pending' | 'processing' | 'completed' | 'failed';
   createdAt: Date;
   updatedAt: Date;
@@ -69,6 +70,7 @@ const ProfessionalDNASchema = new Schema<IProfessionalDNA>(
     experience:  { type: [ExperienceSchema], default: [] },
     education:   { type: [EducationSchema],  default: [] },
     gapAnalysis: { type: GapAnalysisSchema },
+    rawResumeText: { type: String },
     analysisStatus: {
       type: String,
       enum: ['pending', 'processing', 'completed', 'failed'],
