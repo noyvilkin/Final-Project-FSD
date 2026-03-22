@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -121,8 +121,10 @@ export default function OptimizationRunDetail() {
   const { runId } = useParams();
   const { userId: authUserId } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const urlUserId = searchParams.get("userId") || "";
+  const passedBullets = location.state?.bullets || null;
 
   const [manualUserId, setManualUserId] = useState(urlUserId);
   const [run, setRun] = useState(null);
@@ -149,8 +151,9 @@ export default function OptimizationRunDetail() {
         const res = await getOptimizationRun(runId, effectiveUserId);
         if (!cancelled) {
           setRun(res.data);
+          const incoming = passedBullets || res.data?.dashboardData?.bullets || [];
           setBullets(
-            (res.data?.dashboardData?.bullets || []).map((b) => ({
+            incoming.map((b) => ({
               ...b,
               status: b.status || "pending",
             }))
