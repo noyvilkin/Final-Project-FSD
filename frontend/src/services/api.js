@@ -45,6 +45,24 @@ export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
 }
 
+// ── Resume Optimization ─────────────────────────────────────────────
+
+export function optimizeResume({ userId, jobDescriptionText }) {
+  return request("/api/resume/optimize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, jobDescriptionText }),
+  });
+}
+
+export function getResumeScore({ userId, jobDescriptionText }) {
+  return request("/api/resume/score", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, jobDescriptionText }),
+  });
+}
+
 export const apiConfig = {
   baseUrl: API_BASE_URL,
 };
