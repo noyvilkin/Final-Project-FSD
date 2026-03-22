@@ -28,7 +28,7 @@ export class HybridScoringService {
         apiKey,
         model: 'gemini-2.5-flash',
         temperature: 0.2,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 4096,
         rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
       });
     }
