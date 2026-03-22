@@ -104,6 +104,7 @@ export class ResumeParsingService {
     const dna = await ProfessionalDNA.create({
       userId: new Types.ObjectId(userId),
       analysisStatus: 'completed',
+      rawResumeText: cleanText,
       skills: parsed.skills,
       experience: parsed.experience.map((exp) => ({
         ...exp,

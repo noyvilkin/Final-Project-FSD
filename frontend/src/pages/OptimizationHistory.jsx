@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -23,7 +23,9 @@ function ScorePill({ score }) {
 
 export default function OptimizationHistory() {
   const { userId: authUserId } = useAuth();
-  const [manualUserId, setManualUserId] = useState("");
+  const [searchParams] = useSearchParams();
+  const urlUserId = searchParams.get("userId") || "";
+  const [manualUserId, setManualUserId] = useState(urlUserId);
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -138,7 +140,7 @@ export default function OptimizationHistory() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => navigate(`/cv/history/${run._id}`)}
+                      onClick={() => navigate(`/cv/history/${run._id}?userId=${encodeURIComponent(effectiveUserId)}`)}
                     >
                       View
                     </Button>

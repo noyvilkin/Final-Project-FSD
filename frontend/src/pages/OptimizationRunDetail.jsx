@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -11,8 +11,6 @@ import {
   getOptimizationArtifact,
   deleteOptimizationRun,
 } from "../services/api";
-
-// ── Full-CV Preview Modal ───────────────────────────────────────────
 
 function PreviewModal({ text, onClose }) {
   useEffect(() => {
@@ -44,8 +42,6 @@ function PreviewModal({ text, onClose }) {
     </div>
   );
 }
-
-// ── Score ring ───────────────────────────────────────────────────────
 
 function ScoreRing({ score, label, size = 100 }) {
   const radius = (size - 12) / 2;
@@ -89,8 +85,6 @@ function ScoreRing({ score, label, size = 100 }) {
   );
 }
 
-// ── Confidence badge ────────────────────────────────────────────────
-
 const CONFIDENCE_CONFIG = {
   high: {
     label: "High",
@@ -123,15 +117,16 @@ function ConfidenceBadge({ level, score }) {
   );
 }
 
-// ── Main Page ───────────────────────────────────────────────────────
-
 export default function OptimizationRunDetail() {
   const { runId } = useParams();
   const { userId: authUserId } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlUserId = searchParams.get("userId") || "";
 
-  const [manualUserId, setManualUserId] = useState("");
+  const [manualUserId, setManualUserId] = useState(urlUserId);
   const [run, setRun] = useState(null);
+  const [bullets, setBullets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -152,7 +147,15 @@ export default function OptimizationRunDetail() {
       setError(null);
       try {
         const res = await getOptimizationRun(runId, effectiveUserId);
-        if (!cancelled) setRun(res.data);
+        if (!cancelled) {
+          setRun(res.data);
+          setBullets(
+            (res.data?.dashboardData?.bullets || []).map((b) => ({
+              ...b,
+              status: b.status || "pending",
+            }))
+          );
+        }
       } catch (err) {
         if (!cancelled) setError(err.message || "Failed to load run");
       } finally {
@@ -164,15 +167,51 @@ export default function OptimizationRunDetail() {
     };
   }, [runId, effectiveUserId]);
 
+  const handleAccept = (bulletId) => {
+    setBullets((prev) =>
+      prev.map((b) =>
+        b.id === bulletId ? { ...b, status: "accepted" } : b
+      )
+    );
+  };
+
+  const handleDiscard = (bulletId) => {
+    setBullets((prev) =>
+      prev.map((b) =>
+        b.id === bulletId ? { ...b, status: "discarded" } : b
+      )
+    );
+  };
+
+  const handleEdit = (bulletId, newText) => {
+    setBullets((prev) =>
+      prev.map((b) =>
+        b.id === bulletId
+          ? { ...b, userEdit: newText, status: "edited" }
+          : b
+      )
+    );
+  };
+
+  const getAcceptedBullets = () =>
+    bullets
+      .filter((b) => b.status === "accepted" || b.status === "edited")
+      .map((b) => ({
+        originalBullet: b.originalBullet,
+        optimizedBullet: b.optimizedBullet,
+        userEdit: b.userEdit || undefined,
+      }));
+
   const fetchArtifactText = async () => {
-    if (previewText) return previewText;
-    const text = await getOptimizationArtifact(runId, effectiveUserId);
+    const accepted = getAcceptedBullets();
+    const text = await getOptimizationArtifact(runId, effectiveUserId, accepted);
     setPreviewText(text);
     return text;
   };
 
   const handlePreview = async () => {
     setDownloading(true);
+    setPreviewText(null);
     try {
       await fetchArtifactText();
       setShowPreview(true);
@@ -187,11 +226,11 @@ export default function OptimizationRunDetail() {
     setDownloading(true);
     try {
       const text = await fetchArtifactText();
-      const blob = new Blob([text], { type: "text/markdown" });
+      const blob = new Blob([text], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `optimized-cv-${runId}.md`;
+      a.download = `optimized-cv-${runId}.txt`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -207,7 +246,7 @@ export default function OptimizationRunDetail() {
     if (!confirm("Delete this run and its stored CV?")) return;
     try {
       await deleteOptimizationRun(runId, effectiveUserId);
-      navigate("/cv/history");
+      navigate(`/cv/history?userId=${encodeURIComponent(effectiveUserId)}`);
     } catch (err) {
       setError(err.message || "Delete failed");
     }
@@ -215,6 +254,10 @@ export default function OptimizationRunDetail() {
 
   const data = run?.dashboardData;
   const hybridScore = data?.hybridScore;
+
+  const acceptedCount = bullets.filter(
+    (b) => b.status === "accepted" || b.status === "edited"
+  ).length;
 
   return (
     <PageLayout
@@ -255,7 +298,9 @@ export default function OptimizationRunDetail() {
           {/* Action bar */}
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={handleDownload} disabled={downloading}>
-              {downloading ? "Loading..." : "Download Optimized CV"}
+              {downloading
+                ? "Loading..."
+                : `Download CV (${acceptedCount} change${acceptedCount !== 1 ? "s" : ""} applied)`}
             </Button>
             <Button
               size="sm"
@@ -338,14 +383,25 @@ export default function OptimizationRunDetail() {
             </Card>
           )}
 
-          {/* Optimized bullets */}
-          {data?.bullets?.length > 0 && (
+          {/* Optimized bullets with accept/discard/edit */}
+          {bullets.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-gray-900">
-                Optimized Bullets ({data.bullets.length})
+                Optimized Bullets ({bullets.length}) — {acceptedCount} accepted
               </h3>
-              {data.bullets.map((b, i) => (
-                <Card key={b.id || i} className="p-4">
+              {bullets.map((b, i) => (
+                <Card
+                  key={b.id || i}
+                  className={`p-4 ${
+                    b.status === "accepted"
+                      ? "ring-2 ring-emerald-300"
+                      : b.status === "edited"
+                      ? "ring-2 ring-blue-300"
+                      : b.status === "discarded"
+                      ? "opacity-50"
+                      : ""
+                  }`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs text-gray-500">
                       {b.role} @ {b.company}
@@ -354,7 +410,7 @@ export default function OptimizationRunDetail() {
                       level={b.confidenceLevel}
                       score={b.confidenceScore}
                     />
-                    {b.status && b.status !== "pending" && (
+                    {b.status !== "pending" && (
                       <Badge
                         className={
                           b.status === "accepted"
@@ -380,13 +436,74 @@ export default function OptimizationRunDetail() {
                     <p className="text-[10px] uppercase text-blue-500 mb-0.5">
                       Optimized
                     </p>
-                    <p className="text-sm text-gray-900 bg-blue-50/50 rounded-lg p-2 border border-blue-100">
-                      {b.userEdit || b.optimizedBullet}
-                    </p>
+                    {b.status === "edited" ? (
+                      <textarea
+                        className="w-full text-sm text-gray-900 bg-blue-50/50 rounded-lg p-2 border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        rows={3}
+                        value={b.userEdit || b.optimizedBullet}
+                        onChange={(e) => handleEdit(b.id, e.target.value)}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-900 bg-blue-50/50 rounded-lg p-2 border border-blue-100">
+                        {b.optimizedBullet}
+                      </p>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-500 italic">
+                  <p className="text-xs text-gray-500 italic mb-3">
                     {b.explanation}
                   </p>
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    {b.status !== "accepted" && (
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={() => handleAccept(b.id)}
+                      >
+                        Accept
+                      </Button>
+                    )}
+                    {b.status !== "edited" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          handleEdit(b.id, b.userEdit || b.optimizedBullet)
+                        }
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {b.status !== "discarded" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-gray-500"
+                        onClick={() => handleDiscard(b.id)}
+                      >
+                        Discard
+                      </Button>
+                    )}
+                    {b.status !== "pending" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-gray-400"
+                        onClick={() =>
+                          setBullets((prev) =>
+                            prev.map((x) =>
+                              x.id === b.id
+                                ? { ...x, status: "pending", userEdit: undefined }
+                                : x
+                            )
+                          )
+                        }
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </div>
                 </Card>
               ))}
             </div>

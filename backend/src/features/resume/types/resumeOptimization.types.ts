@@ -57,6 +57,7 @@ export interface ProfessionalDNASummary {
   education: IEducation[];
   gapAnalysis?: IGapAnalysis;
   skillNames: string[];
+  rawResumeText?: string;
 }
 
 // ── AI-Gateway Context Payload ──────────────────────────────────────

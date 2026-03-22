@@ -381,7 +381,7 @@ export default function ResumeOptimization() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/cv/history")}
+            onClick={() => navigate(`/cv/history?userId=${encodeURIComponent(effectiveUserId)}`)}
           >
             View History
           </Button>
@@ -518,7 +518,7 @@ export default function ResumeOptimization() {
               {runMeta?._id && (
                 <Button
                   size="sm"
-                  onClick={() => navigate(`/cv/history/${runMeta._id}`)}
+                  onClick={() => navigate(`/cv/history/${runMeta._id}?userId=${encodeURIComponent(effectiveUserId)}`)}
                 >
                   View Saved Run
                 </Button>

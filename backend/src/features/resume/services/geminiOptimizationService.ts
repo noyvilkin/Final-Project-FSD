@@ -33,7 +33,7 @@ export class GeminiOptimizationService {
         apiKey,
         model: MODEL_NAME,
         temperature: 0.3,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
         rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
       });
     }
@@ -118,11 +118,19 @@ export class GeminiOptimizationService {
     }
   }
 
+  private static stripMarkdown(text: string): string {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/__(.+?)__/g, '$1')
+      .replace(/_(.+?)_/g, '$1');
+  }
+
   private static validateBullet(b: Record<string, unknown>): GeminiOptimizedBullet {
     return {
       index: Number(b.index) || 0,
       originalBullet: String(b.originalBullet ?? ''),
-      optimizedBullet: String(b.optimizedBullet ?? ''),
+      optimizedBullet: GeminiOptimizationService.stripMarkdown(String(b.optimizedBullet ?? '')),
       explanation: String(b.explanation ?? ''),
       confidenceScore: Math.max(0, Math.min(1, Number(b.confidenceScore) || 0)),
       keywordsUsed: Array.isArray(b.keywordsUsed) ? b.keywordsUsed.map(String) : [],

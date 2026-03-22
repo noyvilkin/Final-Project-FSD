@@ -15,9 +15,11 @@ ABSOLUTE RULES:
 5. You CAN add industry-standard action verbs (Led, Architected, Implemented, Optimized, etc.).
 6. You MUST preserve the factual essence of each bullet — only improve phrasing and keyword alignment.
 7. Each rewritten bullet should be 1-2 lines, concise and impactful.
+8. You MUST NOT use any Markdown formatting (no **bold**, no *italic*, no # headings) inside bullet text. Return clean plain text only.
 
 Output contract:
 - Return ONLY valid JSON — no markdown, no prose, no code fences.
+- All string values must be plain text — no Markdown syntax whatsoever.
 - Follow the exact schema specified in the user message.`;
 
 

@@ -20,7 +20,6 @@ const resumeUpload = multer({
 });
 
 // ── POST /api/resume/upload ─────────────────────────────────────
-// Upload a resume PDF → Gemini extracts Professional DNA → User + DNA stored.
 router.post(
   '/upload',
   resumeUpload.single('resume'),
@@ -57,7 +56,6 @@ router.post(
 );
 
 // ── POST /api/resume/optimize ───────────────────────────────────
-// Full pipeline: ingest → align → Gemini → reconstruct CV → MinIO → MongoDB
 router.post('/optimize', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, jobDescriptionText } = req.body;
@@ -76,32 +74,25 @@ router.post('/optimize', async (req: Request, res: Response): Promise<void> => {
     const payload = await ResumeOptimizationService.prepareFromText(userId, jobDescriptionText);
     const dashboardData = await GeminiOptimizationService.optimizeResume(payload);
 
-    const { artifactKey, downloadUrl, versionTag } =
-      await CvReconstructionService.reconstructAndStore(
-        userId,
-        dashboardData,
-        payload.professionalDNA
-      );
+    const versionTag = Date.now().toString(36);
+    const originalResumeText = payload.professionalDNA.rawResumeText || '';
 
     const run = await OptimizationRun.create({
       userId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId,
       jobDescriptionText,
       dashboardData: dashboardData as unknown as Record<string, unknown>,
-      artifactKey,
+      originalResumeText,
       versionTag,
-      downloadUrl,
     });
 
-    appLogger.info('[ResumeOptimization] Run persisted', { runId: run._id, artifactKey });
+    appLogger.info('[ResumeOptimization] Run persisted', { runId: run._id });
 
     res.status(200).json({
       success: true,
       data: dashboardData,
       run: {
         _id: run._id,
-        artifactKey,
         versionTag,
-        downloadUrl,
         createdAt: run.createdAt,
       },
     });
@@ -146,7 +137,6 @@ router.post('/score', async (req: Request, res: Response): Promise<void> => {
 });
 
 // ── GET /api/resume/history ─────────────────────────────────────
-// List all optimization runs for the given user (newest first).
 router.get('/history', async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.query.userId as string;
@@ -161,7 +151,7 @@ router.get('/history', async (req: Request, res: Response): Promise<void> => {
         : { userId }
     )
       .sort({ createdAt: -1 })
-      .select('jobDescriptionText versionTag downloadUrl createdAt dashboardData.hybridScore.finalScore')
+      .select('jobDescriptionText versionTag createdAt dashboardData.hybridScore.finalScore')
       .lean();
 
     res.status(200).json({ success: true, data: runs });
@@ -174,7 +164,6 @@ router.get('/history', async (req: Request, res: Response): Promise<void> => {
 });
 
 // ── GET /api/resume/history/:runId ──────────────────────────────
-// Full detail for a single run (user-scoped).
 router.get('/history/:runId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { runId } = req.params;
@@ -203,47 +192,52 @@ router.get('/history/:runId', async (req: Request, res: Response): Promise<void>
   }
 });
 
-// ── GET /api/resume/history/:runId/artifact ─────────────────────
-// Stream the reconstructed CV text from MinIO (user-scoped).
-router.get('/history/:runId/artifact', async (req: Request, res: Response): Promise<void> => {
+// ── POST /api/resume/history/:runId/artifact ────────────────────
+// Generate the optimized CV on-demand: take the user's original resume
+// and replace ONLY the accepted/edited bullets.
+router.post('/history/:runId/artifact', async (req: Request, res: Response): Promise<void> => {
   try {
     const { runId } = req.params;
-    const userId = req.query.userId as string;
+    const { userId, acceptedBullets } = req.body as {
+      userId: string;
+      acceptedBullets: Array<{ originalBullet: string; optimizedBullet: string; userEdit?: string }>;
+    };
+
     if (!userId) {
-      res.status(400).json({ success: false, error: 'userId query param is required' });
+      res.status(400).json({ success: false, error: 'userId is required' });
       return;
     }
 
     const run = await OptimizationRun.findOne({
       _id: runId,
       userId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId,
-    })
-      .select('artifactKey')
-      .lean();
+    }).lean();
 
     if (!run) {
       res.status(404).json({ success: false, error: 'Run not found' });
       return;
     }
 
-    const text = await CvReconstructionService.fetchArtifact(run.artifactKey);
+    const finalText = CvReconstructionService.applyAcceptedChanges(
+      run.originalResumeText,
+      acceptedBullets || []
+    );
 
-    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="optimized-cv-${runId}.md"`
+      `attachment; filename="optimized-cv-${runId}.txt"`
     );
-    res.status(200).send(text);
+    res.status(200).send(finalText);
   } catch (err) {
-    appLogger.error('[ResumeOptimization] Artifact fetch failed', {
+    appLogger.error('[ResumeOptimization] Artifact generation failed', {
       error: err instanceof Error ? err.message : 'Unknown',
     });
-    res.status(500).json({ success: false, error: 'Failed to fetch artifact' });
+    res.status(500).json({ success: false, error: 'Failed to generate artifact' });
   }
 });
 
 // ── DELETE /api/resume/history/:runId ────────────────────────────
-// Delete the run from MongoDB AND its artifact from MinIO.
 router.delete('/history/:runId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { runId } = req.params;
@@ -263,13 +257,15 @@ router.delete('/history/:runId', async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    try {
-      await CvReconstructionService.deleteArtifact(run.artifactKey);
-    } catch (cleanupErr) {
-      appLogger.warn('[ResumeOptimization] MinIO cleanup failed (orphan possible)', {
-        artifactKey: run.artifactKey,
-        error: cleanupErr instanceof Error ? cleanupErr.message : 'Unknown',
-      });
+    if (run.artifactKey) {
+      try {
+        await CvReconstructionService.deleteArtifact(run.artifactKey);
+      } catch (cleanupErr) {
+        appLogger.warn('[ResumeOptimization] MinIO cleanup failed (orphan possible)', {
+          artifactKey: run.artifactKey,
+          error: cleanupErr instanceof Error ? cleanupErr.message : 'Unknown',
+        });
+      }
     }
 
     res.status(200).json({ success: true, deleted: runId });

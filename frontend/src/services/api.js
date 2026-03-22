@@ -88,10 +88,15 @@ export function getOptimizationRun(runId, userId) {
   );
 }
 
-export async function getOptimizationArtifact(runId, userId) {
+export async function getOptimizationArtifact(runId, userId, acceptedBullets = []) {
   const response = await fetch(
-    `${API_BASE_URL}/api/resume/history/${runId}/artifact?userId=${encodeURIComponent(userId)}`,
-    { credentials: "include" }
+    `${API_BASE_URL}/api/resume/history/${runId}/artifact`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, acceptedBullets }),
+    }
   );
   if (!response.ok) {
     throw new Error(`Failed to fetch artifact: ${response.status}`);
