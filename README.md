@@ -6,13 +6,12 @@
 - API gateway built with Express and TypeScript
 - Modular routing for Auth, Profile, Assignments, and Interviews
 - File uploads via MinIO (S3-compatible object storage)
-- Async messaging via [Upstash QStash](https://upstash.com/docs/qstash)
+- Direct synchronous analysis pipeline (download → scan → AI feedback)
 
 ### Prerequisites
 - Node.js ≥ 18
 - Docker
 - MongoDB (local or Atlas)
-- Upstash QStash account — [Upstash Console](https://console.upstash.com/qstash)
 
 ### MinIO setup
 
@@ -63,7 +62,6 @@ Copy `backend/.env.example` to `backend/.env`:
 
 ```bash
 PORT=4000
-BASE_URL=http://localhost:4000
 MONGODB_URI=mongodb://localhost:27017/fsd
 
 # MinIO
@@ -71,11 +69,6 @@ S3_ENDPOINT=http://localhost:9000
 S3_ACCESS_KEY_ID=minioadmin
 S3_SECRET_ACCESS_KEY=minioadmin
 S3_BUCKET_NAME=careerpilot-uploads
-
-# QStash
-QSTASH_TOKEN=<your-qstash-token>
-QSTASH_CURRENT_SIGNING_KEY=<from-upstash-console>
-QSTASH_NEXT_SIGNING_KEY=<from-upstash-console>
 ```
 
 ### File uploads
@@ -92,26 +85,32 @@ QSTASH_NEXT_SIGNING_KEY=<from-upstash-console>
 curl -X POST http://localhost:4000/api/uploads -F "resumes=@./cv.pdf"
 ```
 
-### QStash messaging
+### Analysis pipeline
 
-Publish events from anywhere in the backend:
+When an assignment is uploaded, the backend runs the full pipeline as a direct awaited call:
 
-```typescript
-import { publishEvent } from "./services/mq.service.js";
-await publishEvent("file-ingested", { fileKey, userId });
-```
+1. **Upload** — files are stored in MinIO under `assignments/{userId}/{assignmentId}/`
+2. **Scan** — ZIP is extracted and source files are parsed
+3. **Analyse** — project structure, language, and frameworks are detected
+4. **AI feedback** — source code + requirements are sent to Gemini for grading
+5. **Results** — structured feedback is saved to the assignment record
 
-| Topic | Endpoint |
+Internal endpoints are available for triggering individual steps:
+
+| Endpoint | Purpose |
 |---|---|
-| `file-ingested` | `POST /api/v1/internal/extract-text` |
-| `analysis-requested` | `POST /api/v1/internal/analyze-ai` |
-| `results-generated` | `POST /api/v1/internal/generate-results` |
-
-Internal routes are guarded by QStash signature verification. Bypassed in dev when signing keys are absent.
+| `POST /api/v1/internal/extract-text` | Text extraction (stub) |
+| `POST /api/v1/internal/analyze-assignment` | Full scan → AI → results pipeline |
+| `POST /api/v1/internal/analyze-ai` | AI analysis only |
+| `POST /api/v1/internal/generate-results` | Results compilation |
 
 ### API routes
 - `GET /health`
 - `POST /api/uploads`
+- `GET /api/assignments/:assignmentId`
+- `GET /api/assignments/:assignmentId/status`
+- `GET /api/assignments/:assignmentId/results`
 - `POST /api/v1/internal/extract-text`
+- `POST /api/v1/internal/analyze-assignment`
 - `POST /api/v1/internal/analyze-ai`
 - `POST /api/v1/internal/generate-results`
