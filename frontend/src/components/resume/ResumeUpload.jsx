@@ -1,9 +1,14 @@
 import { useRef, useState } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
+import AnalysisStatus from "./AnalysisStatus";
+import AnalysisDashboard from "../dashboard/AnalysisDashboard";
+import { uploadResume, pollAnalysisStatus } from "../../services/resumeService";
 
 export default function ResumeUpload() {
   const [file, setFile] = useState(null);
+  const [status, setStatus] = useState("idle");
+  const [analysisResult, setAnalysisResult] = useState(null);
   const inputRef = useRef(null);
 
   function handleDrop(e) {
@@ -27,19 +32,30 @@ export default function ResumeUpload() {
 
   function handleCancel() {
     setFile(null);
+    setStatus("idle");
+    setAnalysisResult(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
   async function handleUpload() {
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("resume", file);
+    setStatus("uploading");
 
-    await fetch("/api/resume", {
-      method: "POST",
-      body: formData,
-    });
+    try {
+      await uploadResume(file);
+      setStatus("processing");
+
+      const analysisResponse = await pollAnalysisStatus();
+
+      if (analysisResponse.status === "done") {
+        setAnalysisResult(analysisResponse.result);
+        setStatus("done");
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus("idle");
+    }
   }
 
   return (
@@ -71,6 +87,10 @@ export default function ResumeUpload() {
               onChange={handleFileChange}
               className="hidden"
             />
+
+            <div className="mt-4">
+              <AnalysisStatus status={status} />
+            </div>
           </div>
         </div>
       </Card>
@@ -80,10 +100,20 @@ export default function ResumeUpload() {
           Cancel
         </Button>
 
-        <Button onClick={handleUpload} disabled={!file}>
+        <Button
+          onClick={handleUpload}
+          disabled={!file || status === "uploading" || status === "processing"}
+        >
           Upload & Analyze
         </Button>
       </div>
+
+      {status === "done" && analysisResult && (
+        <AnalysisDashboard
+          skills={analysisResult.skills}
+          experienceYears={analysisResult.experienceYears}
+        />
+      )}
     </div>
   );
 }
