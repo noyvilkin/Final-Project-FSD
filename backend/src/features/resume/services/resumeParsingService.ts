@@ -52,7 +52,7 @@ export class ResumeParsingService {
         apiKey,
         model: MODEL_NAME,
         temperature: 0.1,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 16384,
         rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
       });
     }
