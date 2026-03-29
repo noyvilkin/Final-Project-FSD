@@ -5,12 +5,20 @@ export default function AnalysisStatus({ status }) {
     return <p className="text-sm text-gray-500">Uploading resume...</p>;
   }
 
+  if (status === "extracting") {
+    return <p className="text-sm text-gray-500">Extracting content...</p>;
+  }
+
   if (status === "processing") {
     return <p className="text-sm text-blue-600">Analyzing your resume...</p>;
   }
 
+  if (status === "finalizing") {
+    return <p className="text-sm text-purple-600">Finalizing insights...</p>;
+  }
+
   if (status === "done") {
-    return <p className="text-sm text-green-600">Analysis complete.</p>;
+    return <p className="text-sm text-green-600">Analysis complete ✔</p>;
   }
 
   return null;

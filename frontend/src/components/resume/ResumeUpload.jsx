@@ -1,20 +1,25 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import AnalysisStatus from "./AnalysisStatus";
-import AnalysisDashboard from "../dashboard/AnalysisDashboard";
-import { uploadResume, pollAnalysisStatus } from "../../services/resumeService";
+
+const API_BASE_URL = "http://localhost:4000";
 
 export default function ResumeUpload() {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState("idle");
-  const [analysisResult, setAnalysisResult] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
   const inputRef = useRef(null);
+  const navigate = useNavigate();
 
   function handleDrop(e) {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) setFile(droppedFile);
+    if (droppedFile) {
+      setFile(droppedFile);
+      setErrorMessage("");
+    }
   }
 
   function handleDragOver(e) {
@@ -23,7 +28,10 @@ export default function ResumeUpload() {
 
   function handleFileChange(e) {
     const selectedFile = e.target.files[0];
-    if (selectedFile) setFile(selectedFile);
+    if (selectedFile) {
+      setFile(selectedFile);
+      setErrorMessage("");
+    }
   }
 
   function handleChooseFile() {
@@ -33,27 +41,54 @@ export default function ResumeUpload() {
   function handleCancel() {
     setFile(null);
     setStatus("idle");
-    setAnalysisResult(null);
+    setErrorMessage("");
     if (inputRef.current) inputRef.current.value = "";
   }
 
   async function handleUpload() {
     if (!file) return;
 
+    setErrorMessage("");
     setStatus("uploading");
 
     try {
-      await uploadResume(file);
+      const userId = "123456789012345678901234"; // להחליף אחר כך ב-userId אמיתי מהמערכת
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("userId", userId);
+
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      setStatus("extracting");
+
+      await new Promise((resolve) => setTimeout(resolve, 700));
       setStatus("processing");
 
-      const analysisResponse = await pollAnalysisStatus();
+      const response = await fetch(
+        `${API_BASE_URL}/api/profile-analysis/upload`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
-      if (analysisResponse.status === "done") {
-        setAnalysisResult(analysisResponse.result);
-        setStatus("done");
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || "Upload failed");
       }
+
+      setStatus("finalizing");
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      setStatus("done");
+
+      setTimeout(() => {
+        navigate("/profile");
+      }, 900);
     } catch (error) {
       console.error(error);
+      setErrorMessage(error.message || "Something went wrong");
       setStatus("idle");
     }
   }
@@ -68,7 +103,8 @@ export default function ResumeUpload() {
             <h2 className="text-xl font-bold">Curriculum Vitae (CV)</h2>
 
             <p className="mt-2 text-gray-500">
-              Upload your latest resume in PDF or Word format
+              Upload your latest resume in PDF format for AI-powered profile
+              analysis
             </p>
 
             <div
@@ -83,7 +119,7 @@ export default function ResumeUpload() {
             <input
               ref={inputRef}
               type="file"
-              accept=".pdf,.doc,.docx"
+              accept=".pdf"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -91,6 +127,10 @@ export default function ResumeUpload() {
             <div className="mt-4">
               <AnalysisStatus status={status} />
             </div>
+
+            {errorMessage && (
+              <p className="mt-4 text-sm text-red-500">{errorMessage}</p>
+            )}
           </div>
         </div>
       </Card>
@@ -102,18 +142,17 @@ export default function ResumeUpload() {
 
         <Button
           onClick={handleUpload}
-          disabled={!file || status === "uploading" || status === "processing"}
+          disabled={
+            !file ||
+            status === "uploading" ||
+            status === "extracting" ||
+            status === "processing" ||
+            status === "finalizing"
+          }
         >
           Upload & Analyze
         </Button>
       </div>
-
-      {status === "done" && analysisResult && (
-        <AnalysisDashboard
-          skills={analysisResult.skills}
-          experienceYears={analysisResult.experienceYears}
-        />
-      )}
     </div>
   );
 }
