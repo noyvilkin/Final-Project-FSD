@@ -1,6 +1,7 @@
 import { PdfProcessor, type PdfExtractionResult } from '../../../common/utils/pdfProcessor.js';
 import { ProjectAnalyzer, type ProjectAnalysisResult } from '../../../common/utils/projectAnalyzer.js';
 import type { ZipScanResult, SourceFile } from '../../../common/utils/zipProcessor.js';
+import { selectRelevantSourceFiles, MAX_ANALYSIS_SOURCE_FILES } from '../../../common/utils/sourceFileSelection.js';
 import type { IMetadata } from '../models/assignmentFeedback.model.js';
 import { appLogger } from '../../../common/services/logger.js';
 
@@ -10,6 +11,34 @@ export interface AssignmentAnalysisResult {
   sourceCodeSummary: string;
   errors: string[];
   processingTime: number;
+}
+
+function stringifyRequirementSections(sections: {
+  requirements: string[];
+  objectives: string[];
+  deliverables: string[];
+  criteria: string[];
+}): string {
+  const chunks: string[] = [];
+
+  const appendSection = (title: string, items: string[]) => {
+    if (items.length === 0) {
+      return;
+    }
+
+    chunks.push(`${title}:`);
+    for (const item of items.slice(0, 12)) {
+      chunks.push(`- ${item}`);
+    }
+    chunks.push('');
+  };
+
+  appendSection('Requirements', sections.requirements);
+  appendSection('Objectives', sections.objectives);
+  appendSection('Deliverables', sections.deliverables);
+  appendSection('Criteria', sections.criteria);
+
+  return chunks.join('\n').trim();
 }
 
 export interface AnalysisInput {
@@ -45,7 +74,8 @@ export class AssignmentAnalysisService {
         const pdfResult = await this.processPdfRequirements(input.pdfBuffer);
         if (pdfResult.success) {
           requirementsText = pdfResult.extractedText;
-          result.metadata.extractedRequirements = pdfResult.normalizedText;
+          const structuredRequirements = PdfProcessor.extractRequirementsSections(pdfResult.normalizedText);
+          result.metadata.extractedRequirements = stringifyRequirementSections(structuredRequirements) || pdfResult.normalizedText;
         } else {
           result.errors.push(...pdfResult.errors);
         }
@@ -155,20 +185,12 @@ export class AssignmentAnalysisService {
     const maxTotalSize = 50000; // Limit total summary size
     
     let currentSize = 0;
-    const sortedFiles = sourceFiles.sort((a, b) => {
-      // Prioritize important files: entry points, configs, main files
-      const importantFiles = ['index', 'main', 'app', 'server', 'config'];
-      const aImportant = importantFiles.some(name => a.path.toLowerCase().includes(name));
-      const bImportant = importantFiles.some(name => b.path.toLowerCase().includes(name));
-      
-      if (aImportant && !bImportant) return -1;
-      if (!aImportant && bImportant) return 1;
-      return a.path.localeCompare(b.path);
-    });
+    const sortedFiles = selectRelevantSourceFiles(sourceFiles, MAX_ANALYSIS_SOURCE_FILES);
+    const omittedFiles = Math.max(0, sourceFiles.length - sortedFiles.length);
 
     for (const file of sortedFiles) {
       if (currentSize >= maxTotalSize) {
-        summary.push(`\n... [${sourceFiles.length - summary.length + 1} additional files omitted] ...`);
+        summary.push(`\n... [additional content omitted] ...`);
         break;
       }
 
@@ -189,6 +211,10 @@ export class AssignmentAnalysisService {
       
       summary.push(fileEntry);
       currentSize += fileEntry.length;
+    }
+
+    if (omittedFiles > 0 && currentSize < maxTotalSize) {
+      summary.push(`\n... [${omittedFiles} additional files omitted; limited to the ${MAX_ANALYSIS_SOURCE_FILES} most relevant files] ...`);
     }
 
     return summary.join('').trim();

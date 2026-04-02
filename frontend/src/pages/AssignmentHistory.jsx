@@ -136,7 +136,7 @@ export default function AssignmentHistory() {
   }
 
   return (
-    <PageLayout title="Assignment History" subtitle="Past submissions and recovery actions" showBack>
+    <PageLayout title="Assignment History" subtitle="Past submissions and recovery actions" showBack backTo="/assignment">
       <div className="space-y-3">
         {loading ? (
           <Card className="p-4 text-sm text-gray-600">Loading submissions...</Card>
@@ -154,12 +154,13 @@ export default function AssignmentHistory() {
           const score = scoreFromAssignment(item);
           const failed = item.status === "failed";
           const busy = actionBusyId === String(item.id);
+          const submissionNumber = sortedItems.length - index;
 
           return (
             <Card key={item.id} className="p-4">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Submission #{index + 1}</p>
+                  <p className="text-sm font-semibold text-gray-900">Submission #{submissionNumber}</p>
                   <p className="text-xs text-gray-500">{new Date(item.createdAt).toLocaleString()}</p>
                 </div>
                 <Badge className={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
@@ -176,7 +177,7 @@ export default function AssignmentHistory() {
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {item.status === "completed" ? (
-                  <Button size="sm" onClick={() => navigate(`/assignment/${item.id}/results`)}>
+                  <Button size="sm" onClick={() => navigate(`/assignment/${item.id}/results`, { state: { from: "history" } })}>
                     View Results
                   </Button>
                 ) : null}

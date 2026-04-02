@@ -8,6 +8,7 @@ export default function PageLayout({
   title = "Professional DNA",
   subtitle = "",
   showBack = false,
+  backTo,
   right = null,
 }) {
   return (
@@ -17,6 +18,7 @@ export default function PageLayout({
           title={title}
           subtitle={subtitle}
           showBack={showBack}
+          backTo={backTo}
           right={right}
         />
       )}

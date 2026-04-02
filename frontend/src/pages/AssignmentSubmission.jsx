@@ -7,7 +7,7 @@ import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/AuthContext";
 
 const MAX_DESCRIPTION_SIZE = 10 * 1024 * 1024;
-const MAX_SOLUTION_SIZE = 50 * 1024 * 1024;
+const MAX_SOLUTION_SIZE = 100 * 1024 * 1024;
 const MAX_NOTES_CHARS = 1000;
 
 const DESCRIPTION_ALLOWED_TYPES = [
@@ -156,7 +156,7 @@ export default function AssignmentSubmission() {
     }
 
     if (file.size > MAX_SOLUTION_SIZE) {
-      setErrorMessage("Solution file must be 50MB or smaller.");
+      setErrorMessage("Solution file must be 100MB or smaller.");
       return;
     }
 
@@ -196,6 +196,7 @@ export default function AssignmentSubmission() {
       title="Technical Assignment"
       subtitle="Upload your completed homework for review"
       showBack
+      backTo="/profile"
       right={
         <Button size="sm" variant="outline" onClick={() => navigate("/assignment/history")}>History</Button>
       }
@@ -224,7 +225,7 @@ export default function AssignmentSubmission() {
           onFileChange={validateSolution}
           accept=".zip,.pdf"
           disabled={isSubmitting}
-          hint="ZIP or PDF (Max 50MB)"
+          hint="ZIP or PDF (Max 100MB)"
         />
 
         <Card className="p-4">
@@ -301,7 +302,7 @@ export default function AssignmentSubmission() {
           </div>
 
           <p className="mt-2 text-[11px] text-gray-500">
-            Note: current backend validation accepts PDF and ZIP for assignment uploads.
+            Note: current backend validation accepts PDF and ZIP for assignment uploads up to 100MB.
           </p>
         </Card>
       </div>

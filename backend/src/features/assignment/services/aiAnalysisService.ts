@@ -3,6 +3,7 @@ import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { appLogger } from "../../../common/services/logger.js";
 import type { AssignmentMetadata } from "../../resume/types/professionalDNA.types.js"
 import { normalizeAnalysisFailure } from "./assignmentRecovery.js";
+import { MAX_ANALYSIS_SOURCE_FILES, selectRelevantSourceCodeEntries } from '../../../common/utils/sourceFileSelection.js';
 
 export interface UnifiedAnalysisPayload {
   requirements: string;
@@ -40,6 +41,8 @@ export interface AIAnalysisResult {
 
 export class AIAnalysisService {
   private static geminiClient: GeminiClient | null = null;
+  private static readonly MAX_SOURCE_FILE_CHARS = 1200;
+  private static readonly MAX_SOURCE_CODE_CHARS = 16000;
 
   private static getGeminiClient(): GeminiClient {
     if (!this.geminiClient) {
@@ -119,12 +122,17 @@ export class AIAnalysisService {
       const geminiPayload: GeminiPayload = {
         system_instruction: {
           parts: [{
-            text: `You are a strict university professor grading programming assignments. 
-                   Provide honest, critical evaluation. Do NOT be lenient.
-                   When requirements are ignored or core features are missing, assign low scores.
-                   Intentional deviations from specifications result in failing grades.
+            text: `You are a professional engineering reviewer evaluating a take-home assignment for hiring.
+                   Be fair, specific, and evidence-based.
+                   Prioritize requirement completion and correctness over style preferences.
+                   Use "areas for improvement" for polish opportunities, not as automatic major score penalties.
+                   Penalize only clear requirement gaps, broken behavior, or major deviations from the task.
                    Always respond with valid JSON only, no markdown code blocks or extra text.`
           }]
+        },
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: this.buildAnalysisResponseSchema(),
         },
         contents: [{
           role: 'user',
@@ -194,12 +202,83 @@ export class AIAnalysisService {
     }
 
     const consolidatedFiles: string[] = [];
-    
-    for (const [filePath, content] of Object.entries(metadata.sourceCodeContent)) {
-      consolidatedFiles.push(`\n=== File: ${filePath} ===\n${content}\n`);
+    const selectedFiles = selectRelevantSourceCodeEntries(metadata.sourceCodeContent, MAX_ANALYSIS_SOURCE_FILES);
+    const omittedFiles = Math.max(0, Object.keys(metadata.sourceCodeContent).length - selectedFiles.length);
+    let totalSize = 0;
+
+    if (omittedFiles > 0) {
+      consolidatedFiles.push(
+        `\n... [analysis limited to the ${selectedFiles.length} most relevant files; ${omittedFiles} other files omitted] ...\n`
+      );
+    }
+
+    for (const { path: filePath, content } of selectedFiles) {
+      if (totalSize >= this.MAX_SOURCE_CODE_CHARS) {
+        consolidatedFiles.push(`\n... [source code truncated to keep the prompt focused] ...\n`);
+        break;
+      }
+
+      const truncatedContent = content.length > this.MAX_SOURCE_FILE_CHARS
+        ? `${content.slice(0, this.MAX_SOURCE_FILE_CHARS)}\n... [content truncated] ...`
+        : content;
+
+      const fileEntry = `\n=== File: ${filePath} ===\n${truncatedContent}\n`;
+
+      if (totalSize + fileEntry.length > this.MAX_SOURCE_CODE_CHARS) {
+        consolidatedFiles.push(`\n... [source code truncated to keep the prompt focused] ...\n`);
+        break;
+      }
+
+      consolidatedFiles.push(fileEntry);
+      totalSize += fileEntry.length;
     }
 
     return consolidatedFiles.join('\n');
+  }
+
+  private static buildAnalysisResponseSchema(): Record<string, unknown> {
+    return {
+      type: 'object',
+      properties: {
+        codeQuality: {
+          type: 'object',
+          properties: {
+            score: { type: 'number' },
+            strengths: { type: 'array', items: { type: 'string' } },
+            weaknesses: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['score', 'strengths', 'weaknesses'],
+        },
+        functionalCorrectness: {
+          type: 'object',
+          properties: {
+            score: { type: 'number' },
+            meetsRequirements: { type: 'boolean' },
+            missingFeatures: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['score', 'meetsRequirements', 'missingFeatures'],
+        },
+        bestPractices: {
+          type: 'object',
+          properties: {
+            score: { type: 'number' },
+            followsConventions: { type: 'boolean' },
+            suggestions: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['score', 'followsConventions', 'suggestions'],
+        },
+        overall: {
+          type: 'object',
+          properties: {
+            score: { type: 'number' },
+            grade: { type: 'string' },
+            summary: { type: 'string' },
+          },
+          required: ['score', 'grade', 'summary'],
+        },
+      },
+      required: ['codeQuality', 'functionalCorrectness', 'bestPractices', 'overall'],
+    };
   }
 
   /**
@@ -215,7 +294,9 @@ export class AIAnalysisService {
       prompt += `The code uses: ${frameworks}. `;
     }
     
-    prompt += `Focus on code quality, best practices, and functional correctness.`;
+    prompt += `Focus on code quality, best practices, and functional correctness.
+  Be fair and calibrated: strong, working infrastructure should not be scored as failing just because it is incomplete.
+  Use the provided requirements as guidance, but avoid harsh deductions for minor omissions unless they materially affect the solution.`;
     
     return prompt;
   }
@@ -225,20 +306,26 @@ export class AIAnalysisService {
    */
   private static buildAnalysisPrompt(payload: UnifiedAnalysisPayload): string {
     return `
-You are a strict university professor grading programming assignments. Provide honest, critical evaluation.
+You are a professional reviewer evaluating a real hiring assignment.
+Focus on whether the candidate completed the requested requirements and delivered a working solution.
+Use improvements as constructive feedback, not automatic failure criteria.
 
-**GRADING CRITERIA (0-100 scale):**
-- 90-100: Excellent - Meets ALL requirements, no significant issues
-- 80-89: Good - Meets most requirements, minor issues only
-- 70-79: Satisfactory - Meets basic requirements, several issues
-- 60-69: Passing - Missing requirements, significant issues
-- Below 60: Failing - Does not meet requirements, critical issues
+**SCORING APPROACH (0-100):**
+- Primary factor: requirement completion and functional correctness.
+- Secondary factor: code quality and best practices.
+- Keep scores calibrated for hiring context (not classroom strictness).
 
-**IMPORTANT - Penalize heavily for:**
-- Intentional deviations from stated requirements
-- Missing core functionality (persistence, error handling, validation)
-- No tests or documentation
-- Ignoring assignment specifications
+**CALIBRATION GUIDE:**
+- 85-100: Strong submission. Requirements largely completed, solution works, only minor issues.
+- 70-84: Solid submission. Core requirements mostly completed, some gaps or trade-offs.
+- 55-69: Partial submission. Important requirements missing or functionality is unreliable.
+- 0-54: Major deficiencies. Core requirements largely unmet or key functionality is broken.
+
+**IMPORTANT REVIEW RULES:**
+- Anchor feedback to the stated requirements and concrete evidence from code.
+- Do not invent missing requirements that are not in the assignment text.
+- Do not assign failing grades for minor polish issues when core requirements are met.
+- Put non-blocking concerns in best-practices suggestions.
 
 **Assignment Requirements:**
 ${payload.requirements}
@@ -276,7 +363,7 @@ ${payload.sourceCode}
   }
 }
 
-Grade strictly. Do NOT be generous with intentional deviations from specifications. Failing grades reflect work that ignores requirements.
+Ensure scores and summary reflect requirement completion first, then quality and maintainability.
     `.trim();
   }
 

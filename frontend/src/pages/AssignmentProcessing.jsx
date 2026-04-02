@@ -63,6 +63,11 @@ export default function AssignmentProcessing() {
   const [failedAssignment, setFailedAssignment] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
 
+  const uploadErrorDetails = useMemo(() => {
+    const details = errorMessage && typeof errorMessage === "object" ? errorMessage?.details : null;
+    return Array.isArray(details) ? details : [];
+  }, [errorMessage]);
+
   useEffect(() => {
     let cancelled = false;
     const startedAt = Date.now();
@@ -110,7 +115,14 @@ export default function AssignmentProcessing() {
           }
         } catch (error) {
           if (cancelled) return;
-          setErrorMessage(error?.message || "Upload failed. Please submit again.");
+          if (error?.payload?.error?.details?.length) {
+            setErrorMessage({
+              message: error?.message || "Upload failed. Please submit again.",
+              details: error.payload.error.details,
+            });
+          } else {
+            setErrorMessage(error?.message || "Upload failed. Please submit again.");
+          }
           return;
         }
       }
@@ -136,7 +148,10 @@ export default function AssignmentProcessing() {
             }
 
             if (cancelled) return;
-            navigate(`/assignment/${activeAssignmentId}/results`, { replace: true });
+            navigate(`/assignment/${activeAssignmentId}/results`, {
+              replace: true,
+              state: { from: "assignment" },
+            });
             return;
           }
 
@@ -224,7 +239,16 @@ export default function AssignmentProcessing() {
 
         {errorMessage ? (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {errorMessage}
+            <p>{typeof errorMessage === "string" ? errorMessage : errorMessage.message}</p>
+            {uploadErrorDetails.length > 0 ? (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-red-700">
+                {uploadErrorDetails.map((detail, index) => (
+                  <li key={`${detail.filename || detail.field || 'upload-error'}-${index}`}>
+                    <span className="font-semibold">{detail.filename || detail.field || "File"}:</span> {detail.reason}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         ) : null}
 

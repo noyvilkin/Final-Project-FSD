@@ -65,6 +65,7 @@ export class ProjectAnalyzer {
     yaml: ['.yml', '.yaml'],
     json: ['.json'],
     xml: ['.xml', '.xsl', '.xslt'],
+    terraform: ['.tf', '.tfvars', '.hcl'],
     dockerfile: ['dockerfile'],
     makefile: ['makefile'],
     r: ['.r', '.R'],

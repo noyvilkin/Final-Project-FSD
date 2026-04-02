@@ -15,6 +15,7 @@ const getRequestUserId = (req: Request): string | undefined => {
 
 const serializeAssignment = (assignment: any) => ({
   id: assignment._id,
+  userId: assignment.userId?.toString?.() || assignment.userId,
   status: assignment.status,
   statusMessage: ResultsService.getStatusMessage(assignment),
   requirementsFileKey: assignment.requirementsFileKey,

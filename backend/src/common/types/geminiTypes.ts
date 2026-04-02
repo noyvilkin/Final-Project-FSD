@@ -11,12 +11,14 @@ export interface GeminiContent {
 export interface GeminiPayload {
   system_instruction?: { parts: GeminiPart[] };
   contents:            GeminiContent[];
+  generationConfig?:   GeminiGenerationConfig;
 }
 
 export interface GeminiGenerationConfig {
   temperature?:      number;
   maxOutputTokens?:  number;
   responseMimeType?: string;
+  responseSchema?:   Record<string, unknown>;
 }
 
 export interface GeminiRequestBody {

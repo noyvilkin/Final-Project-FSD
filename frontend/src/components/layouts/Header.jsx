@@ -4,6 +4,7 @@ export default function Header({
   title = "Professional",
   subtitle = "",
   showBack = false,
+  backTo,
   right = null,
 }) {
   const navigate = useNavigate();
@@ -15,7 +16,14 @@ export default function Header({
           <div className="flex items-start gap-3">
             {showBack && (
               <button
-                onClick={() => navigate(-1)}
+                onClick={() => {
+                  if (backTo) {
+                    navigate(backTo);
+                    return;
+                  }
+
+                  navigate(-1);
+                }}
                 className="mt-0.5 rounded-md px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
                 aria-label="Back"
                 title="Back"

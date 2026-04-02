@@ -11,7 +11,7 @@ import { appLogger } from "../../../common/services/logger.js";
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB to support ZIP files
+    fileSize: 100 * 1024 * 1024, // 100MB to support larger assignment ZIP files
     files: 10,
   },
 });

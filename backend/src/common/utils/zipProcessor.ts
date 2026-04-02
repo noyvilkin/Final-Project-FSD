@@ -3,9 +3,9 @@ import yauzl from 'yauzl';
 import { appLogger } from '../services/logger.js';
 
 // File size limits
-const MAX_ZIP_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
+const MAX_ZIP_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
 const MAX_EXTRACTED_SIZE_BYTES = 10 * 1024 * 1024; // 10MB total extracted content
-const MAX_FILE_COUNT = 100;
+const MAX_FILE_COUNT = 1000;
 
 // Noise directories and files to ignore
 const NOISE_PATTERNS = [
@@ -80,6 +80,7 @@ const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
   yaml: ['.yml', '.yaml'],
   json: ['.json'],
   xml: ['.xml'],
+  terraform: ['.tf', '.tfvars', '.hcl'],
   dockerfile: ['Dockerfile', '.dockerfile'],
   config: ['.cfg', '.conf', '.ini', '.env']
 };

@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { ZipProcessor } from "../utils/zipProcessor.js";
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
-const MAX_ZIP_SIZE_BYTES = 50 * 1024 * 1024; // 50MB for ZIP files
+const MAX_ASSIGNMENT_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB for assignment uploads
 
 const allowedMimeByField: Record<string, string[]> = {
   resumes: ["application/pdf"],
@@ -49,9 +49,9 @@ export const validateUploads = async (req: Request, res: Response, next: NextFun
     const allowed = allowedMimeByField[field];
 
     list.forEach((file) => {
-      // Check file size - use different limits for ZIP files
+      // Check file size - assignments can be larger, other fields keep the default cap
       const isZipFile = file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed';
-      const maxSize = isZipFile && field === 'assignments' ? MAX_ZIP_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
+      const maxSize = field === 'assignments' ? MAX_ASSIGNMENT_FILE_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
       
       if (file.size > maxSize) {
         errors.push({

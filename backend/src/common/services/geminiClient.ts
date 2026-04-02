@@ -198,6 +198,7 @@ export class GeminiClient {
         temperature:      this.temperature,
         maxOutputTokens:  this.maxOutputTokens,
         responseMimeType: 'application/json',
+        ...payload.generationConfig,
       },
     };
 
