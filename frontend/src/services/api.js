@@ -41,6 +41,29 @@ export function getAssignment(assignmentId) {
   return request(`/api/assignments/${assignmentId}`);
 }
 
+export function getUserAssignments(userId, { limit = 25, offset = 0 } = {}) {
+  return request(
+    `/api/assignments/user/${encodeURIComponent(userId)}?limit=${limit}&offset=${offset}`,
+    {
+      headers: userId ? { "x-user-id": userId } : undefined,
+    }
+  );
+}
+
+export function retryAssignment(assignmentId, userId) {
+  return request(`/api/assignments/${assignmentId}/retry`, {
+    method: "POST",
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+export function reanalyzeAssignment(assignmentId, userId) {
+  return request(`/api/assignments/${assignmentId}/reanalyze`, {
+    method: "POST",
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
 export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
 }

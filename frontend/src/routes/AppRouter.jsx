@@ -4,6 +4,7 @@ import MyProfile from "../pages/MyProfile";
 import AssignmentSubmission from "../pages/AssignmentSubmission";
 import AssignmentResults from "../pages/AssignmentResults";
 import AssignmentProcessing from "../pages/AssignmentProcessing";
+import AssignmentHistory from "../pages/AssignmentHistory";
 import ResumeOptimization from "../pages/ResumeOptimization";
 import OptimizationHistory from "../pages/OptimizationHistory";
 import OptimizationRunDetail from "../pages/OptimizationRunDetail";
@@ -45,6 +46,15 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <AssignmentProcessing />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/assignment/history"
+        element={
+          <ProtectedRoute>
+            <AssignmentHistory />
           </ProtectedRoute>
         }
       />

@@ -3,7 +3,24 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { getAssignment, uploadAssignment } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { getAssignment, retryAssignment, uploadAssignment } from "../services/api";
+
+const LOCAL_ASSIGNMENT_HISTORY_KEY = "assignment.history.ids";
+
+function trackAssignmentLocally(assignmentId) {
+  if (!assignmentId) return;
+
+  try {
+    const raw = localStorage.getItem(LOCAL_ASSIGNMENT_HISTORY_KEY);
+    const ids = raw ? JSON.parse(raw) : [];
+    const normalized = Array.isArray(ids) ? ids.filter((id) => typeof id === "string" && id.trim()) : [];
+    const next = [assignmentId, ...normalized.filter((id) => id !== assignmentId)].slice(0, 40);
+    localStorage.setItem(LOCAL_ASSIGNMENT_HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    // Local storage failure should never break processing flow.
+  }
+}
 
 const POLL_INTERVAL_MS = 3500;
 const MAX_POLL_ATTEMPTS = 50;
@@ -36,12 +53,15 @@ export default function AssignmentProcessing() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { userId } = useAuth();
 
   const initialSubmission = location.state?.submission;
   const [assignmentId, setAssignmentId] = useState(id || null);
   const [attempt, setAttempt] = useState(0);
   const [currentStatus, setCurrentStatus] = useState(id ? "pending" : "uploading");
   const [errorMessage, setErrorMessage] = useState("");
+  const [failedAssignment, setFailedAssignment] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +102,8 @@ export default function AssignmentProcessing() {
             throw new Error(uploadResult?.assignmentError || "Upload succeeded but assignment ID was missing.");
           }
 
+          trackAssignmentLocally(activeAssignmentId);
+
           setAssignmentId(activeAssignmentId);
           if (!cancelled) {
             navigate(`/assignment/${activeAssignmentId}/processing`, { replace: true });
@@ -100,6 +122,8 @@ export default function AssignmentProcessing() {
           const response = await getAssignment(activeAssignmentId);
           const status = response?.assignment?.status || "pending";
 
+          trackAssignmentLocally(activeAssignmentId);
+
           if (cancelled) return;
 
           setAttempt(i);
@@ -117,6 +141,7 @@ export default function AssignmentProcessing() {
           }
 
           if (status === "failed") {
+            setFailedAssignment(response?.assignment || null);
             setErrorMessage("Analysis failed. Please submit again with updated files.");
             return;
           }
@@ -159,6 +184,23 @@ export default function AssignmentProcessing() {
     return Math.min(95, Math.max(15, Math.round((attempt / MAX_POLL_ATTEMPTS) * 100)));
   }, [attempt, currentStatus]);
 
+  async function handleRetry() {
+    if (!assignmentId || !userId) return;
+    try {
+      setActionBusy(true);
+      await retryAssignment(assignmentId, userId);
+      setErrorMessage("");
+      setCurrentStatus("processing");
+      setFailedAssignment(null);
+      setAttempt(0);
+      navigate(`/assignment/${assignmentId}/processing`, { replace: true });
+    } catch (error) {
+      setErrorMessage(error?.message || "Retry failed.");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   return (
     <PageLayout title="Technical Assignment" subtitle="Analyzing your submission" showBack>
       <Card className="p-6">
@@ -186,12 +228,21 @@ export default function AssignmentProcessing() {
           </div>
         ) : null}
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <Button variant="outline" onClick={() => navigate("/assignment")}>Submit Another</Button>
-          <Button onClick={() => assignmentId && navigate(`/assignment/${assignmentId}/results`)} disabled={!assignmentId}>
-            Try Results Page
-          </Button>
-        </div>
+        {currentStatus === "failed" ? (
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => navigate("/assignment")}>Cancel</Button>
+            <Button
+              onClick={handleRetry}
+              disabled={actionBusy || !failedAssignment?.canRetry}
+            >
+              {actionBusy ? "Retrying..." : "Retry"}
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-5 flex justify-center">
+            <Button variant="outline" className="w-full max-w-[220px]" onClick={() => navigate("/assignment")}>Cancel</Button>
+          </div>
+        )}
       </Card>
     </PageLayout>
   );

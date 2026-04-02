@@ -196,6 +196,9 @@ export default function AssignmentSubmission() {
       title="Technical Assignment"
       subtitle="Upload your completed homework for review"
       showBack
+      right={
+        <Button size="sm" variant="outline" onClick={() => navigate("/assignment/history")}>History</Button>
+      }
     >
       <div className="space-y-4">
         <UploadTile
