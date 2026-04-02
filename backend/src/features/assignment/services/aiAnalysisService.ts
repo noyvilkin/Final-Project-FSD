@@ -316,8 +316,8 @@ Grade strictly. Do NOT be generous with intentional deviations from specificatio
         },
         overall: {
           score: Number(parsed.overall?.score) || 0,
-          grade: String(parsed.overall?.grade) || 'F',
-          summary: String(parsed.overall?.summary) || 'No summary provided'
+          grade: parsed.overall?.grade == null ? 'F' : String(parsed.overall.grade),
+          summary: parsed.overall?.summary == null ? 'No summary provided' : String(parsed.overall.summary)
         }
       };
 
