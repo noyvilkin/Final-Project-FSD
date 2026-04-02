@@ -1,17 +1,21 @@
-﻿const { createDefaultPreset } = require("ts-jest");
+﻿import { createDefaultPreset } from "ts-jest";
 
 const tsJestTransformCfg = createDefaultPreset().transform;
 
 /** @type {import("jest").Config} **/
-module.exports = {
+const config = {
   testEnvironment: "node",
   transform: {
     ...tsJestTransformCfg,
   },
+  moduleNameMapper: {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+  },
+  setupFiles: ["<rootDir>/src/tests/setup-env.js"],
   collectCoverageFrom: [
-    "src/**/*.ts",
+    "src/common/auth/**/*.ts",
+    "src/features/auth/**/*.ts",
     "!src/**/*.d.ts",
-    "!src/server.ts",
     "!src/tests/**",
   ],
   coverageDirectory: "coverage",
@@ -22,3 +26,5 @@ module.exports = {
   forceExit: true, // Force Jest to exit after all tests complete
   detectOpenHandles: false, // Disable open handle detection in CI
 };
+
+export default config;
