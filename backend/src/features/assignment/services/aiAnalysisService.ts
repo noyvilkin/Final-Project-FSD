@@ -2,6 +2,7 @@ import { GeminiClient, GeminiPayload } from "../../../common/services/geminiClie
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { appLogger } from "../../../common/services/logger.js";
 import type { AssignmentMetadata } from "../../resume/types/professionalDNA.types.js"
+import { normalizeAnalysisFailure } from "./assignmentRecovery.js";
 
 export interface UnifiedAnalysisPayload {
   requirements: string;
@@ -357,13 +358,26 @@ Grade strictly. Do NOT be generous with intentional deviations from specificatio
    */
   static async saveAnalysisResults(assignmentId: string, analysisResult: AIAnalysisResult, rawAIResponse?: string): Promise<void> {
     try {
+      const now = new Date();
+      const normalizedFailure = analysisResult.success
+        ? null
+        : normalizeAnalysisFailure(analysisResult.error || 'AI analysis failed');
+
       const updateData: any = {
-        status: analysisResult.success ? 'completed' : 'failed',
-        aiAnalysisCompletedAt: new Date()
+        $set: {
+          status: analysisResult.success ? 'completed' : 'failed',
+          aiAnalysisCompletedAt: now,
+        },
+        $unset: {
+          jobId: 1,
+          'recovery.activeRunId': 1,
+          'recovery.activeRunType': 1,
+          'recovery.activeRunStartedAt': 1,
+        },
       };
 
       if (analysisResult.success && analysisResult.feedback) {
-        updateData.aiFeedback = analysisResult.feedback;
+        updateData.$set.aiFeedback = analysisResult.feedback;
       }
 
       if (analysisResult.error) {
@@ -371,7 +385,15 @@ Grade strictly. Do NOT be generous with intentional deviations from specificatio
         if (rawAIResponse) {
           errors.push(`Raw AI Response (first 1000 chars): ${rawAIResponse.substring(0, 1000)}`);
         }
-        updateData.processingErrors = errors;
+        updateData.$set.processingErrors = errors;
+        updateData.$set['recovery.failureReason'] = normalizedFailure?.reason || analysisResult.error;
+        updateData.$set['recovery.failureCategory'] = normalizedFailure?.category || 'unknown';
+        updateData.$set['recovery.lastFailureAt'] = now;
+      } else {
+        updateData.$unset.processingErrors = 1;
+        updateData.$unset['recovery.failureReason'] = 1;
+        updateData.$unset['recovery.failureCategory'] = 1;
+        updateData.$unset['recovery.lastFailureAt'] = 1;
       }
 
       await AssignmentFeedback.findByIdAndUpdate(assignmentId, updateData);

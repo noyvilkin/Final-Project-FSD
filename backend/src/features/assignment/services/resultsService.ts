@@ -1,5 +1,6 @@
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { appLogger } from "../../../common/services/logger.js";
+import { MAX_ASSIGNMENT_RETRIES } from "./assignmentRecovery.js";
 
 export interface AssignmentResultsSummary {
   assignmentId: string;
@@ -133,17 +134,56 @@ export class ResultsService {
    * Gets a user-friendly status message based on assignment state
    */
   static getStatusMessage(assignment: any): string {
+    const recovery = assignment?.recovery;
+    const retryCount = recovery?.retryCount ?? 0;
+    const maxRetryCount = recovery?.maxRetryCount ?? MAX_ASSIGNMENT_RETRIES;
+    const canRetry = retryCount < maxRetryCount;
+
     switch (assignment.status) {
       case 'pending':
         return 'Assignment received and queued for processing';
       case 'scanning':
+        if (recovery?.activeRunType === 'retry') {
+          return 'Retrying analysis after a previous failure';
+        }
+
+        if (recovery?.activeRunType === 'reanalysis') {
+          return 'Re-running analysis for this assignment';
+        }
+
         return 'Analyzing uploaded files and extracting source code';
       case 'processing':
+        if (recovery?.activeRunType === 'retry') {
+          return 'Retry in progress: running AI analysis on your code';
+        }
+
+        if (recovery?.activeRunType === 'reanalysis') {
+          return 'Re-analysis in progress: refreshing the assignment feedback';
+        }
+
         return 'Running AI analysis on your code';
       case 'completed':
+        if (retryCount > 0) {
+          return 'Analysis complete! Your feedback has been refreshed after recovery';
+        }
+
         return 'Analysis complete! Your feedback is ready';
       case 'failed':
-        return 'Analysis failed. Please try uploading your files again';
+        if (recovery?.failureCategory === 'transient' && canRetry) {
+          return 'Analysis failed temporarily. You can retry this assignment';
+        }
+
+        if (recovery?.failureCategory === 'transient') {
+          return 'Analysis failed temporarily. Automatic retries are exhausted, but a manual re-analysis is still available';
+        }
+
+        if (recovery?.failureCategory === 'terminal') {
+          return recovery?.failureReason
+            ? `Analysis failed due to a terminal issue: ${recovery.failureReason}`
+            : 'Analysis failed due to a terminal issue';
+        }
+
+        return 'Analysis failed. A manual re-analysis may still recover this assignment';
       default:
         return 'Unknown status';
     }

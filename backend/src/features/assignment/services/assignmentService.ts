@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { AssignmentFeedback, type IAssignmentFeedback } from '../models/assignmentFeedback.model.js';
 import { appLogger } from '../../../common/services/logger.js';
 import { Types } from 'mongoose';
@@ -5,6 +6,7 @@ import { fetchBlobAsBuffer } from '../../../common/services/s3Upload.js';
 import { AssignmentAnalysisService } from './assignmentAnalysisService.js';
 import { AIAnalysisService } from './aiAnalysisService.js';
 import { ZipProcessor } from '../../../common/utils/zipProcessor.js';
+import { canRetryAssignment, normalizeAnalysisFailure, MAX_ASSIGNMENT_RETRIES, type RecoveryRunType } from './assignmentRecovery.js';
 
 export interface AssignmentCreationResult {
   assignmentId: string;
@@ -21,6 +23,96 @@ export interface UploadedFile {
 }
 
 export class AssignmentService {
+  private static async updateFailureState(
+    assignmentId: string,
+    error: unknown,
+    options: {
+      status?: IAssignmentFeedback['status'];
+      clearJobId?: boolean;
+      rawAIResponse?: string;
+    } = {}
+  ): Promise<void> {
+    const normalizedFailure = normalizeAnalysisFailure(error);
+    const processingErrors = [
+      normalizedFailure.reason,
+      ...normalizedFailure.details.slice(1),
+    ].filter(Boolean);
+
+    if (options.rawAIResponse) {
+      processingErrors.push(
+        `Raw AI Response (first 1000 chars): ${options.rawAIResponse.substring(0, 1000)}`
+      );
+    }
+
+    const unset: Record<string, 1> = {
+      'recovery.activeRunId': 1,
+      'recovery.activeRunType': 1,
+      'recovery.activeRunStartedAt': 1,
+    };
+
+    if (options.clearJobId !== false) {
+      unset.jobId = 1;
+    }
+
+    await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
+      $set: {
+        status: options.status ?? 'failed',
+        processingErrors,
+        'recovery.failureReason': normalizedFailure.reason,
+        'recovery.failureCategory': normalizedFailure.category,
+        'recovery.lastFailureAt': new Date(),
+      },
+      $unset: unset,
+    });
+  }
+
+  private static async claimRecoveryRun(
+    assignmentId: string,
+    ownerUserId: string,
+    runType: 'retry' | 'reanalysis'
+  ): Promise<IAssignmentFeedback | null> {
+    const now = new Date();
+    const runId = randomUUID();
+    const baseFilter = {
+      _id: assignmentId,
+      userId: new Types.ObjectId(ownerUserId),
+      $or: [{ jobId: { $exists: false } }, { jobId: null }],
+    };
+
+    const statusFilter = runType === 'retry'
+      ? { status: 'failed' as const, 'recovery.retryCount': { $lt: MAX_ASSIGNMENT_RETRIES } }
+      : { status: { $in: ['completed', 'failed'] as const } };
+
+    const claimedAssignment = await AssignmentFeedback.findOneAndUpdate(
+      {
+        ...baseFilter,
+        ...statusFilter,
+      },
+      {
+        $set: {
+          status: 'processing',
+          jobId: runId,
+          'recovery.activeRunId': runId,
+          'recovery.activeRunType': runType,
+          'recovery.activeRunStartedAt': now,
+          ...(runType === 'retry' ? { 'recovery.lastRetryAt': now } : {}),
+        },
+        ...(runType === 'retry' ? { $inc: { 'recovery.retryCount': 1 } } : {}),
+      },
+      { new: true }
+    );
+
+    return claimedAssignment;
+  }
+
+  private static async startInitialRun(
+    assignmentId: string,
+    userId: string,
+    files: { requirements?: UploadedFile; solution?: UploadedFile }
+  ): Promise<void> {
+    await this.runAnalysisPipeline(assignmentId, userId, files, 'initial');
+  }
+
   /**
    * Create a new assignment and trigger analysis if both files are provided
    */
@@ -82,7 +174,7 @@ export class AssignmentService {
       let analysisTriggered = false;
       if (files.solution) {
         try {
-          await this.runAnalysisPipeline(assignmentId, resolvedUserId.toString(), files);
+          await this.startInitialRun(assignmentId, resolvedUserId.toString(), files);
           analysisTriggered = true;
 
           appLogger.info('Assignment analysis completed', { assignmentId, userId });
@@ -92,13 +184,9 @@ export class AssignmentService {
             userId,
             error: error instanceof Error ? error.message : 'Unknown error'
           });
-          
-          // Update assignment status to failed
-          await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
-            status: 'failed',
-            metadata: {
-              processingErrors: ['Analysis pipeline failed']
-            }
+
+          await this.updateFailureState(assignmentId, error, {
+            rawAIResponse: error instanceof Error ? undefined : undefined,
           });
         }
       }
@@ -125,7 +213,8 @@ export class AssignmentService {
   private static async runAnalysisPipeline(
     assignmentId: string,
     _userId: string,
-    files: { requirements?: UploadedFile; solution?: UploadedFile }
+    files: { requirements?: UploadedFile; solution?: UploadedFile },
+    runType: RecoveryRunType = 'initial'
   ): Promise<void> {
     if (!files.solution) {
       throw new Error('Solution file is required');
@@ -136,7 +225,17 @@ export class AssignmentService {
       throw new Error('Missing bucket information');
     }
 
-    await AssignmentFeedback.findByIdAndUpdate(assignmentId, { status: 'scanning' });
+    const runId = randomUUID();
+
+    await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
+      $set: {
+        status: 'scanning',
+        jobId: runId,
+        'recovery.activeRunId': runId,
+        'recovery.activeRunType': runType,
+        'recovery.activeRunStartedAt': new Date(),
+      },
+    });
 
     const isZipSolution =
       files.solution.mimeType === 'application/zip' ||
@@ -182,13 +281,21 @@ export class AssignmentService {
       detectedFrameworks: analysisResult.metadata.detectedFrameworks || zipScanResult.metadata.frameworks
     };
 
-    await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
+    const analysisUpdate: Record<string, unknown> = {
       status: analysisResult.success ? 'processing' : 'failed',
       metadata: metadataUpdate,
-      ...(analysisResult.errors.length > 0 ? { processingErrors: analysisResult.errors } : {})
+    };
+
+    if (analysisResult.errors.length > 0) {
+      analysisUpdate.processingErrors = analysisResult.errors;
+    }
+
+    await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
+      $set: analysisUpdate,
     });
 
     if (!analysisResult.success) {
+      await this.updateFailureState(assignmentId, `Assignment analysis failed: ${analysisResult.errors.join('; ')}`);
       throw new Error(`Assignment analysis failed: ${analysisResult.errors.join('; ')}`);
     }
 
@@ -203,6 +310,115 @@ export class AssignmentService {
     if (!aiResult.success) {
       throw new Error(aiResult.error || 'AI analysis failed');
     }
+  }
+
+  static async retryFailedAssignment(assignmentId: string, userId: string): Promise<IAssignmentFeedback> {
+    const assignment = await AssignmentFeedback.findById(assignmentId);
+
+    if (!assignment) {
+      throw new Error('Assignment not found');
+    }
+
+    if (assignment.userId.toString() !== userId) {
+      throw new Error('You do not have permission to retry this assignment');
+    }
+
+    if (assignment.status !== 'failed') {
+      throw new Error('Only failed assignments can be retried');
+    }
+
+    if (assignment.recovery?.failureCategory === 'terminal') {
+      throw new Error('This assignment has a terminal failure and cannot be automatically retried');
+    }
+
+    const retryCount = assignment.recovery?.retryCount ?? 0;
+    if (!canRetryAssignment(retryCount, assignment.recovery?.maxRetryCount ?? MAX_ASSIGNMENT_RETRIES)) {
+      throw new Error('Retry limit reached for this assignment');
+    }
+
+    const claimedAssignment = await this.claimRecoveryRun(assignmentId, assignment.userId.toString(), 'retry');
+    if (!claimedAssignment) {
+      throw new Error('Assignment is already being processed');
+    }
+
+    await this.runAnalysisPipeline(
+      assignmentId,
+      userId,
+      {
+        requirements: assignment.requirementsFileKey ? {
+          bucket: process.env.S3_BUCKET_NAME || '',
+          key: assignment.requirementsFileKey,
+          url: '',
+          mimeType: 'application/pdf',
+          size: 0,
+        } : undefined,
+        solution: {
+          bucket: process.env.S3_BUCKET_NAME || '',
+          key: assignment.solutionFileKey,
+          url: '',
+          mimeType: 'application/zip',
+          size: 0,
+        },
+      },
+      'retry'
+    );
+
+    const refreshed = await AssignmentFeedback.findById(assignmentId);
+    if (!refreshed) {
+      throw new Error('Assignment not found after retry');
+    }
+
+    return refreshed;
+  }
+
+  static async reanalyzeAssignment(assignmentId: string, userId: string): Promise<IAssignmentFeedback> {
+    const assignment = await AssignmentFeedback.findById(assignmentId);
+
+    if (!assignment) {
+      throw new Error('Assignment not found');
+    }
+
+    if (assignment.userId.toString() !== userId) {
+      throw new Error('You do not have permission to re-analyze this assignment');
+    }
+
+    if (!['completed', 'failed'].includes(assignment.status)) {
+      throw new Error('Re-analysis is only available for completed or failed assignments');
+    }
+
+    const claimedAssignment = await this.claimRecoveryRun(assignmentId, assignment.userId.toString(), 'reanalysis');
+    if (!claimedAssignment) {
+      throw new Error('Assignment is already being processed');
+    }
+
+    await this.runAnalysisPipeline(
+      assignmentId,
+      userId,
+      {
+        requirements: assignment.requirementsFileKey ? {
+          bucket: process.env.S3_BUCKET_NAME || '',
+          key: assignment.requirementsFileKey,
+          url: '',
+          mimeType: 'application/pdf',
+          size: 0,
+        } : undefined,
+        solution: {
+          bucket: process.env.S3_BUCKET_NAME || '',
+          key: assignment.solutionFileKey,
+          url: '',
+          mimeType: 'application/zip',
+          size: 0,
+        },
+      },
+      'reanalysis'
+    );
+
+    const refreshed = await AssignmentFeedback.findById(assignmentId);
+    if (!refreshed) {
+      throw new Error('Assignment not found after re-analysis');
+    }
+
+    return refreshed;
   }
 
   /**

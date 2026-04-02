@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import type { RecoveryFailureCategory, RecoveryRunType } from '../services/assignmentRecovery.js';
 
 interface IRequirementAnalysis {
   requirement: string;
@@ -52,6 +53,18 @@ interface IAIFeedback {
   overall: IAIOverall;
 }
 
+export interface IAssignmentRecovery {
+  retryCount: number;
+  maxRetryCount: number;
+  lastRetryAt?: Date;
+  lastFailureAt?: Date;
+  failureReason?: string;
+  failureCategory?: RecoveryFailureCategory;
+  activeRunId?: string;
+  activeRunType?: RecoveryRunType;
+  activeRunStartedAt?: Date;
+}
+
 export interface IMetadata {
   detectedLanguage?: string;
   detectedFrameworks?: string[];
@@ -91,6 +104,7 @@ export interface IAssignmentFeedback extends Document {
   jobId?: string;
   processingErrors?: string[];
   aiAnalysisCompletedAt?: Date;
+  recovery?: IAssignmentRecovery;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -146,6 +160,18 @@ const AIFeedbackSchema = new Schema<IAIFeedback>({
   overall:                  { type: AIOverallSchema }
 }, { _id: false });
 
+const RecoverySchema = new Schema<IAssignmentRecovery>({
+  retryCount:           { type: Number, default: 0, min: 0 },
+  maxRetryCount:        { type: Number, default: 2, min: 0 },
+  lastRetryAt:          { type: Date },
+  lastFailureAt:        { type: Date },
+  failureReason:        { type: String },
+  failureCategory:      { type: String, enum: ['transient', 'terminal', 'unknown'], default: 'unknown' },
+  activeRunId:          { type: String },
+  activeRunType:        { type: String, enum: ['initial', 'retry', 'reanalysis'] },
+  activeRunStartedAt:   { type: Date }
+}, { _id: false });
+
 
 // Metadata schema
 const MetadataSchema = new Schema<IMetadata>({
@@ -179,7 +205,8 @@ const AssignmentFeedbackSchema = new Schema<IAssignmentFeedback>(
     aiFeedback:          { type: AIFeedbackSchema },
     jobId:               { type: String },
     processingErrors:    { type: [String], default: [] },
-    aiAnalysisCompletedAt: { type: Date }
+    aiAnalysisCompletedAt: { type: Date },
+    recovery:            { type: RecoverySchema, default: () => ({}) }
   },
   { timestamps: true }
 );
