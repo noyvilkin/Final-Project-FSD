@@ -1,22 +1,89 @@
+import axios from "axios";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+});
+
+let unauthorizedHandler = null;
+
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = typeof handler === "function" ? handler : null;
+}
+
+function toApiError(error) {
+  const message =
+    error?.response?.data?.error?.message ||
+    error?.response?.data?.message ||
+    error?.message ||
+    "Request failed";
+
+  const apiError = new Error(message);
+  apiError.status = error?.response?.status ?? 0;
+  apiError.payload = error?.response?.data ?? null;
+  return apiError;
+}
+
+apiClient.interceptors.request.use((config) => {
+  return {
+    ...config,
+    withCredentials: true,
+  };
+});
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const shouldHandleAuth = !error?.config?.skipAuthHandling;
+
+    if (status === 401 && shouldHandleAuth && unauthorizedHandler) {
+      unauthorizedHandler();
+    }
+
+    return Promise.reject(toApiError(error));
+  }
+);
+
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: "include",
+  const response = await apiClient.request({
+    url: path,
     ...options,
   });
 
-  const data = await response.json().catch(() => null);
+  return response.data;
+}
 
-  if (!response.ok) {
-    const message = data?.error?.message || data?.message || `Request failed: ${response.status}`;
-    const error = new Error(message);
-    error.status = response.status;
-    error.payload = data;
-    throw error;
-  }
+export function signUp(payload) {
+  return request("/api/auth/signup", {
+    method: "POST",
+    data: payload,
+    skipAuthHandling: true,
+  });
+}
 
-  return data;
+export function login(payload) {
+  return request("/api/auth/login", {
+    method: "POST",
+    data: payload,
+    skipAuthHandling: true,
+  });
+}
+
+export function refresh() {
+  return request("/api/auth/refresh", {
+    method: "POST",
+    skipAuthHandling: true,
+  });
+}
+
+export function logout() {
+  return request("/api/auth/logout", {
+    method: "POST",
+    skipAuthHandling: true,
+  });
 }
 
 export function uploadAssignment({ assignmentFiles, userId, notes }) {
@@ -33,7 +100,7 @@ export function uploadAssignment({ assignmentFiles, userId, notes }) {
   return request("/api/uploads", {
     method: "POST",
     headers: userId ? { "x-user-id": userId } : undefined,
-    body: formData,
+    data: formData,
   });
 }
 
@@ -63,16 +130,14 @@ export function uploadResume(file, userId) {
 export function optimizeResume({ userId, jobDescriptionText }) {
   return request("/api/resume/optimize", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, jobDescriptionText }),
+    data: { userId, jobDescriptionText },
   });
 }
 
 export function getResumeScore({ userId, jobDescriptionText }) {
   return request("/api/resume/score", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, jobDescriptionText }),
+    data: { userId, jobDescriptionText },
   });
 }
 
@@ -89,19 +154,19 @@ export function getOptimizationRun(runId, userId) {
 }
 
 export async function getOptimizationArtifact(runId, userId, acceptedBullets = []) {
-  const response = await fetch(
-    `${API_BASE_URL}/api/resume/history/${runId}/artifact`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, acceptedBullets }),
-    }
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to fetch artifact: ${response.status}`);
+  try {
+    const response = await apiClient.post(
+      `/api/resume/history/${runId}/artifact`,
+      { userId, acceptedBullets },
+      {
+        responseType: "text",
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    throw toApiError(error);
   }
-  return response.text();
 }
 
 export function deleteOptimizationRun(runId, userId) {
