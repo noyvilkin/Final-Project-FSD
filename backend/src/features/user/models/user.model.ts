@@ -10,6 +10,8 @@ interface IUserProfile {
 export interface IUser extends Document {
   email: string;
   passwordHash: string;
+  refreshTokenHash?: string;
+  refreshTokenIssuedAt?: Date;
   profile: IUserProfile;
   latestResumeId?:        Types.ObjectId;
   latestProfessionalDNA?: Types.ObjectId;
@@ -29,6 +31,8 @@ const UserSchema = new Schema<IUser>(
   {
     email:        { type: String, required: true, unique: true, lowercase: true, index: true },
     passwordHash: { type: String, required: true },
+    refreshTokenHash: { type: String },
+    refreshTokenIssuedAt: { type: Date },
     profile:      { type: UserProfileSchema, default: {} },
     latestResumeId:        { type: Schema.Types.ObjectId, ref: 'Resume' },
     latestProfessionalDNA: { type: Schema.Types.ObjectId, ref: 'ProfessionalDNA' },

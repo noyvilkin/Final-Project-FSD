@@ -1,5 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
+import { useAuth } from "../context/AuthContext";
+import Home from "../pages/Home";
+import Login from "../pages/Login";
+import Signup from "../pages/Signup";
 import MyProfile from "../pages/MyProfile";
 import ResumeUploadPage from "../pages/ResumeUploadPage";
 import AssignmentSubmission from "../pages/AssignmentSubmission";
@@ -9,10 +13,44 @@ import ResumeOptimization from "../pages/ResumeOptimization";
 import OptimizationHistory from "../pages/OptimizationHistory";
 import OptimizationRunDetail from "../pages/OptimizationRunDetail";
 
+function PublicRoute({ children }) {
+  const { isAuthenticated, isAuthLoading } = useAuth();
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
+        Checking your session...
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  return children;
+}
+
 export default function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/profile" replace />} />
+      <Route path="/" element={<Home />} />
+      <Route
+        path="/login"
+        element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          <PublicRoute>
+            <Signup />
+          </PublicRoute>
+        }
+      />
 
       <Route
         path="/profile"
@@ -88,7 +126,7 @@ export default function AppRouter() {
         }
       />
 
-      <Route path="*" element={<div>404</div>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

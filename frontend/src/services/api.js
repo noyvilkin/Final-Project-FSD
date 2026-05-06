@@ -1,49 +1,95 @@
+import axios from "axios";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-async function refreshToken() {
-  console.log("Token expired - refresh placeholder");
-  return localStorage.getItem("token") || "";
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+});
+
+let unauthorizedHandler = null;
+
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = typeof handler === "function" ? handler : null;
 }
 
-async function request(path, options = {}) {
+function toApiError(error) {
+  const message =
+    error?.response?.data?.error?.message ||
+    error?.response?.data?.message ||
+    error?.message ||
+    "Request failed";
+
+  const apiError = new Error(message);
+  apiError.status = error?.response?.status ?? 0;
+  apiError.payload = error?.response?.data ?? null;
+  return apiError;
+}
+
+apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
 
-  let response = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: "include",
-    ...options,
+  return {
+    ...config,
+    withCredentials: true,
     headers: {
-      ...(options.headers || {}),
-      Authorization: token ? `Bearer ${token}` : "",
+      ...(config.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
+  };
+});
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const shouldHandleAuth = !error?.config?.skipAuthHandling;
+
+    if (status === 401 && shouldHandleAuth && unauthorizedHandler) {
+      unauthorizedHandler();
+    }
+
+    return Promise.reject(toApiError(error));
+  }
+);
+
+async function request(path, options = {}) {
+  const response = await apiClient.request({
+    url: path,
+    ...options,
   });
 
-  if (response.status === 401) {
-    const newToken = await refreshToken();
+  return response.data;
+}
 
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      credentials: "include",
-      ...options,
-      headers: {
-        ...(options.headers || {}),
-        Authorization: newToken ? `Bearer ${newToken}` : "",
-      },
-    });
-  }
+export function signUp(payload) {
+  return request("/api/auth/signup", {
+    method: "POST",
+    data: payload,
+    skipAuthHandling: true,
+  });
+}
 
-  const data = await response.json().catch(() => null);
+export function login(payload) {
+  return request("/api/auth/login", {
+    method: "POST",
+    data: payload,
+    skipAuthHandling: true,
+  });
+}
 
-  if (!response.ok) {
-    const message =
-      data?.error?.message ||
-      data?.message ||
-      `Request failed: ${response.status}`;
-    const error = new Error(message);
-    error.status = response.status;
-    error.payload = data;
-    throw error;
-  }
+export function refresh() {
+  return request("/api/auth/refresh", {
+    method: "POST",
+    skipAuthHandling: true,
+  });
+}
 
-  return data;
+export function logout() {
+  return request("/api/auth/logout", {
+    method: "POST",
+    skipAuthHandling: true,
+  });
 }
 
 export function uploadAssignment({ assignmentFiles, userId, notes }) {
@@ -60,7 +106,7 @@ export function uploadAssignment({ assignmentFiles, userId, notes }) {
   return request("/api/uploads", {
     method: "POST",
     headers: userId ? { "x-user-id": userId } : undefined,
-    body: formData,
+    data: formData,
   });
 }
 
@@ -75,27 +121,28 @@ export function getAssignmentResults(assignmentId, format = "summary") {
 export function uploadResume(file, userId) {
   const formData = new FormData();
   formData.append("resume", file);
-  if (userId) formData.append("userId", userId);
+
+  if (userId) {
+    formData.append("userId", userId);
+  }
 
   return request("/api/resume/upload", {
     method: "POST",
-    body: formData,
+    data: formData,
   });
 }
 
 export function optimizeResume({ userId, jobDescriptionText }) {
   return request("/api/resume/optimize", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, jobDescriptionText }),
+    data: { userId, jobDescriptionText },
   });
 }
 
 export function getResumeScore({ userId, jobDescriptionText }) {
   return request("/api/resume/score", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, jobDescriptionText }),
+    data: { userId, jobDescriptionText },
   });
 }
 
@@ -114,43 +161,19 @@ export async function getOptimizationArtifact(
   userId,
   acceptedBullets = []
 ) {
-  const token = localStorage.getItem("token");
-
-  let response = await fetch(
-    `${API_BASE_URL}/api/resume/history/${runId}/artifact`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token ? `Bearer ${token}` : "",
-      },
-      body: JSON.stringify({ userId, acceptedBullets }),
-    }
-  );
-
-  if (response.status === 401) {
-    const newToken = await refreshToken();
-
-    response = await fetch(
-      `${API_BASE_URL}/api/resume/history/${runId}/artifact`,
+  try {
+    const response = await apiClient.post(
+      `/api/resume/history/${runId}/artifact`,
+      { userId, acceptedBullets },
       {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: newToken ? `Bearer ${newToken}` : "",
-        },
-        body: JSON.stringify({ userId, acceptedBullets }),
+        responseType: "text",
       }
     );
-  }
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch artifact: ${response.status}`);
+    return response.data;
+  } catch (error) {
+    throw toApiError(error);
   }
-
-  return response.text();
 }
 
 export function deleteOptimizationRun(runId, userId) {
