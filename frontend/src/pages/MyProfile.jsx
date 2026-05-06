@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
 
@@ -33,26 +33,11 @@ export default function MyProfile() {
   const profileSummary = profileAnalysis?.profileSummary || null;
   const hasAnalysis = !!profileAnalysis;
 
-  const lastRoleLabel = useMemo(() => {
-    const rawText = profileAnalysis?.rawResumeText || "";
-    if (!rawText) return "Not available yet";
+  const lastRoleLabel =
+    profileSummary?.lastRoleTitle || "Role not identified";
 
-    const lines = rawText
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    const experienceIndex = lines.findIndex(
-      (line) =>
-        line.toLowerCase().includes("experience") ||
-        line.includes("ניסיון תעסוקתי")
-    );
-
-    if (experienceIndex === -1) return "Not available yet";
-
-    const roleLine = lines[experienceIndex + 1] || "Not available yet";
-    return roleLine.length > 120 ? `${roleLine.slice(0, 120)}...` : roleLine;
-  }, [profileAnalysis]);
+  const lastRoleCompany =
+    profileSummary?.lastRoleCompany || "";
 
   return (
     <PageLayout title="My Profile" subtitle="Your career preparation hub">
@@ -109,7 +94,9 @@ export default function MyProfile() {
 
           {isLoading ? (
             <section className="rounded-[28px] border border-[#e5e7eb] bg-white p-8 shadow-sm">
-              <p className="text-sm text-[#6b7280]">Loading profile insights...</p>
+              <p className="text-sm text-[#6b7280]">
+                Loading profile insights...
+              </p>
             </section>
           ) : !hasAnalysis ? (
             <section className="rounded-[28px] border border-dashed border-[#d0d5dd] bg-white p-10 text-center shadow-sm">
@@ -164,6 +151,12 @@ export default function MyProfile() {
                     <h3 className="text-lg font-semibold leading-7 text-[#065f46]">
                       {lastRoleLabel}
                     </h3>
+
+                    {lastRoleCompany && (
+                      <p className="mt-1 text-sm font-medium text-[#047857]">
+                        {lastRoleCompany}
+                      </p>
+                    )}
                   </div>
 
                   <p className="mt-3 text-sm text-[#667085]">
@@ -177,15 +170,16 @@ export default function MyProfile() {
                   iconBg="bg-[#7c3aed]"
                 >
                   <h3 className="text-3xl font-bold text-[#6d28d9]">
-                    {profileSummary?.hasDegree
-                      ? "Degree Found"
-                      : "Studies in Progress"}
-                  </h3>
+  {profileSummary?.hasDegree
+    ? "Degree Found"
+    : "Studies in Progress"}
+</h3>
 
-                  <p className="mt-3 text-sm text-[#667085]">
-                    {profileSummary?.fieldOfStudy ||
-                      "No academic field identified"}
-                  </p>
+<p className="mt-3 text-sm font-medium text-[#475467]">
+  {profileSummary?.fieldOfStudy
+    ? `Field of Study: ${profileSummary.fieldOfStudy}`
+    : "No academic field identified"}
+</p>
                 </WideInsightCard>
               </section>
 
