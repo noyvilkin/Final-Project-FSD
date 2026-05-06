@@ -27,9 +27,15 @@ function toApiError(error) {
 }
 
 apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+
   return {
     ...config,
     withCredentials: true,
+    headers: {
+      ...(config.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   };
 });
 
@@ -112,20 +118,19 @@ export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
 }
 
-// ── Resume Upload (PDF → Professional DNA) ─────────────────────────
-
 export function uploadResume(file, userId) {
   const formData = new FormData();
   formData.append("resume", file);
-  if (userId) formData.append("userId", userId);
+
+  if (userId) {
+    formData.append("userId", userId);
+  }
 
   return request("/api/resume/upload", {
     method: "POST",
-    body: formData,
+    data: formData,
   });
 }
-
-// ── Resume Optimization ─────────────────────────────────────────────
 
 export function optimizeResume({ userId, jobDescriptionText }) {
   return request("/api/resume/optimize", {
@@ -141,8 +146,6 @@ export function getResumeScore({ userId, jobDescriptionText }) {
   });
 }
 
-// ── Optimization History ────────────────────────────────────────────
-
 export function getOptimizationHistory(userId) {
   return request(`/api/resume/history?userId=${encodeURIComponent(userId)}`);
 }
@@ -153,7 +156,11 @@ export function getOptimizationRun(runId, userId) {
   );
 }
 
-export async function getOptimizationArtifact(runId, userId, acceptedBullets = []) {
+export async function getOptimizationArtifact(
+  runId,
+  userId,
+  acceptedBullets = []
+) {
   try {
     const response = await apiClient.post(
       `/api/resume/history/${runId}/artifact`,

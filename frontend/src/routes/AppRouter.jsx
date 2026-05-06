@@ -5,6 +5,7 @@ import Home from "../pages/Home";
 import Login from "../pages/Login";
 import Signup from "../pages/Signup";
 import MyProfile from "../pages/MyProfile";
+import ResumeUploadPage from "../pages/ResumeUploadPage";
 import AssignmentSubmission from "../pages/AssignmentSubmission";
 import AssignmentResults from "../pages/AssignmentResults";
 import AssignmentProcessing from "../pages/AssignmentProcessing";
@@ -59,6 +60,8 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
+
+      <Route path="/resume-upload" element={<ResumeUploadPage />} />
 
       <Route
         path="/assignment"
