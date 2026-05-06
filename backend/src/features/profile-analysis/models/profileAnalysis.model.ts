@@ -12,6 +12,8 @@ export interface IProfileAnalysis extends Document {
     institution?: string;
     gradeAverage?: number;
     totalYearsOfExperience?: number;
+    lastRoleTitle?: string;
+    lastRoleCompany?: string;
     topSkills: string[];
     recommendedCourses: string[];
   };
@@ -38,6 +40,8 @@ const ProfileAnalysisSchema = new Schema<IProfileAnalysis>(
       institution: { type: String },
       gradeAverage: { type: Number },
       totalYearsOfExperience: { type: Number },
+      lastRoleTitle: { type: String },
+      lastRoleCompany: { type: String },
       topSkills: { type: [String], default: [] },
       recommendedCourses: { type: [String], default: [] },
     },
