@@ -1,6 +1,6 @@
 ﻿import { createDefaultPreset } from "ts-jest";
 
-const tsJestTransformCfg = createDefaultPreset().transform;
+const tsJestTransformCfg = createDefaultPreset({ diagnostics: { ignoreCodes: [151002] } }).transform;
 
 /** @type {import("jest").Config} **/
 const config = {
@@ -20,7 +20,7 @@ const config = {
   ],
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
-  testMatch: ["**/tests/**/*.test.ts"],
+  testMatch: ["**/tests/**/*.test.ts", "**/__tests__/**/*.spec.ts"],
   testTimeout: 30000,
   maxWorkers: 1, // Run tests sequentially to avoid database conflicts
   forceExit: true, // Force Jest to exit after all tests complete
