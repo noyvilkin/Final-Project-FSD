@@ -1,0 +1,44 @@
+DANIEL COHEN
+Full Stack Developer
+daniel.cohen@example.com  |  +972-50-555-1234  |  Tel Aviv, Israel
+
+PROFESSIONAL SUMMARY
+Full stack developer with 4 years of hands-on experience building production web
+applications. Strong on the React/Node.js stack with a focus on TypeScript, REST
+APIs, and cloud-native deployment.
+
+EXPERIENCE
+
+Senior Frontend Developer — Acme Tech                           Mar 2024 – Present
+- Owned the migration of the customer-facing dashboard from JavaScript to TypeScript,
+  reducing runtime errors in production by 38%.
+- Built a real-time analytics module using React, Redux Toolkit, and WebSockets.
+- Led code reviews and mentored two junior engineers.
+
+Full Stack Developer — Innovate Labs                            Jul 2022 – Feb 2024
+- Implemented a microservices architecture in Node.js (Express) with MongoDB,
+  serving 50K+ daily active users.
+- Containerised services with Docker and deployed to AWS ECS via GitHub Actions.
+- Designed and shipped a Stripe-backed billing flow handling $1.2M ARR.
+
+Junior Web Developer — BlueWave Studio                          Sep 2020 – Jun 2022
+- Built marketing sites in Next.js and Tailwind CSS; integrated headless CMS (Sanity).
+- Wrote unit and integration tests with Jest and Cypress.
+
+EDUCATION
+
+B.Sc. in Computer Science — The Open University of Israel       2017 – 2020
+GPA: 3.6 / 4.0
+
+SKILLS
+Languages: TypeScript, JavaScript, Python
+Frontend: React, Next.js, Redux Toolkit, Tailwind CSS
+Backend: Node.js, Express, NestJS, REST APIs, GraphQL
+Databases: MongoDB, PostgreSQL, Redis
+DevOps: Docker, AWS (ECS, S3, Lambda), GitHub Actions, Terraform
+Testing: Jest, Cypress, Playwright
+Soft: Mentoring, Code Review, Agile/Scrum
+
+ACHIEVEMENTS
+- Internal "Hack Day" winner for an in-house feature-flag service (Innovate Labs, 2023).
+- Speaker at React Tel Aviv Meetup — "Practical patterns for typed Redux".
