@@ -1,4 +1,8 @@
-import mongoose, { Document, Schema, Types } from 'mongoose';
+import mongoose, { Document, Schema, Types } from "mongoose";
+
+// The InterviewInsights document is the analysis output side of an interview.
+// Upload metadata + workflow status live on InterviewJob (see interviewJob.model.ts).
+// Each InterviewInsights doc is uniquely tied to one InterviewJob via interviewJobId.
 
 interface IStarComponent {
   detected: boolean;
@@ -6,7 +10,7 @@ interface IStarComponent {
 }
 
 interface IStarAlignment {
-  score: number;
+  score:     number;
   situation: IStarComponent;
   task:      IStarComponent;
   action:    IStarComponent;
@@ -14,18 +18,18 @@ interface IStarAlignment {
 }
 
 interface IFillerWord {
-  word: string;
+  word:  string;
   count: number;
 }
 
 interface IFillerWords {
-  totalCount: number;
+  totalCount:    number;
   ratePerMinute: number;
-  examples: IFillerWord[];
+  examples:      IFillerWord[];
 }
 
 interface ISentiment {
-  overallTone: 'confident' | 'neutral' | 'hesitant';
+  overallTone:  "confident" | "neutral" | "hesitant";
   clarityScore: number;
 }
 
@@ -39,73 +43,83 @@ interface IInsights {
 }
 
 export interface IInterviewInsights extends Document {
-  userId: Types.ObjectId;
-  mediaFileKey: string;
-  mediaType: 'audio' | 'video';
-  status: 'pending' | 'transcribing' | 'analyzing' | 'completed' | 'failed';
-  transcript?: string;
-  insights?: IInsights;
-  jobId?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  userId:         Types.ObjectId;
+  interviewJobId: Types.ObjectId;
+  transcript?:    string;
+  insights?:      IInsights;
+  version:        number;
+  createdAt:      Date;
+  updatedAt:      Date;
 }
 
-const StarComponentSchema = new Schema<IStarComponent>({
-  detected: { type: Boolean, required: true },
-  feedback: { type: String },
-}, { _id: false });
+const StarComponentSchema = new Schema<IStarComponent>(
+  {
+    detected: { type: Boolean, required: true },
+    feedback: { type: String },
+  },
+  { _id: false }
+);
 
-const StarAlignmentSchema = new Schema<IStarAlignment>({
-  score:     { type: Number, min: 0, max: 100 },
-  situation: { type: StarComponentSchema },
-  task:      { type: StarComponentSchema },
-  action:    { type: StarComponentSchema },
-  result:    { type: StarComponentSchema },
-}, { _id: false });
+const StarAlignmentSchema = new Schema<IStarAlignment>(
+  {
+    score:     { type: Number, min: 0, max: 100 },
+    situation: { type: StarComponentSchema },
+    task:      { type: StarComponentSchema },
+    action:    { type: StarComponentSchema },
+    result:    { type: StarComponentSchema },
+  },
+  { _id: false }
+);
 
-const FillerWordSchema = new Schema<IFillerWord>({
-  word:  { type: String, required: true },
-  count: { type: Number, required: true },
-}, { _id: false });
+const FillerWordSchema = new Schema<IFillerWord>(
+  {
+    word:  { type: String, required: true },
+    count: { type: Number, required: true },
+  },
+  { _id: false }
+);
 
-const FillerWordsSchema = new Schema<IFillerWords>({
-  totalCount:     { type: Number, default: 0 },
-  ratePerMinute:  { type: Number, default: 0 },
-  examples:       { type: [FillerWordSchema], default: [] },
-}, { _id: false });
+const FillerWordsSchema = new Schema<IFillerWords>(
+  {
+    totalCount:    { type: Number, default: 0 },
+    ratePerMinute: { type: Number, default: 0 },
+    examples:      { type: [FillerWordSchema], default: [] },
+  },
+  { _id: false }
+);
 
-const SentimentSchema = new Schema<ISentiment>({
-  overallTone:  { type: String, enum: ['confident', 'neutral', 'hesitant'] },
-  clarityScore: { type: Number, min: 0, max: 100 },
-}, { _id: false });
+const SentimentSchema = new Schema<ISentiment>(
+  {
+    overallTone:  { type: String, enum: ["confident", "neutral", "hesitant"] },
+    clarityScore: { type: Number, min: 0, max: 100 },
+  },
+  { _id: false }
+);
 
-const InsightsSchema = new Schema<IInsights>({
-  overallScore:  { type: Number, min: 0, max: 100 },
-  starAlignment: { type: StarAlignmentSchema },
-  fillerWords:   { type: FillerWordsSchema },
-  sentiment:     { type: SentimentSchema },
-  strengths:     { type: [String], default: [] },
-  improvements:  { type: [String], default: [] },
-}, { _id: false });
+const InsightsSchema = new Schema<IInsights>(
+  {
+    overallScore:  { type: Number, min: 0, max: 100 },
+    starAlignment: { type: StarAlignmentSchema },
+    fillerWords:   { type: FillerWordsSchema },
+    sentiment:     { type: SentimentSchema },
+    strengths:     { type: [String], default: [] },
+    improvements:  { type: [String], default: [] },
+  },
+  { _id: false }
+);
 
 const InterviewInsightsSchema = new Schema<IInterviewInsights>(
   {
-    userId:       { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    mediaFileKey: { type: String, required: true },
-    mediaType:    { type: String, enum: ['audio', 'video'], required: true },
-    status: {
-      type: String,
-      enum: ['pending', 'transcribing', 'analyzing', 'completed', 'failed'],
-      default: 'pending',
-    },
-    transcript: { type: String },
-    insights:   { type: InsightsSchema },
-    jobId:      { type: String },
+    userId:         { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    interviewJobId: { type: Schema.Types.ObjectId, ref: "InterviewJob", required: true, unique: true, index: true },
+    transcript:     { type: String },
+    insights:       { type: InsightsSchema },
+    version:        { type: Number, default: 1, required: true },
   },
   { timestamps: true }
 );
 
 export const InterviewInsights = mongoose.model<IInterviewInsights>(
-  'InterviewInsights',
+  "InterviewInsights",
   InterviewInsightsSchema
 );
