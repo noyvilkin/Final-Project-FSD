@@ -5,6 +5,7 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import request from "supertest";
 
 import { authConfig } from "../../common/auth/auth.config.js";
+import { GoogleAuthService } from "../../common/auth/google.service.js";
 import { errorHandler } from "../../common/middlewares/errorHandler.js";
 import authRoutes from "../../features/auth/routes/auth.routes.js";
 import { User } from "../../features/user/models/user.model.js";
@@ -263,5 +264,105 @@ describe("Auth API integration", () => {
 
     expect(logout.status).toBe(200);
     expect(logout.body.message).toBe("logged out");
+  });
+
+  describe("Google sign-in", () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it("creates a new user from a verified google profile and sets cookies", async () => {
+      jest.spyOn(GoogleAuthService, "verifyIdToken").mockResolvedValue({
+        googleId: "google-sub-123",
+        email: "google-new@example.com",
+        emailVerified: true,
+        firstName: "Google",
+        lastName: "User",
+      });
+
+      const response = await request(testApp)
+        .post("/api/auth/google")
+        .send({ idToken: "fake-token" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.user.email).toBe("google-new@example.com");
+      expect(response.body.user.profile.firstName).toBe("Google");
+
+      const cookies = extractCookies(getSetCookieHeaders(response.headers["set-cookie"]));
+      expect(cookies[authConfig.accessToken.cookieName]).toBeDefined();
+      expect(cookies[authConfig.refreshToken.cookieName]).toBeDefined();
+
+      const created = await User.findOne({ email: "google-new@example.com" }).lean();
+      expect(created?.googleId).toBe("google-sub-123");
+      expect(created?.authProviders).toEqual(["google"]);
+      expect(created?.passwordHash).toBeUndefined();
+    });
+
+    it("links google identity to existing email/password account", async () => {
+      await request(testApp).post("/api/auth/signup").send({
+        email: "linkme@example.com",
+        password: "Password123!",
+      });
+
+      jest.spyOn(GoogleAuthService, "verifyIdToken").mockResolvedValue({
+        googleId: "google-sub-link",
+        email: "LinkMe@example.com",
+        emailVerified: true,
+      });
+
+      const response = await request(testApp)
+        .post("/api/auth/google")
+        .send({ idToken: "fake-token" });
+
+      expect(response.status).toBe(200);
+
+      const linked = await User.findOne({ email: "linkme@example.com" }).lean();
+      expect(linked?.googleId).toBe("google-sub-link");
+      expect(linked?.authProviders).toEqual(expect.arrayContaining(["password", "google"]));
+    });
+
+    it("rejects unverified google email", async () => {
+      jest.spyOn(GoogleAuthService, "verifyIdToken").mockResolvedValue({
+        googleId: "google-sub-unverified",
+        email: "unverified@example.com",
+        emailVerified: false,
+      });
+
+      const response = await request(testApp)
+        .post("/api/auth/google")
+        .send({ idToken: "fake-token" });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe("GOOGLE_EMAIL_NOT_VERIFIED");
+    });
+
+    it("rejects invalid google id token", async () => {
+      const response = await request(testApp).post("/api/auth/google").send({ idToken: "" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("GOOGLE_ID_TOKEN_MISSING");
+    });
+
+    it("rejects google sign-in for inactive user", async () => {
+      await User.create({
+        email: "google-inactive@example.com",
+        googleId: "google-sub-inactive",
+        authProviders: ["google"],
+        isActive: false,
+      });
+
+      jest.spyOn(GoogleAuthService, "verifyIdToken").mockResolvedValue({
+        googleId: "google-sub-inactive",
+        email: "google-inactive@example.com",
+        emailVerified: true,
+      });
+
+      const response = await request(testApp)
+        .post("/api/auth/google")
+        .send({ idToken: "fake-token" });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe("INVALID_CREDENTIALS");
+    });
   });
 });

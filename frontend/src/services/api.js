@@ -78,6 +78,14 @@ export function login(payload) {
   });
 }
 
+export function googleLogin(idToken) {
+  return request("/api/auth/google", {
+    method: "POST",
+    data: { idToken },
+    skipAuthHandling: true,
+  });
+}
+
 export function refresh() {
   return request("/api/auth/refresh", {
     method: "POST",
