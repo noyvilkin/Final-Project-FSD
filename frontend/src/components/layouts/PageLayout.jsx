@@ -11,7 +11,7 @@ export default function PageLayout({
   right = null,
 }) {
   return (
-    <div className="min-h-screen bg-transparent text-[#24180f]">
+    <div className="min-h-screen bg-transparent text-[#111827]">
       {!noNav && <BottomNav />}
 
       <div className={noNav ? "" : "pl-[280px]"}>
@@ -25,7 +25,7 @@ export default function PageLayout({
         )}
 
         <main className="pb-10">
-          <div className="w-full px-10 py-8 2xl:px-14">
+          <div className="mx-auto w-full max-w-[1480px] px-8 py-6 2xl:px-10">
             {children}
           </div>
         </main>

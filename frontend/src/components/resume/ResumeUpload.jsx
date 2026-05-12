@@ -109,18 +109,20 @@ export default function ResumeUpload() {
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onClick={handleChooseFile}
-        className="flex min-h-[250px] w-full flex-1 cursor-pointer flex-col items-center justify-center rounded-[22px] border border-dashed border-[#d6c5b2] bg-[#fffaf5] px-6 py-8 text-center transition hover:border-[#8b5e34] hover:bg-[#f8f1e8]"
+        className="flex min-h-[250px] w-full flex-1 cursor-pointer flex-col items-center justify-center rounded-[22px] border border-dashed border-[#cfe0f5] bg-[#f8fbff] px-6 py-8 text-center transition hover:border-[#4f7df3] hover:bg-[#eaf2fb]"
       >
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
           📄
         </div>
 
-        <p className="mt-4 text-lg font-semibold text-[#24180f]">
+        <p className="mt-4 text-lg font-semibold text-[#111827]">
           {file ? file.name : "Choose or drop your PDF"}
         </p>
 
-        <p className="mt-1 text-sm text-[#7a6f64]">
-          {file ? "File selected and ready to analyze" : "Only PDF files are supported"}
+        <p className="mt-1 text-sm text-[#64748b]">
+          {file
+            ? "File selected and ready to analyze"
+            : "Only PDF files are supported"}
         </p>
       </button>
 
@@ -142,11 +144,11 @@ export default function ResumeUpload() {
         </div>
       )}
 
-      <div className="mt-5 flex justify-end gap-3 border-t border-[#f3eadf] pt-4">
+      <div className="mt-5 flex justify-end gap-3 border-t border-[#eef4fb] pt-4">
         <button
           type="button"
           onClick={handleCancel}
-          className="inline-flex h-11 min-w-[130px] items-center justify-center rounded-2xl border border-[#eadfd2] bg-white px-5 text-sm font-semibold text-[#6b625a] transition hover:bg-[#f8f1e8] hover:text-[#24180f]"
+          className="inline-flex h-11 min-w-[130px] items-center justify-center rounded-2xl border border-[#dde7f3] bg-white px-5 text-sm font-semibold text-[#64748b] transition hover:bg-[#eaf2fb] hover:text-[#111827]"
         >
           Cancel
         </button>
@@ -155,7 +157,7 @@ export default function ResumeUpload() {
           type="button"
           onClick={handleUpload}
           disabled={!file || isBusy}
-          className="inline-flex h-11 min-w-[180px] items-center justify-center rounded-2xl bg-[#8b5e34] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#744923] disabled:cursor-not-allowed disabled:bg-[#c9b8a6] disabled:text-white/80"
+          className="inline-flex h-11 min-w-[180px] items-center justify-center rounded-2xl bg-[#050816] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#111827] disabled:cursor-not-allowed disabled:bg-[#94a3b8] disabled:text-white/80"
         >
           {isBusy ? "Analyzing..." : "Upload & Analyze"}
         </button>
