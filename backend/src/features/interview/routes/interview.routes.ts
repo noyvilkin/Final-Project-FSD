@@ -1,8 +1,13 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import multer, { MulterError } from "multer";
+import { Types } from "mongoose";
 
 import { asyncHandler } from "../../../common/middlewares/asyncHandler.js";
 import { appLogger } from "../../../common/services/logger.js";
+import { getEventBus } from "../../../common/services/events/index.js";
+import { getFileService } from "../../../common/services/files/index.js";
+
+import { createInterviewJob } from "../services/jobService.js";
 
 // ---------------------------------------------------------------------------
 // Constraints
@@ -74,10 +79,22 @@ router.post(
   "/",
   uploadMedia,
   asyncHandler(async (req, res) => {
-    // TODO(auth): swap the x-user-id header for a shared requireAuth middleware
-    // once the cookie-based auth helper lands. Matches the convention currently
-    // used by features/upload/routes/upload.routes.ts.
-    const userId = (req.headers["x-user-id"] as string | undefined) ?? "anonymous";
+    // TODO(auth): swap the x-user-id header for a shared requireAuth
+    // middleware once the cookie-based auth helper lands. Matches the
+    // convention currently used by features/upload/routes/upload.routes.ts.
+    const rawUserId = req.headers["x-user-id"];
+    const userId    = typeof rawUserId === "string" ? rawUserId.trim() : "";
+
+    if (!userId || !Types.ObjectId.isValid(userId)) {
+      res.status(401).json({
+        error: {
+          code: "UNAUTHORIZED",
+          message: "Missing or invalid user identity",
+        },
+        requestId: req.requestId ?? "-",
+      });
+      return;
+    }
 
     const file = req.file;
     if (!file) {
@@ -105,25 +122,34 @@ router.post(
 
     const mediaType = getMediaType(file.mimetype as AllowedMime);
 
-    appLogger.info("Interview media ingested", {
-      requestId: req.requestId ?? "-",
+    const result = await createInterviewJob({
       userId,
+      buffer:    file.buffer,
+      mimeType:  file.mimetype,
       mediaType,
-      mimeType: file.mimetype,
-      sizeBytes: file.size,
-      originalName: file.originalname,
+      files:     getFileService(),
+      events:    getEventBus(),
     });
 
-    // Sub-tasks 1.2/1.3 will plug in: object-storage upload + InterviewJob
-    // creation + Kafka publish of media-ingested. For now we acknowledge the
-    // upload so the route can be exercised end-to-end.
-    res.status(202).json({
-      status: "accepted",
+    appLogger.info("Interview media accepted", {
+      requestId:     req.requestId ?? "-",
       userId,
-      mediaType,
-      mimeType: file.mimetype,
-      sizeBytes: file.size,
-      originalName: file.originalname,
+      jobId:         result.jobId,
+      correlationId: result.correlationId,
+      mediaType:     result.mediaType,
+      mimeType:      result.mimeType,
+      sizeBytes:     result.sizeBytes,
+      originalName:  file.originalname,
+    });
+
+    res.status(202).json({
+      jobId:         result.jobId,
+      status:        result.status,
+      mediaType:     result.mediaType,
+      mimeType:      result.mimeType,
+      sizeBytes:     result.sizeBytes,
+      storageKey:    result.storageKey,
+      correlationId: result.correlationId,
     });
   })
 );
