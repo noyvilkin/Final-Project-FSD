@@ -57,12 +57,12 @@ async function runPOCTest(): Promise<void> {
     let pdfBuffer: Buffer | undefined;
     let zipBuffer: Buffer;
 
-    //try {
-      //pdfBuffer = readFileSync(pdfPath);
-      //console.log(`✓ PDF loaded (${formatFileSize(pdfBuffer.length)})`);
-    //} catch (error) {
-      //console.warn(`⚠ PDF not found, continuing without requirements`);
-    //}
+    try {
+      pdfBuffer = readFileSync(pdfPath);
+      console.log(`✓ PDF loaded (${formatFileSize(pdfBuffer.length)})`);
+    } catch (error) {
+      console.warn(`⚠ PDF not found, continuing without requirements`);
+    }
 
     try {
       zipBuffer = readFileSync(zipPath);

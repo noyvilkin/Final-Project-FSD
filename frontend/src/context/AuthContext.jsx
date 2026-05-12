@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import {
+  googleLogin as googleLoginRequest,
   login as loginRequest,
   logout as logoutRequest,
   refresh as refreshRequest,
@@ -75,6 +76,14 @@ export function AuthProvider({ children }) {
     [storeUser]
   );
 
+  const googleLogin = useCallback(
+    async (idToken) => {
+      const response = await googleLoginRequest(idToken);
+      return storeUser(response?.user);
+    },
+    [storeUser]
+  );
+
   const logout = useCallback(
     async ({ remote = true } = {}) => {
       if (remote) {
@@ -132,9 +141,10 @@ export function AuthProvider({ children }) {
       userId: user?.id || null,
       login,
       signUp,
+      googleLogin,
       logout,
     }),
-    [isAuthLoading, login, logout, signUp, user]
+    [googleLogin, isAuthLoading, login, logout, signUp, user]
   );
 
   return (

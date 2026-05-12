@@ -33,7 +33,7 @@ export class ProfileAnalysisService {
       });
 
       const rawResponse = await geminiClient.generate({
-        systemInstruction: {
+        system_instruction: {
           parts: [{ text: PROFILE_ANALYSIS_SYSTEM_INSTRUCTION }],
         },
         contents: [
