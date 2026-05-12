@@ -39,6 +39,15 @@ export interface IGapAnalysis {
   recommendations: IRecommendation[];
 }
 
+export type DnaAuditSource = 'resume' | 'interview' | 'manual' | 'gap-analysis';
+
+export interface IDnaAuditEntry {
+  source:    DnaAuditSource;
+  refId?:    string;     // e.g. InterviewJob id or ResumeOptimization id
+  summary:   string;
+  timestamp: Date;
+}
+
 // Assignment-related interfaces
 export interface AssignmentMetadata {
   detectedLanguage?: string;

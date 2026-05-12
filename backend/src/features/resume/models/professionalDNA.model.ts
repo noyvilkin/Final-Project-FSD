@@ -1,5 +1,12 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
-import type { ISkill, IExperience, IEducation, IGapAnalysis, IRecommendation } from '../types/professionalDNA.types.js';
+import type {
+  ISkill,
+  IExperience,
+  IEducation,
+  IGapAnalysis,
+  IRecommendation,
+  IDnaAuditEntry,
+} from '../types/professionalDNA.types.js';
 
 export interface IProfessionalDNA extends Document {
   userId: Types.ObjectId;
@@ -10,6 +17,10 @@ export interface IProfessionalDNA extends Document {
   gapAnalysis?: IGapAnalysis;
   rawResumeText?: string;
   analysisStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  /** Versioning for evolving DNA — new docs bump this each rewrite. Optional
+   *  for backward-compat with docs created before Mission 03. */
+  dnaVersion?: number;
+  auditTrail?: IDnaAuditEntry[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +73,13 @@ const GapAnalysisSchema = new Schema<IGapAnalysis>({
   recommendations: { type: [RecommendationSchema], default: [] },
 }, { _id: false });
 
+const DnaAuditEntrySchema = new Schema<IDnaAuditEntry>({
+  source:    { type: String, enum: ['resume', 'interview', 'manual', 'gap-analysis'], required: true },
+  refId:     { type: String },
+  summary:   { type: String, required: true },
+  timestamp: { type: Date, required: true, default: () => new Date() },
+}, { _id: false });
+
 const ProfessionalDNASchema = new Schema<IProfessionalDNA>(
   {
     userId:   { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -76,9 +94,13 @@ const ProfessionalDNASchema = new Schema<IProfessionalDNA>(
       enum: ['pending', 'processing', 'completed', 'failed'],
       default: 'pending',
     },
+    dnaVersion: { type: Number, default: 1 },
+    auditTrail: { type: [DnaAuditEntrySchema], default: [] },
   },
   { timestamps: true }
 );
+
+ProfessionalDNASchema.index({ userId: 1, dnaVersion: -1 });
 
 export const ProfessionalDNA = mongoose.model<IProfessionalDNA>(
   'ProfessionalDNA',
