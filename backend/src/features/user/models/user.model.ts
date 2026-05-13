@@ -7,9 +7,13 @@ interface IUserProfile {
   linkedIn?:  string;
 }
 
+export type AuthProvider = "password" | "google";
+
 export interface IUser extends Document {
   email: string;
-  passwordHash: string;
+  passwordHash?: string;
+  googleId?: string;
+  authProviders: AuthProvider[];
   refreshTokenHash?: string;
   refreshTokenIssuedAt?: Date;
   profile: IUserProfile;
@@ -30,7 +34,13 @@ const UserProfileSchema = new Schema<IUserProfile>({
 const UserSchema = new Schema<IUser>(
   {
     email:        { type: String, required: true, unique: true, lowercase: true, index: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String },
+    googleId:     { type: String, unique: true, sparse: true, index: true },
+    authProviders: {
+      type: [String],
+      enum: ["password", "google"],
+      default: ["password"],
+    },
     refreshTokenHash: { type: String },
     refreshTokenIssuedAt: { type: Date },
     profile:      { type: UserProfileSchema, default: {} },

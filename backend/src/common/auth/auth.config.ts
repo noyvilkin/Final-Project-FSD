@@ -62,13 +62,11 @@ export const authConfig: AuthConfig = {
   bcryptSaltRounds: normalizeBcryptSaltRounds(getRequiredIntegerEnv("AUTH_BCRYPT_SALT_ROUNDS")),
   accessToken: {
     secret: getRequiredEnv("JWT_ACCESS_TOKEN_SECRET"),
-    expiresIn: getRequiredEnv("JWT_ACCESS_TOKEN_EXPIRES_IN"),
     maxAgeMs: getRequiredIntegerEnv("JWT_ACCESS_TOKEN_MAX_AGE_MS"),
     cookieName: process.env.ACCESS_TOKEN_COOKIE_NAME ?? "accessToken",
   },
   refreshToken: {
     secret: getRequiredEnv("JWT_REFRESH_TOKEN_SECRET"),
-    expiresIn: getRequiredEnv("JWT_REFRESH_TOKEN_EXPIRES_IN"),
     maxAgeMs: getRequiredIntegerEnv("JWT_REFRESH_TOKEN_MAX_AGE_MS"),
     cookieName: process.env.REFRESH_TOKEN_COOKIE_NAME ?? "refreshToken",
   },
@@ -76,5 +74,8 @@ export const authConfig: AuthConfig = {
     secure: secureCookies,
     sameSite,
     domain: process.env.AUTH_COOKIE_DOMAIN,
+  },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
   },
 };
