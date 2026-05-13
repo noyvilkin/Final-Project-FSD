@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 const REQUIRED_ENV: Record<string, string> = {
   JWT_ACCESS_TOKEN_SECRET: "test-access-secret-1234567890",
   JWT_REFRESH_TOKEN_SECRET: "test-refresh-secret-1234567890",
+  JWT_ACCESS_TOKEN_EXPIRES_IN: "15m",
+  JWT_REFRESH_TOKEN_EXPIRES_IN: "7d",
   JWT_ACCESS_TOKEN_MAX_AGE_MS: "900000",
   JWT_REFRESH_TOKEN_MAX_AGE_MS: "604800000",
   AUTH_BCRYPT_SALT_ROUNDS: "10",
