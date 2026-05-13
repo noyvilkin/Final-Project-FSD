@@ -72,10 +72,23 @@ router.post('/optimize', async (req: Request, res: Response): Promise<void> => {
     appLogger.info('[ResumeOptimization] Starting optimization pipeline', { userId });
 
     const payload = await ResumeOptimizationService.prepareFromText(userId, jobDescriptionText);
+
+    const originalResumeText = payload.professionalDNA.rawResumeText?.trim();
+    if (!originalResumeText) {
+      appLogger.info('[ResumeOptimization] Aborted — user has no resume on file', { userId });
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'RESUME_NOT_UPLOADED',
+          message: 'Please upload your resume before running an optimization.',
+        },
+      });
+      return;
+    }
+
     const dashboardData = await GeminiOptimizationService.optimizeResume(payload);
 
     const versionTag = Date.now().toString(36);
-    const originalResumeText = payload.professionalDNA.rawResumeText || '';
 
     const run = await OptimizationRun.create({
       userId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId,

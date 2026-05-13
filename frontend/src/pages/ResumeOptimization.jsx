@@ -293,9 +293,12 @@ export default function ResumeOptimization() {
 
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  const [needsResumeUpload, setNeedsResumeUpload] = useState(false);
 
   const effectiveUserId =
     authUserId || uploadResult?.userId || manualUserId.trim();
+
+  const showUploadSection = !authUserId || needsResumeUpload;
 
   const handleResumeUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -304,9 +307,10 @@ export default function ResumeOptimization() {
     setUploading(true);
     setError(null);
     try {
-      const res = await uploadResume(file);
+      const res = await uploadResume(file, authUserId || undefined);
       setUploadResult(res.data);
       setManualUserId(res.data.userId);
+      setNeedsResumeUpload(false);
     } catch (err) {
       setError(err.message || "Resume upload failed");
     } finally {
@@ -330,8 +334,17 @@ export default function ResumeOptimization() {
       });
       setData(response.data);
       if (response.run) setRunMeta(response.run);
+      setNeedsResumeUpload(false);
     } catch (err) {
-      setError(err.message || "Optimization failed");
+      if (err?.payload?.error?.code === "RESUME_NOT_UPLOADED") {
+        setNeedsResumeUpload(true);
+        setError(
+          err.message ||
+            "Please upload your resume before running an optimization."
+        );
+      } else {
+        setError(err.message || "Optimization failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -400,8 +413,20 @@ export default function ResumeOptimization() {
               bullet points.
             </p>
 
-            {!authUserId && (
+            {showUploadSection && (
               <div className="mb-4 space-y-3">
+                {needsResumeUpload && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-sm font-semibold text-amber-800">
+                      Resume required
+                    </p>
+                    <p className="mt-1 text-xs text-amber-700">
+                      We couldn't find a resume on your account. Upload your CV as a
+                      PDF below and we'll parse it before running the optimization.
+                    </p>
+                  </div>
+                )}
+
                 {/* Resume upload option */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -441,28 +466,32 @@ export default function ResumeOptimization() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 border-t border-gray-200" />
-                  <span className="text-[10px] font-medium text-gray-400 uppercase">or</span>
-                  <div className="flex-1 border-t border-gray-200" />
-                </div>
+                {!authUserId && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 border-t border-gray-200" />
+                      <span className="text-[10px] font-medium text-gray-400 uppercase">or</span>
+                      <div className="flex-1 border-t border-gray-200" />
+                    </div>
 
-                {/* Manual userId option */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Enter User ID
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    placeholder="e.g. 665f1a2b3c4d5e6f7a8b9c0d"
-                    value={manualUserId}
-                    onChange={(e) => {
-                      setManualUserId(e.target.value);
-                      if (uploadResult) setUploadResult(null);
-                    }}
-                    disabled={loading || uploading}
-                  />
-                </div>
+                    {/* Manual userId option */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Enter User ID
+                      </label>
+                      <input
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        placeholder="e.g. 665f1a2b3c4d5e6f7a8b9c0d"
+                        value={manualUserId}
+                        onChange={(e) => {
+                          setManualUserId(e.target.value);
+                          if (uploadResult) setUploadResult(null);
+                        }}
+                        disabled={loading || uploading}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
