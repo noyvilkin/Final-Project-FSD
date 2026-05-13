@@ -55,6 +55,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+export const googleLogin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const idToken = String(req.body?.idToken ?? "");
+    const result = await AuthService.googleSignIn(idToken);
+
+    AuthCookieService.setAuthCookies(res, result.tokenPair);
+
+    res.status(200).json({
+      user: result.user,
+      requestId: req.requestId ?? "-",
+    });
+  } catch (error) {
+    sendAuthError(req, res, error);
+  }
+};
+
 export const refresh = async (req: Request, res: Response): Promise<void> => {
   try {
     const refreshToken = req.cookies?.[authConfig.refreshToken.cookieName] as string | undefined;

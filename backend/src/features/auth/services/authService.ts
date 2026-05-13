@@ -1,7 +1,11 @@
 import { AuthPasswordService } from "../../../common/auth/password.service.js";
 import { AuthTokenService, type AuthTokenPair } from "../../../common/auth/token.service.js";
 import type { AuthPublicUser } from "../../../common/auth/auth.types.js";
-import { User } from "../../user/models/user.model.js";
+import {
+  GoogleAuthError,
+  GoogleAuthService,
+} from "../../../common/auth/google.service.js";
+import { User, type AuthProvider } from "../../user/models/user.model.js";
 import { RefreshTokenService } from "./refreshTokenService.js";
 
 interface SignUpInput {
@@ -80,7 +84,7 @@ export class AuthService {
     }
 
     const user = await User.findOne({ email: normalizedEmail });
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || !user.passwordHash) {
       throw new AuthServiceError("invalid credentials", 401, "INVALID_CREDENTIALS");
     }
 
@@ -118,6 +122,75 @@ export class AuthService {
     const user = await User.findById(payload.sub);
     if (!user || !user.isActive) {
       throw new AuthServiceError("user not found", 401, "USER_NOT_FOUND");
+    }
+
+    const tokenPair = AuthTokenService.issueTokenPair(user.id, user.email);
+    await RefreshTokenService.rotateUserRefreshToken(user.id, tokenPair.refreshToken);
+
+    return {
+      user: this.toPublicUser(user),
+      tokenPair,
+    };
+  }
+
+  static async googleSignIn(idToken: string): Promise<AuthSuccessResult> {
+    let profile;
+    try {
+      profile = await GoogleAuthService.verifyIdToken(idToken);
+    } catch (error) {
+      if (error instanceof GoogleAuthError) {
+        throw new AuthServiceError(error.message, error.status, error.code);
+      }
+      throw error;
+    }
+
+    if (!profile.emailVerified) {
+      throw new AuthServiceError(
+        "google account email is not verified",
+        401,
+        "GOOGLE_EMAIL_NOT_VERIFIED"
+      );
+    }
+
+    const normalizedEmail = profile.email.trim().toLowerCase();
+
+    let user = await User.findOne({
+      $or: [{ googleId: profile.googleId }, { email: normalizedEmail }],
+    });
+
+    if (!user) {
+      user = await User.create({
+        email: normalizedEmail,
+        googleId: profile.googleId,
+        profile: {
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+        },
+        authProviders: ["google"],
+        isActive: true,
+      });
+    } else {
+      if (!user.isActive) {
+        throw new AuthServiceError("invalid credentials", 401, "INVALID_CREDENTIALS");
+      }
+
+      let dirty = false;
+
+      if (!user.googleId) {
+        user.googleId = profile.googleId;
+        dirty = true;
+      }
+
+      const providers = new Set<AuthProvider>(user.authProviders ?? []);
+      if (!providers.has("google")) {
+        providers.add("google");
+        user.authProviders = Array.from(providers);
+        dirty = true;
+      }
+
+      if (dirty) {
+        await user.save();
+      }
     }
 
     const tokenPair = AuthTokenService.issueTokenPair(user.id, user.email);
