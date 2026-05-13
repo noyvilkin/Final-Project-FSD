@@ -30,11 +30,13 @@ export interface AuthConfig {
   bcryptSaltRounds: number;
   accessToken: {
     secret: string;
+    expiresIn: string;
     maxAgeMs: number;
     cookieName: string;
   };
   refreshToken: {
     secret: string;
+    expiresIn: string;
     maxAgeMs: number;
     cookieName: string;
   };
@@ -42,8 +44,5 @@ export interface AuthConfig {
     secure: boolean;
     sameSite: "strict" | "lax" | "none";
     domain?: string;
-  };
-  google: {
-    clientId?: string;
   };
 }

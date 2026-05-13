@@ -69,30 +69,6 @@ S3_ENDPOINT=http://localhost:9000
 S3_ACCESS_KEY_ID=minioadmin
 S3_SECRET_ACCESS_KEY=minioadmin
 S3_BUCKET_NAME=careerpilot-uploads
-
-# Gemini AI
-GEMINI_API_KEY=your-gemini-api-key
-
-# Auth (JWT + bcrypt)
-AUTH_BCRYPT_SALT_ROUNDS=10
-JWT_ACCESS_TOKEN_SECRET=replace-with-long-random-string
-JWT_REFRESH_TOKEN_SECRET=replace-with-long-random-string
-JWT_ACCESS_TOKEN_MAX_AGE_MS=900000
-JWT_REFRESH_TOKEN_MAX_AGE_MS=604800000
-ACCESS_TOKEN_COOKIE_NAME=accessToken
-REFRESH_TOKEN_COOKIE_NAME=refreshToken
-AUTH_COOKIE_SECURE=false
-AUTH_COOKIE_SAME_SITE=lax
-
-# Google OAuth (optional, enables "Sign in with Google")
-GOOGLE_CLIENT_ID=
-```
-
-Frontend (`frontend/.env`):
-
-```bash
-VITE_API_URL=http://localhost:4000
-VITE_GOOGLE_CLIENT_ID=
 ```
 
 ### File uploads

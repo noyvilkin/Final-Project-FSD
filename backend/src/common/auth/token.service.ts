@@ -41,7 +41,7 @@ export class AuthTokenService {
     const tokenConfig = type === "access" ? authConfig.accessToken : authConfig.refreshToken;
 
     const signOptions: SignOptions = {
-      expiresIn: Math.floor(tokenConfig.maxAgeMs / 1000),
+      expiresIn: tokenConfig.expiresIn as SignOptions["expiresIn"],
     };
 
     return jwt.sign(payload, tokenConfig.secret as Secret, signOptions);
