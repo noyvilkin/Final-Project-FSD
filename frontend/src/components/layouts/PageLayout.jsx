@@ -11,21 +11,25 @@ export default function PageLayout({
   right = null,
 }) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {!noHeader && (
-        <Header
-          title={title}
-          subtitle={subtitle}
-          showBack={showBack}
-          right={right}
-        />
-      )}
-
-      <main className={["py-4", noNav ? "pb-6" : "pb-20"].join(" ")}>
-        <div className="mx-auto max-w-3xl px-4">{children}</div>
-      </main>
-
+    <div className="min-h-screen bg-transparent text-[#111827]">
       {!noNav && <BottomNav />}
+
+      <div className={noNav ? "" : "pl-[280px]"}>
+        {!noHeader && (
+          <Header
+            title={title}
+            subtitle={subtitle}
+            showBack={showBack}
+            right={right}
+          />
+        )}
+
+        <main className="pb-10">
+          <div className="mx-auto w-full max-w-[1480px] px-8 py-6 2xl:px-10">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

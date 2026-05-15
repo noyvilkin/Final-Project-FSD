@@ -1,7 +1,5 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card } from "../ui/card";
-import { Button } from "../ui/button";
 import AnalysisStatus from "./AnalysisStatus";
 
 const API_BASE_URL = "http://localhost:4000";
@@ -13,9 +11,16 @@ export default function ResumeUpload() {
   const inputRef = useRef(null);
   const navigate = useNavigate();
 
+  const isBusy =
+    status === "uploading" ||
+    status === "extracting" ||
+    status === "processing" ||
+    status === "finalizing";
+
   function handleDrop(e) {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files[0];
+
     if (droppedFile) {
       setFile(droppedFile);
       setErrorMessage("");
@@ -28,6 +33,7 @@ export default function ResumeUpload() {
 
   function handleFileChange(e) {
     const selectedFile = e.target.files[0];
+
     if (selectedFile) {
       setFile(selectedFile);
       setErrorMessage("");
@@ -42,7 +48,10 @@ export default function ResumeUpload() {
     setFile(null);
     setStatus("idle");
     setErrorMessage("");
-    if (inputRef.current) inputRef.current.value = "";
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
   }
 
   async function handleUpload() {
@@ -52,7 +61,7 @@ export default function ResumeUpload() {
     setStatus("uploading");
 
     try {
-      const userId = "123456789012345678901234"; // להחליף אחר כך ב-userId אמיתי מהמערכת
+      const userId = "123456789012345678901234";
 
       const formData = new FormData();
       formData.append("file", file);
@@ -94,64 +103,64 @@ export default function ResumeUpload() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="text-3xl">📄</div>
-
-          <div className="flex-1">
-            <h2 className="text-xl font-bold">Curriculum Vitae (CV)</h2>
-
-            <p className="mt-2 text-gray-500">
-              Upload your latest resume in PDF format for AI-powered profile
-              analysis
-            </p>
-
-            <div
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onClick={handleChooseFile}
-              className="mt-6 cursor-pointer rounded-xl bg-gray-100 px-4 py-3 text-gray-600 hover:bg-gray-200"
-            >
-              {file ? file.name : "No file selected — click to choose"}
-            </div>
-
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-
-            <div className="mt-4">
-              <AnalysisStatus status={status} />
-            </div>
-
-            {errorMessage && (
-              <p className="mt-4 text-sm text-red-500">{errorMessage}</p>
-            )}
-          </div>
+    <div className="flex h-full flex-col">
+      <button
+        type="button"
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onClick={handleChooseFile}
+        className="flex min-h-[250px] w-full flex-1 cursor-pointer flex-col items-center justify-center rounded-[22px] border border-dashed border-[#cfe0f5] bg-[#f8fbff] px-6 py-8 text-center transition hover:border-[#4f7df3] hover:bg-[#eaf2fb]"
+      >
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+          📄
         </div>
-      </Card>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Button variant="outline" onClick={handleCancel}>
-          Cancel
-        </Button>
+        <p className="mt-4 text-lg font-semibold text-[#111827]">
+          {file ? file.name : "Choose or drop your PDF"}
+        </p>
 
-        <Button
-          onClick={handleUpload}
-          disabled={
-            !file ||
-            status === "uploading" ||
-            status === "extracting" ||
-            status === "processing" ||
-            status === "finalizing"
-          }
+        <p className="mt-1 text-sm text-[#64748b]">
+          {file
+            ? "File selected and ready to analyze"
+            : "Only PDF files are supported"}
+        </p>
+      </button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      <div className="mt-4">
+        <AnalysisStatus status={status} />
+      </div>
+
+      {errorMessage && (
+        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+          {errorMessage}
+        </div>
+      )}
+
+      <div className="mt-5 flex justify-end gap-3 border-t border-[#eef4fb] pt-4">
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="inline-flex h-11 min-w-[130px] items-center justify-center rounded-2xl border border-[#dde7f3] bg-white px-5 text-sm font-semibold text-[#64748b] transition hover:bg-[#eaf2fb] hover:text-[#111827]"
         >
-          Upload & Analyze
-        </Button>
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          onClick={handleUpload}
+          disabled={!file || isBusy}
+          className="inline-flex h-11 min-w-[180px] items-center justify-center rounded-2xl bg-[#050816] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#111827] disabled:cursor-not-allowed disabled:bg-[#94a3b8] disabled:text-white/80"
+        >
+          {isBusy ? "Analyzing..." : "Upload & Analyze"}
+        </button>
       </div>
     </div>
   );
