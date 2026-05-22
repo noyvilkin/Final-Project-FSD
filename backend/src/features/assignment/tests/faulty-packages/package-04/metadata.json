@@ -1,0 +1,7 @@
+{
+  "id": "pkg-04",
+  "violation_key": "missing_tests",
+  "violation_description": "Assignment requires unit tests for core endpoints, solution contains no tests.",
+  "secondary_violation": "test_config_no_tests",
+  "secondary_violation_description": "package.json includes jest test script and jest/supertest dependencies, but no actual test files exist in the solution."
+}

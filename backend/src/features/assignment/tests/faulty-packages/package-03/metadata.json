@@ -1,0 +1,7 @@
+{
+  "id": "pkg-03",
+  "violation_key": "missing_auth",
+  "violation_description": "Assignment requires JWT authentication, solution provides no auth implementation.",
+  "secondary_violation": "auth_middleware_unused",
+  "secondary_violation_description": "JWT and bcryptjs imported but never actually applied to protected endpoints. All endpoints are public. Auth middleware defined but never used."
+}
