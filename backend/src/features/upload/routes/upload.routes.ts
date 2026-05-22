@@ -33,6 +33,8 @@ router.post(
   ]),
   validateUploads,
   asyncHandler(async (req, res) => {
+    // eslint-disable-next-line no-console
+    console.log('[upload.routes] invoked', { requestId: req.requestId });
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
 
     if (!files || Object.keys(files).length === 0) {

@@ -13,7 +13,10 @@ const router = Router();
 router.get(
   '/:assignmentId',
   asyncHandler(async (req: Request, res: Response) => {
+    // eslint-disable-next-line no-console
+    console.log('[assignment.routes] GET /:assignmentId invoked', { requestId: req.requestId, params: req.params });
     const assignmentId = req.params.assignmentId as string;
+    console.log('[ASSIGNMENT_ROUTE] GET /api/assignments/:id', { assignmentId, requestId: req.requestId });
     
     if (!assignmentId) {
       res.status(400).json({
@@ -27,6 +30,7 @@ router.get(
     }
 
     const assignment = await AssignmentService.getAssignment(assignmentId);
+    console.log('[ASSIGNMENT_ROUTE] fetched assignment', { assignmentId, status: assignment?.status });
     
     if (!assignment) {
       res.status(404).json({
@@ -47,6 +51,7 @@ router.get(
         solutionFileKey: assignment.solutionFileKey,
         userNotes: assignment.userNotes,
         metadata: assignment.metadata,
+        processingErrors: assignment.processingErrors,
         feedback: assignment.feedback,
         createdAt: assignment.createdAt,
         updatedAt: assignment.updatedAt

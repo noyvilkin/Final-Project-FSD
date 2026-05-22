@@ -37,6 +37,13 @@ export class PdfProcessor {
     };
 
     try {
+      // Quick sanity check: PDF files should start with "%PDF-"
+      if (!pdfBuffer || pdfBuffer.length < 4 || pdfBuffer.slice(0, 4).toString() !== '%PDF') {
+        const msg = 'Buffer does not appear to be a valid PDF (missing %PDF header)';
+        result.errors.push(msg);
+        appLogger.error('PDF text extraction failed: not a PDF', { reason: msg });
+        return result;
+      }
       // Extract text from PDF
       const data = await pdfParse(pdfBuffer);
       
@@ -71,6 +78,29 @@ export class PdfProcessor {
       const message = error instanceof Error ? error.message : 'Unknown PDF processing error';
       result.errors.push(`PDF processing failed: ${message}`);
       appLogger.error('PDF text extraction failed:', error);
+      // Attempt a lightweight fallback: extract ASCII text found inside parentheses in the PDF
+      try {
+        const raw = pdfBuffer.toString('latin1');
+        const matches: string[] = [];
+        const re = /\(([^)\n]{1,1000})\)/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(raw)) !== null) {
+          matches.push(m[1]);
+        }
+
+        if (matches.length > 0) {
+          const extracted = matches.join(' ');
+          result.extractedText = extracted;
+          result.normalizedText = this.normalizeText(extracted);
+          result.metadata.originalLength = extracted.length;
+          result.metadata.normalizedLength = result.normalizedText.length;
+          result.success = true;
+          result.errors.push('Used fallback extraction (simple text scan) after pdf-parse failure');
+          appLogger.warn('PDF fallback extraction succeeded (simple scan)', { originalLength: result.metadata.originalLength });
+        }
+      } catch (fallbackErr) {
+        // ignore fallback errors
+      }
     }
 
     return result;

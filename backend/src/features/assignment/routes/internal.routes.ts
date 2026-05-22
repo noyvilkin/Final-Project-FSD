@@ -7,7 +7,9 @@ import { AssignmentAnalysisService } from "../services/assignmentAnalysisService
 import { AIAnalysisService } from "../services/aiAnalysisService.js";
 import { ZipProcessor } from "../../../common/utils/zipProcessor.js";
 import { ResultsService } from "../services/resultsService.js";
+import { PdfProcessor } from "../../../common/utils/pdfProcessor.js";
 import { fetchBlobAsBuffer } from "../../../common/services/s3Upload.js";
+import { Types } from "mongoose";
 
 const router = Router();
 
@@ -33,10 +35,83 @@ router.post(
       return;
     }
 
-    // TODO: download from S3, parse PDF/DOCX, store extracted text
+    const resolvedBucket = bucket || process.env.S3_BUCKET_NAME;
+    if (!resolvedBucket) {
+      res.status(400).json({ error: "bucket is required" });
+      return;
+    }
+
+    const isPdf =
+      (mimeType?.toLowerCase().includes("pdf") ?? false) ||
+      fileKey.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
+      res.status(415).json({
+        error: "Only PDF text extraction is supported by this endpoint",
+        fileKey,
+      });
+      return;
+    }
+
     appLogger.info("[internal] Text extraction started", { fileKey, userId });
 
-    res.status(200).json({ status: "accepted", fileKey });
+    const pdfBuffer = await fetchBlobAsBuffer(fileKey, resolvedBucket);
+    const extraction = await PdfProcessor.extractTextFromPdf(pdfBuffer);
+
+    if (!extraction.success) {
+      res.status(422).json({
+        status: "failed",
+        fileKey,
+        errors: extraction.errors,
+      });
+      return;
+    }
+
+    let assignmentId: string | undefined;
+    let persisted = false;
+
+    const userObjectId = Types.ObjectId.isValid(userId)
+      ? new Types.ObjectId(userId)
+      : null;
+
+    if (userObjectId) {
+      const assignment = await AssignmentFeedback.findOne({
+        userId: userObjectId,
+        requirementsFileKey: fileKey,
+      });
+
+      if (assignment) {
+        assignment.metadata = {
+          ...assignment.metadata,
+          extractedRequirements: extraction.normalizedText,
+        };
+        await assignment.save();
+
+        assignmentId = assignment._id.toString();
+        persisted = true;
+      }
+    }
+
+    appLogger.info("[internal] Text extraction completed", {
+      fileKey,
+      userId,
+      assignmentId,
+      persisted,
+      pages: extraction.metadata.totalPages,
+      textLength: extraction.metadata.normalizedLength,
+    });
+
+    res.status(200).json({
+      status: "completed",
+      fileKey,
+      assignmentId,
+      persisted,
+      extraction: {
+        text: extraction.extractedText,
+        normalizedText: extraction.normalizedText,
+        metadata: extraction.metadata,
+      },
+    });
   })
 );
 

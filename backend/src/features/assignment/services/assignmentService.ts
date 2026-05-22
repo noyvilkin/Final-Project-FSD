@@ -92,13 +92,11 @@ export class AssignmentService {
             userId,
             error: error instanceof Error ? error.message : 'Unknown error'
           });
-          
-          // Update assignment status to failed
+
+          // Update assignment status to failed and set top-level processingErrors
           await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
             status: 'failed',
-            metadata: {
-              processingErrors: ['Analysis pipeline failed']
-            }
+            processingErrors: [error instanceof Error ? error.message : 'Analysis pipeline failed']
           });
         }
       }
@@ -132,6 +130,7 @@ export class AssignmentService {
     }
 
     const bucket = files.solution.bucket;
+
     if (!bucket) {
       throw new Error('Missing bucket information');
     }
@@ -159,6 +158,7 @@ export class AssignmentService {
     }
 
     const analysisResult = await AssignmentAnalysisService.analyzeAssignment({
+
       zipScanResult,
       pdfBuffer: requirementsBuffer
     });
@@ -169,6 +169,7 @@ export class AssignmentService {
     }, {});
 
     const totalLines = zipScanResult.sourceFiles.reduce(
+
       (sum, file) => sum + file.content.split('\n').length,
       0
     );

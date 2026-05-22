@@ -15,7 +15,10 @@
     "poc": "tsx src/features/assignment/POC/poc-assignment-test.ts",
     "poc:test": "tsx src/features/assignment/POC/poc-assignment-test.ts",
     "poc:resume": "tsx src/features/resume/POC/poc-resume-optimization-test.ts",
-    "poc:optimize": "tsx src/features/resume/POC/poc-ai-optimization-test.ts"
+    "poc:optimize": "tsx src/features/resume/POC/poc-ai-optimization-test.ts",
+    "audit:run": "tsx src/features/assignment/scripts/run-semantic-audit.js",
+    "audit:score": "tsx src/features/assignment/scripts/score-reports.js",
+    "audit": "npm run audit:run && npm run audit:score"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.986.0",
