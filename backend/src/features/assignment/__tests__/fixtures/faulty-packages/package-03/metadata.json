@@ -1,0 +1,5 @@
+{
+  "id": "pkg-03",
+  "violation_key": "missing_auth",
+  "violation_description": "Assignment requires JWT authentication, solution provides no auth implementation."
+}

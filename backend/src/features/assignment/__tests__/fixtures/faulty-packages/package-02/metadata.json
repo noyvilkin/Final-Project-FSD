@@ -1,0 +1,5 @@
+{
+  "id": "pkg-02",
+  "violation_key": "wrong_database",
+  "violation_description": "Assignment requires PostgreSQL, solution uses SQLite (local file)."
+}

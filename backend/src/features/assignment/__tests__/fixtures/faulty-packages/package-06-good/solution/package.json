@@ -1,0 +1,25 @@
+{
+  "name": "assignment-good-solution",
+  "version": "1.0.0",
+  "description": "A correct solution meeting all requirements",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "jest --coverage",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^5.0.0",
+    "pg": "^8.11.0",
+    "jsonwebtoken": "^9.0.0",
+    "bcryptjs": "^3.0.0"
+  },
+  "devDependencies": {
+    "jest": "^30.0.0",
+    "supertest": "^7.0.0",
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "postgresql": ">=12.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "pkg-01-graphql",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "apollo-server": "^3.0.0",
+    "graphql": "^15.0.0"
+  }
+}

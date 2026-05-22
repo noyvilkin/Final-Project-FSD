@@ -1,0 +1,5 @@
+{
+  "id": "pkg-04",
+  "violation_key": "missing_tests",
+  "violation_description": "Assignment requires unit tests for core endpoints, solution contains no tests."
+}

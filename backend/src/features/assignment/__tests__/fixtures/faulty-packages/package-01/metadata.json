@@ -1,0 +1,5 @@
+{
+  "id": "pkg-01",
+  "violation_key": "wrong_api_style",
+  "violation_description": "Assignment requires a REST API with Express, solution provides a GraphQL API (Apollo Server)."
+}

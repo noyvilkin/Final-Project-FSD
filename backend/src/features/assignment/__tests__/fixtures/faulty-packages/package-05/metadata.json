@@ -1,0 +1,5 @@
+{
+  "id": "pkg-05",
+  "violation_key": "missing_health_endpoint",
+  "violation_description": "Assignment requires GET /health returning 200, solution does not provide a health endpoint."
+}

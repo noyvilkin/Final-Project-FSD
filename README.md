@@ -119,11 +119,23 @@ When an assignment is uploaded, the backend runs the full pipeline as a direct a
 4. **AI feedback** — source code + requirements are sent to Gemini for grading
 5. **Results** — structured feedback is saved to the assignment record
 
+For local development, you can bypass Gemini by setting `ASSIGNMENT_AI_DRY_RUN=true` (or `DRY_RUN_AI_ANALYSIS=true`). In dry-run mode, the backend returns deterministic structured feedback based on the saved requirements and source snapshot, without calling the external AI API.
+
+Assignment audit scripts live under `backend/src/features/assignment/scripts/`:
+
+```bash
+cd backend
+npm run audit:run
+npm run audit:score
+```
+
+The audit runner writes raw package reports and summaries under `backend/reports/assignment-audit/<run-id>/`.
+
 Internal endpoints are available for triggering individual steps:
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/v1/internal/extract-text` | Text extraction (stub) |
+| `POST /api/v1/internal/extract-text` | Extract and normalize PDF text, optionally persisting requirements metadata |
 | `POST /api/v1/internal/analyze-assignment` | Full scan → AI → results pipeline |
 | `POST /api/v1/internal/analyze-ai` | AI analysis only |
 | `POST /api/v1/internal/generate-results` | Results compilation |
