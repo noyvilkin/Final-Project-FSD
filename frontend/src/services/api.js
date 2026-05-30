@@ -191,6 +191,32 @@ export function deleteOptimizationRun(runId, userId) {
   );
 }
 
+export async function uploadInterview({ mediaFile, userId, jobId, onProgress }) {
+  const formData = new FormData();
+  formData.append("interviews", mediaFile);
+
+  if (typeof jobId === "string" && jobId.trim()) {
+    formData.append("jobId", jobId.trim());
+  }
+
+  try {
+    const response = await apiClient.request({
+      url: "/api/uploads",
+      method: "POST",
+      headers: userId ? { "x-user-id": userId } : {},
+      data: formData,
+      onUploadProgress: (event) => {
+        if (typeof onProgress === "function" && event.total) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
 export const apiConfig = {
   baseUrl: API_BASE_URL,
 };
