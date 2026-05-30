@@ -14,7 +14,7 @@ const allowedMimeByField: Record<string, string[]> = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
   ],
-  interviews: ["image/*", "video/*", "application/pdf"],
+  interviews: ["audio/*", "video/*", "image/*", "application/pdf"],
 };
 
 const isAllowedMime = (mimeType: string, allowed: string[]) => {

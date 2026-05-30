@@ -62,18 +62,19 @@ type UploadInput = {
   path: StoragePath;
   userId?: string;
   assignmentId?: string;
+  interviewId?: string;
 };
 
-export const uploadFileToS3 = async ({ file, path, userId, assignmentId }: UploadInput) => {
+export const uploadFileToS3 = async ({ file, path, userId, assignmentId, interviewId }: UploadInput) => {
   await getBucketReady();
 
   let key: string;
-  
-  // For assignments, organize by userId and assignmentId
+
   if (path === 'assignments' && userId && assignmentId) {
     key = `${path}/${userId}/${assignmentId}/${randomUUID()}-${sanitizeName(file.originalname)}`;
+  } else if (path === 'interviews' && userId && interviewId) {
+    key = `${path}/${userId}/${interviewId}/${randomUUID()}-${sanitizeName(file.originalname)}`;
   } else {
-    // For other paths or if userId/assignmentId not provided, use simple structure
     key = `${path}/${randomUUID()}-${sanitizeName(file.originalname)}`;
   }
 
