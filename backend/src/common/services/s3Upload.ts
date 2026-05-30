@@ -7,6 +7,11 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
+import { createWriteStream, unlink } from "fs";
+import { mkdir } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { pipeline } from "stream/promises";
 import { appLogger } from "./logger.js";
 
 const S3_ENDPOINT = process.env.S3_ENDPOINT;
@@ -174,6 +179,56 @@ export const deleteBlob = async (
   await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
   appLogger.info("[s3] Blob deleted", { bucket, key });
 };
+
+// ─── Temp-file helpers ────────────────────────────────────────────────────────
+
+const CAREERPILOT_TMP_DIR = join(tmpdir(), 'careerpilot');
+
+/**
+ * Stream an S3 object directly to a temporary file on disk.
+ * Avoids loading large video/audio files into memory.
+ *
+ * @returns Absolute path of the temp file — caller MUST call `cleanupTempFile` when done.
+ */
+export const downloadToTempFile = async (
+  fileKey: string,
+  extension: string = '',
+  bucket: string = S3_BUCKET
+): Promise<string> => {
+  await getBucketReady();
+  await mkdir(CAREERPILOT_TMP_DIR, { recursive: true });
+
+  const suffix  = extension.startsWith('.') ? extension : extension ? `.${extension}` : '';
+  const tmpPath = join(CAREERPILOT_TMP_DIR, `${randomUUID()}${suffix}`);
+
+  const response = await s3.send(
+    new GetObjectCommand({ Bucket: bucket, Key: fileKey })
+  );
+
+  if (!response.Body || !(Symbol.asyncIterator in (response.Body as object))) {
+    throw new Error(`[s3] Could not obtain a readable stream for key: ${fileKey}`);
+  }
+
+  const writeStream = createWriteStream(tmpPath);
+  await pipeline(response.Body as AsyncIterable<Uint8Array>, writeStream);
+
+  appLogger.info('[s3] Object streamed to temp file', { bucket, key: fileKey, tmpPath });
+  return tmpPath;
+};
+
+/**
+ * Delete a temporary file created by `downloadToTempFile`.
+ * Errors are swallowed so cleanup failures never mask the real error.
+ */
+export const cleanupTempFile = (tmpPath: string): void => {
+  unlink(tmpPath, (err) => {
+    if (err && err.code !== 'ENOENT') {
+      appLogger.warn('[s3] Failed to clean up temp file', { tmpPath, error: err.message });
+    }
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const bucketCache = new Set<string>();
 

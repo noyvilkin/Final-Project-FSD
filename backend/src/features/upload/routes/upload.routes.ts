@@ -5,6 +5,7 @@ import { validateUploads } from "../../../common/middlewares/validateUploads.js"
 import { uploadFileToS3 } from "../../../common/services/s3Upload.js";
 import { ZipProcessor, type ZipScanResult } from "../../../common/utils/zipProcessor.js";
 import { AssignmentService, type UploadedFile } from "../../assignment/services/assignmentService.js";
+import { InterviewInsights } from "../../interview/models/interviewInsights.model.js";
 import type { StoragePath } from "../../../common/services/s3Upload.js";
 import { appLogger } from "../../../common/services/logger.js";
 
@@ -156,6 +157,46 @@ router.post(
           response.assignmentError = error instanceof Error
             ? error.message
             : 'Failed to create assignment record';
+        }
+      }
+
+      // Create InterviewInsights records for uploaded interview files
+      const interviewFiles = uploadResults.filter((file: UploadedFile) =>
+        file.key.startsWith('interviews/')
+      );
+
+      if (interviewFiles.length > 0) {
+        const createdInterviewIds: string[] = [];
+        for (const file of interviewFiles) {
+          try {
+            const mediaType = file.mimeType.startsWith('video/') ? 'video' : 'audio';
+            const { Types } = await import('mongoose');
+            const resolvedUserId = Types.ObjectId.isValid(userId)
+              ? new Types.ObjectId(userId)
+              : new Types.ObjectId();
+            const interview = await InterviewInsights.create({
+              userId:          resolvedUserId,
+              mediaFileKey:    file.key,
+              mediaType,
+              processingStatus: 'uploaded',
+              status:           'pending',
+            });
+            createdInterviewIds.push(interview._id.toString());
+            appLogger.info('InterviewInsights record created from upload', {
+              interviewId: interview._id.toString(),
+              userId,
+              mediaType,
+              key: file.key,
+            });
+          } catch (err) {
+            appLogger.error('Failed to create InterviewInsights record', {
+              key: file.key,
+              error: err instanceof Error ? err.message : 'Unknown error',
+            });
+          }
+        }
+        if (createdInterviewIds.length > 0) {
+          response.interviews = createdInterviewIds;
         }
       }
 

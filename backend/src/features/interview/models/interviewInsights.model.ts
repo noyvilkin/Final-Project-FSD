@@ -1,5 +1,20 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
+// ─── Transcription types ──────────────────────────────────────────────────────
+
+export interface ITranscriptSegment {
+  start: number;
+  end:   number;
+  text:  string;
+}
+
+export interface IProcessingError {
+  stage:   string;
+  message: string;
+}
+
+// ─── Existing insight types (preserved for backward compat) ───────────────────
+
 interface IStarComponent {
   detected: boolean;
   feedback?: string;
@@ -38,17 +53,66 @@ interface IInsights {
   improvements:  string[];
 }
 
+// ─── Processing status ────────────────────────────────────────────────────────
+
+export type InterviewProcessingStatus =
+  | 'uploaded'
+  | 'queued'
+  | 'downloading'
+  | 'extracting_audio'
+  | 'transcribing'
+  | 'analyzing'
+  | 'completed'
+  | 'failed';
+
+// ─── Main document interface ──────────────────────────────────────────────────
+
 export interface IInterviewInsights extends Document {
-  userId: Types.ObjectId;
+  userId:       Types.ObjectId;
   mediaFileKey: string;
-  mediaType: 'audio' | 'video';
+  mediaType:    'audio' | 'video';
+
+  /** @deprecated use processingStatus instead */
   status: 'pending' | 'transcribing' | 'analyzing' | 'completed' | 'failed';
-  transcript?: string;
+
+  processingStatus: InterviewProcessingStatus;
+
+  // Transcription fields
+  transcript?:             string;
+  transcriptSegments?:     ITranscriptSegment[];
+  transcriptionProvider?:  string;
+  transcriptionModel?:     string;
+  transcriptionLanguage?:  string;
+  transcriptionDurationMs?: number;
+  mediaDurationSeconds?:   number;
+
+  // Timestamps for pipeline stages
+  processingStartedAt?:      Date;
+  transcriptionCompletedAt?: Date;
+
+  // Internal error storage – never returned to the frontend
+  processingError?: IProcessingError;
+
+  // Existing insight fields (preserved)
   insights?: IInsights;
-  jobId?: string;
+  jobId?:    string;
+
   createdAt: Date;
   updatedAt: Date;
 }
+
+// ─── Sub-document schemas ─────────────────────────────────────────────────────
+
+const TranscriptSegmentSchema = new Schema<ITranscriptSegment>({
+  start: { type: Number, required: true },
+  end:   { type: Number, required: true },
+  text:  { type: String, required: true },
+}, { _id: false });
+
+const ProcessingErrorSchema = new Schema<IProcessingError>({
+  stage:   { type: String, required: true },
+  message: { type: String, required: true },
+}, { _id: false });
 
 const StarComponentSchema = new Schema<IStarComponent>({
   detected: { type: Boolean, required: true },
@@ -69,9 +133,9 @@ const FillerWordSchema = new Schema<IFillerWord>({
 }, { _id: false });
 
 const FillerWordsSchema = new Schema<IFillerWords>({
-  totalCount:     { type: Number, default: 0 },
-  ratePerMinute:  { type: Number, default: 0 },
-  examples:       { type: [FillerWordSchema], default: [] },
+  totalCount:    { type: Number, default: 0 },
+  ratePerMinute: { type: Number, default: 0 },
+  examples:      { type: [FillerWordSchema], default: [] },
 }, { _id: false });
 
 const SentimentSchema = new Schema<ISentiment>({
@@ -88,19 +152,58 @@ const InsightsSchema = new Schema<IInsights>({
   improvements:  { type: [String], default: [] },
 }, { _id: false });
 
+// ─── Main schema ──────────────────────────────────────────────────────────────
+
+const PROCESSING_STATUSES: InterviewProcessingStatus[] = [
+  'uploaded',
+  'queued',
+  'downloading',
+  'extracting_audio',
+  'transcribing',
+  'analyzing',
+  'completed',
+  'failed',
+];
+
 const InterviewInsightsSchema = new Schema<IInterviewInsights>(
   {
     userId:       { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     mediaFileKey: { type: String, required: true },
     mediaType:    { type: String, enum: ['audio', 'video'], required: true },
+
+    // Legacy status field – kept so existing records are not broken
     status: {
-      type: String,
-      enum: ['pending', 'transcribing', 'analyzing', 'completed', 'failed'],
+      type:    String,
+      enum:    ['pending', 'transcribing', 'analyzing', 'completed', 'failed'],
       default: 'pending',
     },
-    transcript: { type: String },
-    insights:   { type: InsightsSchema },
-    jobId:      { type: String },
+
+    processingStatus: {
+      type:    String,
+      enum:    PROCESSING_STATUSES,
+      default: 'uploaded',
+      index:   true,
+    },
+
+    // Transcription
+    transcript:              { type: String },
+    transcriptSegments:      { type: [TranscriptSegmentSchema], default: undefined },
+    transcriptionProvider:   { type: String },
+    transcriptionModel:      { type: String },
+    transcriptionLanguage:   { type: String },
+    transcriptionDurationMs: { type: Number },
+    mediaDurationSeconds:    { type: Number },
+
+    // Pipeline timestamps
+    processingStartedAt:      { type: Date },
+    transcriptionCompletedAt: { type: Date },
+
+    // Internal error – never returned to callers
+    processingError: { type: ProcessingErrorSchema },
+
+    // Existing fields preserved
+    insights: { type: InsightsSchema },
+    jobId:    { type: String },
   },
   { timestamps: true }
 );
