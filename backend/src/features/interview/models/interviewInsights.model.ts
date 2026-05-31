@@ -65,6 +65,42 @@ export type InterviewProcessingStatus =
   | 'completed'
   | 'failed';
 
+export type InsightsStatus = 'not_started' | 'analyzing' | 'completed' | 'failed';
+
+// ─── Insight sub-types ────────────────────────────────────────────────────────
+
+export interface IStarSection {
+  text:      string;
+  start:     number | null;
+  end:       number | null;
+  score:     number;
+  feedback:  string;
+}
+
+export interface IStarActionSection extends IStarSection {
+  candidateOwnedAction:    boolean;
+  teamOnlyLanguageDetected: boolean;
+}
+
+export interface IStarAnalysis {
+  situation: IStarSection;
+  task:      IStarSection;
+  action:    IStarActionSection;
+  result:    IStarSection;
+}
+
+export interface ICandidateActionAssessment {
+  candidateOwnedActionScore: number;
+  usesPersonalAgency:        boolean;
+  teamLanguageDetected:      boolean;
+  feedback:                  string;
+}
+
+export interface IFillerWordBreakdown {
+  word:  string;
+  count: number;
+}
+
 // ─── Main document interface ──────────────────────────────────────────────────
 
 export interface IInterviewInsights extends Document {
@@ -86,14 +122,32 @@ export interface IInterviewInsights extends Document {
   transcriptionDurationMs?: number;
   mediaDurationSeconds?:   number;
 
-  // Timestamps for pipeline stages
+  // Pipeline timestamps
   processingStartedAt?:      Date;
   transcriptionCompletedAt?: Date;
 
-  // Internal error storage – never returned to the frontend
+  // Internal transcription error – never returned to the frontend
   processingError?: IProcessingError;
 
-  // Existing insight fields (preserved)
+  // ── Gemini insight fields ─────────────────────────────────────────────────
+  insightsStatus:              InsightsStatus;
+  fillerWordCount?:            number;
+  fillerWordsBreakdown?:       IFillerWordBreakdown[];
+  wordsPerMinute?:             number;
+  estimatedSpeakingDurationSeconds?: number;
+  confidenceScore?:            number;
+  starAnalysis?:               IStarAnalysis;
+  candidateActionAssessment?:  ICandidateActionAssessment;
+  strengths?:                  string[];
+  weaknesses?:                 string[];
+  recommendations?:            string[];
+  geminiProvider?:             string;
+  geminiModel?:                string;
+  insightsCompletedAt?:        Date;
+  // Internal insights error – never returned to the frontend
+  insightsError?: IProcessingError;
+
+  // Existing legacy insight sub-document (preserved for backward compat)
   insights?: IInsights;
   jobId?:    string;
 
@@ -152,6 +206,45 @@ const InsightsSchema = new Schema<IInsights>({
   improvements:  { type: [String], default: [] },
 }, { _id: false });
 
+// ─── Insight sub-document schemas ────────────────────────────────────────────
+
+const StarSectionSchema = new Schema<IStarSection>({
+  text:     { type: String, default: '' },
+  start:    { type: Number, default: null },
+  end:      { type: Number, default: null },
+  score:    { type: Number, min: 0, max: 100, default: 0 },
+  feedback: { type: String, default: '' },
+}, { _id: false });
+
+const StarActionSectionSchema = new Schema<IStarActionSection>({
+  text:                    { type: String, default: '' },
+  start:                   { type: Number, default: null },
+  end:                     { type: Number, default: null },
+  score:                   { type: Number, min: 0, max: 100, default: 0 },
+  feedback:                { type: String, default: '' },
+  candidateOwnedAction:    { type: Boolean, default: false },
+  teamOnlyLanguageDetected: { type: Boolean, default: false },
+}, { _id: false });
+
+const StarAnalysisSchema = new Schema<IStarAnalysis>({
+  situation: { type: StarSectionSchema },
+  task:      { type: StarSectionSchema },
+  action:    { type: StarActionSectionSchema },
+  result:    { type: StarSectionSchema },
+}, { _id: false });
+
+const CandidateActionAssessmentSchema = new Schema<ICandidateActionAssessment>({
+  candidateOwnedActionScore: { type: Number, min: 0, max: 100, default: 0 },
+  usesPersonalAgency:        { type: Boolean, default: false },
+  teamLanguageDetected:      { type: Boolean, default: false },
+  feedback:                  { type: String, default: '' },
+}, { _id: false });
+
+const FillerWordBreakdownSchema = new Schema<IFillerWordBreakdown>({
+  word:  { type: String, required: true },
+  count: { type: Number, required: true },
+}, { _id: false });
+
 // ─── Main schema ──────────────────────────────────────────────────────────────
 
 const PROCESSING_STATUSES: InterviewProcessingStatus[] = [
@@ -164,6 +257,8 @@ const PROCESSING_STATUSES: InterviewProcessingStatus[] = [
   'completed',
   'failed',
 ];
+
+const INSIGHTS_STATUSES: InsightsStatus[] = ['not_started', 'analyzing', 'completed', 'failed'];
 
 const InterviewInsightsSchema = new Schema<IInterviewInsights>(
   {
@@ -198,8 +293,31 @@ const InterviewInsightsSchema = new Schema<IInterviewInsights>(
     processingStartedAt:      { type: Date },
     transcriptionCompletedAt: { type: Date },
 
-    // Internal error – never returned to callers
+    // Internal transcription error – never returned to callers
     processingError: { type: ProcessingErrorSchema },
+
+    // ── Gemini insight fields ───────────────────────────────────────────────
+    insightsStatus: {
+      type:    String,
+      enum:    INSIGHTS_STATUSES,
+      default: 'not_started',
+      index:   true,
+    },
+    fillerWordCount:            { type: Number },
+    fillerWordsBreakdown:       { type: [FillerWordBreakdownSchema], default: undefined },
+    wordsPerMinute:             { type: Number },
+    estimatedSpeakingDurationSeconds: { type: Number },
+    confidenceScore:            { type: Number, min: 0, max: 100 },
+    starAnalysis:               { type: StarAnalysisSchema },
+    candidateActionAssessment:  { type: CandidateActionAssessmentSchema },
+    strengths:                  { type: [String], default: undefined },
+    weaknesses:                 { type: [String], default: undefined },
+    recommendations:            { type: [String], default: undefined },
+    geminiProvider:             { type: String },
+    geminiModel:                { type: String },
+    insightsCompletedAt:        { type: Date },
+    // Internal insights error – never returned to callers
+    insightsError:              { type: ProcessingErrorSchema },
 
     // Existing fields preserved
     insights: { type: InsightsSchema },

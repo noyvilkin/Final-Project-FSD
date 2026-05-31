@@ -11,6 +11,13 @@ import {
   InterviewAlreadyProcessingError,
   InterviewMissingMediaKeyError,
 } from '../services/transcriptionOrchestrationService.js';
+import {
+  InsightOrchestrationService,
+  InsightInterviewNotFoundError,
+  InsightOwnershipError,
+  InsightNoTranscriptError,
+  InsightAlreadyAnalyzingError,
+} from '../services/insightOrchestrationService.js';
 
 const router = Router();
 
@@ -161,12 +168,14 @@ router.get(
     res.json({
       id:               interview._id,
       processingStatus: interview.processingStatus,
+      insightsStatus:   interview.insightsStatus,
       hasTranscript:    !!interview.transcript,
-      hasInsights:      !!interview.insights,
-      createdAt:           interview.createdAt,
-      updatedAt:           interview.updatedAt,
-      processingStartedAt: interview.processingStartedAt ?? null,
+      hasInsights:      interview.insightsStatus === 'completed',
+      createdAt:              interview.createdAt,
+      updatedAt:              interview.updatedAt,
+      processingStartedAt:    interview.processingStartedAt    ?? null,
       transcriptionCompletedAt: interview.transcriptionCompletedAt ?? null,
+      insightsCompletedAt:    interview.insightsCompletedAt    ?? null,
       requestId: req.requestId ?? '-',
     });
   })
@@ -293,4 +302,277 @@ router.get(
   })
 );
 
+// ─── POST /interviews/:id/analyze ────────────────────────────────────────────
+
+/**
+ * Trigger Gemini insight analysis for an interview that already has a transcript.
+ * Returns 202 immediately; analysis runs asynchronously.
+ */
+router.post(
+  '/:id/analyze',
+  asyncHandler(async (req: Request, res: Response) => {
+    const interviewId = asString(req.params.id);
+    const userId      = resolveUserId(req);
+
+    if (!userId) {
+      res.status(401).json({
+        error:     { code: 'MISSING_USER_ID', message: 'x-user-id header is required' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    if (!isValidObjectId(interviewId)) {
+      res.status(400).json({
+        error:     { code: 'INVALID_INTERVIEW_ID', message: 'Invalid interview ID format' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    const force = asString(req.query.force as string | string[] ?? '') === 'true';
+
+    try {
+      await InsightOrchestrationService.analyseInterview(interviewId, userId, { force });
+
+      appLogger.info('[interview-api] Insight analysis triggered', { interviewId, userId });
+
+      const interview = await InsightOrchestrationService.findByIdAndUser(interviewId, userId);
+      res.status(202).json({
+        interviewId,
+        processingStatus: interview?.processingStatus ?? 'completed',
+        insightsStatus:   'analyzing',
+        message:          'Insight analysis has been queued and will complete shortly.',
+        requestId:        req.requestId ?? '-',
+      });
+
+    } catch (err) {
+      if (err instanceof InsightInterviewNotFoundError) {
+        res.status(404).json({
+          error: { code: 'INTERVIEW_NOT_FOUND', message: err.message },
+          requestId: req.requestId ?? '-',
+        });
+        return;
+      }
+      if (err instanceof InsightOwnershipError) {
+        res.status(403).json({
+          error: { code: 'FORBIDDEN', message: err.message },
+          requestId: req.requestId ?? '-',
+        });
+        return;
+      }
+      if (err instanceof InsightNoTranscriptError) {
+        res.status(422).json({
+          error: { code: 'NO_TRANSCRIPT', message: err.message },
+          requestId: req.requestId ?? '-',
+        });
+        return;
+      }
+      if (err instanceof InsightAlreadyAnalyzingError) {
+        res.status(409).json({
+          error: { code: 'ALREADY_ANALYZING', message: err.message },
+          requestId: req.requestId ?? '-',
+        });
+        return;
+      }
+      throw err;
+    }
+  })
+);
+
+// ─── POST /interviews/:id/process ────────────────────────────────────────────
+
+/**
+ * Full pipeline: transcription (if needed) → Gemini insights.
+ * Returns 202 immediately; both stages run asynchronously in sequence.
+ */
+router.post(
+  '/:id/process',
+  asyncHandler(async (req: Request, res: Response) => {
+    const interviewId = asString(req.params.id);
+    const userId      = resolveUserId(req);
+
+    if (!userId) {
+      res.status(401).json({
+        error:     { code: 'MISSING_USER_ID', message: 'x-user-id header is required' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    if (!isValidObjectId(interviewId)) {
+      res.status(400).json({
+        error:     { code: 'INVALID_INTERVIEW_ID', message: 'Invalid interview ID format' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    const interview = await TranscriptionOrchestrationService.findByIdAndUser(
+      interviewId, userId
+    );
+
+    if (!interview) {
+      res.status(404).json({
+        error:     { code: 'INTERVIEW_NOT_FOUND', message: 'Interview not found' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    const activeTranscriptionStatuses = ['queued', 'downloading', 'extracting_audio', 'transcribing'];
+    if (activeTranscriptionStatuses.includes(interview.processingStatus)) {
+      res.status(409).json({
+        error: {
+          code:    'ALREADY_PROCESSING',
+          message: `Interview transcription is already in progress (status: ${interview.processingStatus})`,
+        },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    if (interview.insightsStatus === 'analyzing') {
+      res.status(409).json({
+        error: { code: 'ALREADY_ANALYZING', message: 'Insight analysis is already in progress' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    appLogger.info('[interview-api] Full pipeline triggered', { interviewId, userId });
+
+    // Fire-and-forget full pipeline: transcribe (if needed) then analyse
+    (async () => {
+      try {
+        if (!interview.transcript) {
+          // Block inside the async task so analysis starts after transcription
+          await new Promise<void>((resolve, reject) => {
+            TranscriptionOrchestrationService.transcribeInterview(interviewId, userId)
+              .then(resolve)
+              .catch(reject);
+          });
+
+          // Wait for the background pipeline to finish
+          await waitForTranscriptionCompletion(interviewId, 300_000);
+        }
+
+        // Re-load to get fresh transcript before analysing
+        const fresh = await InterviewInsights.findById(interviewId);
+        if (fresh?.transcript) {
+          await InsightOrchestrationService.analyseInterview(interviewId, userId);
+        } else {
+          appLogger.warn('[interview-api] Transcript missing after transcription, skipping insights', {
+            interviewId,
+          });
+        }
+      } catch (err: unknown) {
+        appLogger.error('[interview-api] Full pipeline error', {
+          interviewId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+
+    res.status(202).json({
+      interviewId,
+      processingStatus: interview.transcript ? interview.processingStatus : 'queued',
+      insightsStatus:   interview.transcript ? 'analyzing' : 'not_started',
+      message:          'Full processing pipeline has been triggered.',
+      requestId:        req.requestId ?? '-',
+    });
+  })
+);
+
+// ─── GET /interviews/:id/insights ────────────────────────────────────────────
+
+/**
+ * Return full Gemini insights once analysis is complete.
+ * Returns 400 with INSIGHTS_NOT_READY if insightsStatus is not 'completed'.
+ * insightsError and gemini raw responses are never included.
+ */
+router.get(
+  '/:id/insights',
+  asyncHandler(async (req: Request, res: Response) => {
+    const interviewId = asString(req.params.id);
+    const userId      = resolveUserId(req);
+
+    if (!userId) {
+      res.status(401).json({
+        error:     { code: 'MISSING_USER_ID', message: 'x-user-id header is required' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    if (!isValidObjectId(interviewId)) {
+      res.status(400).json({
+        error:     { code: 'INVALID_INTERVIEW_ID', message: 'Invalid interview ID format' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    const interview = await InsightOrchestrationService.findByIdAndUser(interviewId, userId);
+
+    if (!interview) {
+      res.status(404).json({
+        error:     { code: 'INTERVIEW_NOT_FOUND', message: 'Interview not found' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    if (interview.insightsStatus !== 'completed') {
+      res.status(400).json({
+        error: {
+          code:           'INSIGHTS_NOT_READY',
+          message:        'Insight analysis has not completed yet',
+          insightsStatus: interview.insightsStatus,
+        },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    res.json({
+      interviewId:               interview._id,
+      processingStatus:          interview.processingStatus,
+      insightsStatus:            interview.insightsStatus,
+      fillerWordCount:           interview.fillerWordCount           ?? null,
+      fillerWordsBreakdown:      interview.fillerWordsBreakdown      ?? [],
+      wordsPerMinute:            interview.wordsPerMinute            ?? null,
+      estimatedSpeakingDurationSeconds: interview.estimatedSpeakingDurationSeconds ?? null,
+      confidenceScore:           interview.confidenceScore           ?? null,
+      starAnalysis:              interview.starAnalysis              ?? null,
+      candidateActionAssessment: interview.candidateActionAssessment ?? null,
+      strengths:                 interview.strengths                 ?? [],
+      weaknesses:                interview.weaknesses                ?? [],
+      recommendations:           interview.recommendations           ?? [],
+      insightsCompletedAt:       interview.insightsCompletedAt       ?? null,
+      requestId: req.requestId ?? '-',
+    });
+  })
+);
+
 export default router;
+
+// ─── Internal helper ──────────────────────────────────────────────────────────
+
+/**
+ * Poll MongoDB until the interview's processingStatus reaches a terminal
+ * state ('completed' or 'failed'). Used by the full-pipeline endpoint so
+ * insight analysis doesn't start before transcription finishes.
+ */
+async function waitForTranscriptionCompletion(
+  interviewId: string,
+  timeoutMs:   number
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const doc = await InterviewInsights.findById(interviewId).select('processingStatus');
+    if (doc?.processingStatus === 'completed' || doc?.processingStatus === 'failed') return;
+    await new Promise<void>((r) => setTimeout(r, 500));
+  }
+  appLogger.warn('[interview-api] waitForTranscriptionCompletion timed out', { interviewId });
+}
