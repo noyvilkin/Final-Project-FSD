@@ -53,7 +53,7 @@ export default function MyProfile() {
   const lastRoleLabel = profileSummary?.lastRoleTitle || "Role not identified";
   const lastRoleCompany = profileSummary?.lastRoleCompany || "";
 
-  const accountFullName = [user?.firstName, user?.lastName]
+  const accountFullName = [user?.profile?.firstName, user?.profile?.lastName]
     .filter((part) => typeof part === "string" && part.trim().length > 0)
     .join(" ")
     .trim();
