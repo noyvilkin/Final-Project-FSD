@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { apiConfig } from "../services/api";
 
 export default function MyProfile() {
-  const { userId } = useAuth();
+  const { userId, user } = useAuth();
   const [profileAnalysis, setProfileAnalysis] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -53,6 +53,19 @@ export default function MyProfile() {
   const lastRoleLabel = profileSummary?.lastRoleTitle || "Role not identified";
   const lastRoleCompany = profileSummary?.lastRoleCompany || "";
 
+  const accountFullName = [user?.firstName, user?.lastName]
+    .filter((part) => typeof part === "string" && part.trim().length > 0)
+    .join(" ")
+    .trim();
+  const displayName =
+    profileAnalysis?.candidateName ||
+    accountFullName ||
+    user?.email ||
+    "Your Profile";
+  const displayEmail =
+    profileAnalysis?.candidateEmail || user?.email || "No email available yet";
+  const displayInitial = (displayName?.trim()?.[0] || "?").toUpperCase();
+
   return (
     <PageLayout title="My Profile" subtitle="Your professional DNA dashboard">
       <div className="space-y-5">
@@ -60,7 +73,7 @@ export default function MyProfile() {
           <div className="flex items-center justify-between gap-6">
             <div className="flex min-w-0 items-center gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#050816] text-xl font-bold text-white shadow-sm">
-                {profileAnalysis?.candidateName?.[0] || "V"}
+                {displayInitial}
               </div>
 
               <div className="min-w-0">
@@ -69,11 +82,11 @@ export default function MyProfile() {
                 </p>
 
                 <h2 className="mt-1 truncate text-2xl font-semibold tracking-tight text-[#111827]">
-                  {profileAnalysis?.candidateName || "Vered Ben David"}
+                  {displayName}
                 </h2>
 
                 <p className="mt-1 truncate text-sm text-[#64748b]">
-                  {profileAnalysis?.candidateEmail || "No email available yet"}
+                  {displayEmail}
                 </p>
               </div>
             </div>
