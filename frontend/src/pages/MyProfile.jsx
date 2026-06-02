@@ -1,34 +1,51 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
-
-const API_BASE_URL = "http://localhost:4000";
-const USER_ID = "123456789012345678901234";
+import { useAuth } from "../context/AuthContext";
+import { apiConfig } from "../services/api";
 
 export default function MyProfile() {
+  const { userId } = useAuth();
   const [profileAnalysis, setProfileAnalysis] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (!userId) {
+      setProfileAnalysis(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
     async function fetchProfileAnalysis() {
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/profile-analysis/${USER_ID}`
+          `${apiConfig.baseUrl}/api/profile-analysis/${encodeURIComponent(userId)}`
         );
         const data = await response.json();
+
+        if (cancelled) return;
 
         if (response.ok && data.success) {
           setProfileAnalysis(data.data || null);
         }
       } catch (error) {
-        console.error("Failed to fetch profile analysis", error);
+        if (!cancelled) {
+          console.error("Failed to fetch profile analysis", error);
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
 
+    setIsLoading(true);
     fetchProfileAnalysis();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const profileSummary = profileAnalysis?.profileSummary || null;
   const hasAnalysis = !!profileAnalysis;
