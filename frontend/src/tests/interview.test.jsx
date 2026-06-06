@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 
@@ -18,6 +18,16 @@ vi.mock("../services/api", () => ({
   getInterviewStatus:   vi.fn(),
   getInterviewInsights: vi.fn(),
   getInterviewTranscript: vi.fn(),
+  apiConfig:            { baseUrl: "http://localhost:4000" },
+}));
+
+// InterviewUpload now uploads directly via axios (for progress tracking)
+vi.mock("axios", () => ({
+  default: {
+    post: vi.fn().mockResolvedValue({
+      data: { interviews: ["interview-123"], count: 1 },
+    }),
+  },
 }));
 
 // ─── Mock AuthContext ─────────────────────────────────────────────────────────
@@ -47,10 +57,15 @@ function makeAudioFile(name = "interview.mp3") {
 
 import InterviewUpload from "../pages/InterviewUpload";
 
+import axios from "axios";
+
 describe("InterviewUpload", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    api.uploadInterview.mockResolvedValue({ interviews: ["interview-123"], count: 1 });
+    // InterviewUpload now uses axios.post directly for progress tracking
+    axios.post.mockResolvedValue({
+      data: { interviews: ["interview-123"], count: 1 },
+    });
     api.processInterview.mockResolvedValue({ interviewId: "interview-123", processingStatus: "queued" });
   });
 
@@ -83,7 +98,7 @@ describe("InterviewUpload", () => {
     expect(screen.getByRole("button", { name: /generate insights/i })).toBeEnabled();
   });
 
-  it("calls uploadInterview and processInterview when Generate Insights is clicked", async () => {
+  it("calls axios.post and processInterview when Generate Insights is clicked", async () => {
     renderWithRouter(
       <Routes>
         <Route path="/" element={<InterviewUpload />} />
@@ -96,13 +111,13 @@ describe("InterviewUpload", () => {
     await userEvent.click(screen.getByRole("button", { name: /generate insights/i }));
 
     await waitFor(() => {
-      expect(api.uploadInterview).toHaveBeenCalledTimes(1);
+      expect(axios.post).toHaveBeenCalledTimes(1);
       expect(api.processInterview).toHaveBeenCalledWith("interview-123", "test-user-id");
     });
   });
 
   it("shows an error when upload fails", async () => {
-    api.uploadInterview.mockRejectedValue(new Error("Network error"));
+    axios.post.mockRejectedValue(new Error("Network error"));
 
     renderWithRouter(
       <Routes>
@@ -486,6 +501,105 @@ describe("InterviewInsights page", () => {
     await waitFor(() => {
       // Text is a single node (no child elements) after removing <em>
       expect(screen.getByText(/you personally contributed/i)).toBeInTheDocument();
+    });
+  });
+});
+
+// ─── New: InterviewUpload media preview tests ─────────────────────────────────
+
+describe("InterviewUpload — media preview", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    axios.post.mockResolvedValue({ data: { interviews: ["interview-abc"], count: 1 } });
+    api.processInterview.mockResolvedValue({});
+    // jsdom does not implement URL.createObjectURL — provide a stub
+    globalThis.URL.createObjectURL = vi.fn(() => "blob:fake-url");
+    globalThis.URL.revokeObjectURL = vi.fn();
+  });
+
+  function renderUpload() {
+    return renderWithRouter(
+      <Routes>
+        <Route path="/" element={<InterviewUpload />} />
+        <Route path="/interview/:id/processing" element={<div>Processing</div>} />
+      </Routes>
+    );
+  }
+
+  it("shows an audio player after an audio file is selected", async () => {
+    renderUpload();
+    const input = document.getElementById("interview-file-input");
+    await userEvent.upload(input, new File(["data"], "talk.mp3", { type: "audio/mpeg" }));
+    // The preview section renders an <audio> element for audio files
+    await waitFor(() => {
+      expect(document.querySelector("audio")).not.toBeNull();
+    });
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a video player after a video file is selected", async () => {
+    renderUpload();
+    const input = document.getElementById("interview-file-input");
+    await userEvent.upload(input, new File(["data"], "interview.mp4", { type: "video/mp4" }));
+    expect(document.querySelector("video") ?? document.querySelector("audio")).toBeTruthy();
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it("revokes object URL when a new file is selected", async () => {
+    renderUpload();
+    const input = document.getElementById("interview-file-input");
+    await userEvent.upload(input, new File(["data"], "first.mp3", { type: "audio/mpeg" }));
+    await userEvent.upload(input, new File(["data"], "second.mp3", { type: "audio/mpeg" }));
+    // revokeObjectURL called for the first URL when second file is chosen
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an unsupported file type and shows a validation error", async () => {
+    // userEvent.upload respects the `accept` attribute and filters out
+    // non-matching files silently. Use fireEvent.change to bypass accept
+    // filtering and exercise the component's own MIME validation.
+    renderUpload();
+    const input = document.getElementById("interview-file-input");
+    const pdfFile = new File(["data"], "doc.pdf", { type: "application/pdf" });
+    Object.defineProperty(input, "files", { value: [pdfFile], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => {
+      expect(screen.getByText(/please upload an audio or video file/i)).toBeInTheDocument();
+    });
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("rejects a file over 200 MB and shows a validation error", async () => {
+    renderUpload();
+    const input = document.getElementById("interview-file-input");
+    // File API allows setting size via Object.defineProperty in tests
+    const bigFile = new File(["x"], "huge.mp3", { type: "audio/mpeg" });
+    Object.defineProperty(bigFile, "size", { value: 201 * 1024 * 1024 });
+    await userEvent.upload(input, bigFile);
+    expect(screen.getByText(/or smaller/i)).toBeInTheDocument();
+  });
+});
+
+// ─── New: resolveStage fix — 'completed'+'not_started' shows 'Analyzing' ──────
+
+describe("InterviewProcessing — resolveStage after transcription fix", () => {
+  beforeEach(() => { vi.resetAllMocks(); });
+
+  it("shows 'Analyzing interview' when processingStatus=completed, insightsStatus=not_started", async () => {
+    api.getInterviewStatus.mockResolvedValue({
+      processingStatus: "completed",
+      insightsStatus:   "not_started",
+    });
+    renderWithRouter(
+      <Routes>
+        <Route path="/interview/:id/processing" element={<InterviewProcessing />} />
+        <Route path="/interview/:id/insights"   element={<div>done</div>} />
+      </Routes>,
+      { initialEntries: ["/interview/xyz/processing"] }
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/analyzing interview/i)).toBeInTheDocument();
     });
   });
 });

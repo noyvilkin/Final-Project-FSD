@@ -12,7 +12,9 @@ import { appLogger } from "../../../common/services/logger.js";
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB to support ZIP files
+    // 200 MB: large enough for interview audio/video recordings.
+    // Per-field size constraints are enforced in validateUploads middleware.
+    fileSize: 200 * 1024 * 1024,
     files: 10,
   },
 });

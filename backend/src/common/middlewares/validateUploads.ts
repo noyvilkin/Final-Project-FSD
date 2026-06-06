@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZipProcessor } from "../utils/zipProcessor.js";
 
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
-const MAX_ZIP_SIZE_BYTES = 50 * 1024 * 1024; // 50MB for ZIP files
+const MAX_FILE_SIZE_BYTES     = 20  * 1024 * 1024; // 20 MB  – resumes and generic files
+const MAX_ZIP_SIZE_BYTES      = 50  * 1024 * 1024; // 50 MB  – assignment ZIP files
+const MAX_INTERVIEW_SIZE_BYTES = 200 * 1024 * 1024; // 200 MB – interview audio/video
 
 const allowedMimeByField: Record<string, string[]> = {
   resumes: ["application/pdf"],
@@ -14,7 +15,8 @@ const allowedMimeByField: Record<string, string[]> = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
   ],
-  interviews: ["image/*", "video/*", "application/pdf"],
+  // Audio and video only — images and PDFs cannot be transcribed
+  interviews: ["audio/*", "video/*"],
 };
 
 const isAllowedMime = (mimeType: string, allowed: string[]) => {
@@ -49,9 +51,11 @@ export const validateUploads = async (req: Request, res: Response, next: NextFun
     const allowed = allowedMimeByField[field];
 
     list.forEach((file) => {
-      // Check file size - use different limits for ZIP files
+      // Determine per-field size limit
       const isZipFile = file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed';
-      const maxSize = isZipFile && field === 'assignments' ? MAX_ZIP_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
+      let maxSize = MAX_FILE_SIZE_BYTES;
+      if (field === 'interviews')                  maxSize = MAX_INTERVIEW_SIZE_BYTES;
+      else if (isZipFile && field === 'assignments') maxSize = MAX_ZIP_SIZE_BYTES;
       
       if (file.size > maxSize) {
         errors.push({

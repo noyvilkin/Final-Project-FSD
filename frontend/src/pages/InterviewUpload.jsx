@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { uploadInterview, processInterview } from "../services/api";
+import { processInterview } from "../services/api";
+import { apiConfig } from "../services/api";
+import axios from "axios";
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200 MB
 
@@ -63,13 +65,32 @@ export default function InterviewUpload() {
   const { userId } = useAuth();
 
   const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [validationError, setValidationError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [submitError, setSubmitError] = useState("");
+  const previewUrlRef = useRef(null);
+
+  // Revoke the previous object URL whenever a new file is chosen or component unmounts
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    };
+  }, []);
 
   function handleFileChange(event) {
     const selected = event.target.files?.[0] || null;
     event.target.value = "";
+
+    // Revoke old preview URL before creating a new one
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+      setPreviewUrl(null);
+    }
 
     if (!selected) {
       setFile(null);
@@ -91,6 +112,11 @@ export default function InterviewUpload() {
     setValidationError("");
     setSubmitError("");
     setFile(selected);
+
+    // Create local preview URL so the user can verify the file before uploading
+    const url = URL.createObjectURL(selected);
+    previewUrlRef.current = url;
+    setPreviewUrl(url);
   }
 
   async function handleSubmit() {
@@ -99,12 +125,36 @@ export default function InterviewUpload() {
     try {
       setSubmitting(true);
       setSubmitError("");
+      setUploadProgress(0);
 
-      const uploadResult = await uploadInterview({ file, userId });
+      // Upload with progress tracking via axios directly (the shared request()
+      // helper does not expose onUploadProgress)
+      const formData = new FormData();
+      formData.append("interviews", file);
+
+      const uploadResult = await axios.post(
+        `${apiConfig.baseUrl}/api/uploads`,
+        formData,
+        {
+          withCredentials: true,
+          headers: userId ? { "x-user-id": userId } : undefined,
+          onUploadProgress: (evt) => {
+            if (evt.total) {
+              setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
+            }
+          },
+        }
+      ).then((r) => r.data);
 
       const interviewId = uploadResult?.interviews?.[0];
       if (!interviewId) {
         throw new Error("Upload succeeded but interview ID was not returned. Please try again.");
+      }
+
+      // Revoke the preview URL now that the file has been uploaded
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
       }
 
       // Trigger full pipeline immediately after upload
@@ -112,8 +162,10 @@ export default function InterviewUpload() {
 
       navigate(`/interview/${interviewId}/processing`, { replace: true });
     } catch (err) {
-      setSubmitError(err?.message || "Upload failed. Please try again.");
+      const msg = err?.response?.data?.error?.message || err?.message || "Upload failed. Please try again.";
+      setSubmitError(msg);
       setSubmitting(false);
+      setUploadProgress(0);
     }
   }
 
@@ -168,6 +220,23 @@ export default function InterviewUpload() {
           {validationError ? (
             <p className="mt-2 text-xs text-red-600">{validationError}</p>
           ) : null}
+
+          {/* Local media preview — lets the user verify the right file was selected */}
+          {previewUrl && file ? (
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="mb-1 text-[11px] font-semibold text-gray-500">Preview</p>
+              {file.type.startsWith("video/") ? (
+                <video
+                  src={previewUrl}
+                  controls
+                  className="w-full rounded-lg"
+                  style={{ maxHeight: "220px" }}
+                />
+              ) : (
+                <audio src={previewUrl} controls className="w-full" />
+              )}
+            </div>
+          ) : null}
         </Card>
 
         {/* What happens */}
@@ -198,6 +267,22 @@ export default function InterviewUpload() {
 
         {/* Submit */}
         <Card className="p-4">
+          {/* Upload progress bar */}
+          {submitting && uploadProgress > 0 && uploadProgress < 100 ? (
+            <div className="mb-3">
+              <div className="mb-1 flex justify-between text-xs text-gray-600">
+                <span>Uploading…</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+
           {submitError ? (
             <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {submitError}
@@ -218,7 +303,11 @@ export default function InterviewUpload() {
               onClick={handleSubmit}
               disabled={!file || submitting || !!validationError}
             >
-              {submitting ? "Uploading…" : "Generate Insights"}
+              {submitting
+                ? uploadProgress < 100
+                  ? `Uploading ${uploadProgress}%…`
+                  : "Starting analysis…"
+                : "Generate Insights"}
             </Button>
           </div>
         </Card>

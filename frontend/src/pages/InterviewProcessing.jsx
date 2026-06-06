@@ -17,16 +17,19 @@ function wait(ms) {
 function resolveStage(processingStatus, insightsStatus) {
   if (insightsStatus === "completed") return "insights_ready";
   if (insightsStatus === "analyzing") return "analyzing";
-  if (insightsStatus === "failed") return "failed";
+  if (insightsStatus === "failed")    return "failed";
 
   switch (processingStatus) {
-    case "queued":          return "queued";
-    case "downloading":     return "downloading";
+    case "queued":           return "queued";
+    case "downloading":      return "downloading";
     case "extracting_audio": return "extracting_audio";
-    case "transcribing":    return "transcribing";
-    case "completed":       return insightsStatus === "not_started" ? "queued" : "analyzing";
-    case "failed":          return "failed";
-    default:                return "queued";
+    case "transcribing":     return "transcribing";
+    // Transcription done, Gemini is about to start (or already set to 'analyzing'
+    // but the next poll hasn't fired yet). Show "Analyzing interview" rather than
+    // "Preparing interview" to avoid confusing regression in the progress bar.
+    case "completed":        return "analyzing";
+    case "failed":           return "failed";
+    default:                 return "queued";
   }
 }
 
