@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AnalysisStatus from "./AnalysisStatus";
-
-const API_BASE_URL = "http://localhost:4000";
+import { useAuth } from "../../context/AuthContext";
+import { apiConfig } from "../../services/api";
 
 export default function ResumeUpload() {
+  const { userId } = useAuth();
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -57,12 +58,15 @@ export default function ResumeUpload() {
   async function handleUpload() {
     if (!file) return;
 
+    if (!userId) {
+      setErrorMessage("You need to be signed in to upload a resume.");
+      return;
+    }
+
     setErrorMessage("");
     setStatus("uploading");
 
     try {
-      const userId = "123456789012345678901234";
-
       const formData = new FormData();
       formData.append("file", file);
       formData.append("userId", userId);
@@ -74,7 +78,7 @@ export default function ResumeUpload() {
       setStatus("processing");
 
       const response = await fetch(
-        `${API_BASE_URL}/api/profile-analysis/upload`,
+        `${apiConfig.baseUrl}/api/profile-analysis/upload`,
         {
           method: "POST",
           body: formData,
