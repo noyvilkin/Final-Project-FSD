@@ -295,13 +295,13 @@ export class SemanticAuditAssertions {
     if (scoringPassed) score += 10; // Grade accuracy
     if (feedbackActionable) score += 10; // Feedback quality
 
-    const overall = {
+    const overall: DetectionResult['overall'] = {
       passed: primaryPassed && scoringPassed,
-      strength:
+      strength: (
         score >= 90 ? 'excellent'
         : score >= 70 ? 'good'
         : score >= 50 ? 'partial'
-        : 'fail',
+        : 'fail') as DetectionResult['overall']['strength'],
       score
     };
 
