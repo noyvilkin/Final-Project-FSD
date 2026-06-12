@@ -20,3 +20,5 @@ pnpm-debug.log*
 Thumbs.db
 
 coverage/
+
+backend/src/features/assignment/tests/results
