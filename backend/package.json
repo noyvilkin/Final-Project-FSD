@@ -15,7 +15,8 @@
     "poc": "tsx src/features/assignment/POC/poc-assignment-test.ts",
     "poc:test": "tsx src/features/assignment/POC/poc-assignment-test.ts",
     "poc:resume": "tsx src/features/resume/POC/poc-resume-optimization-test.ts",
-    "poc:optimize": "tsx src/features/resume/POC/poc-ai-optimization-test.ts"
+    "poc:optimize": "tsx src/features/resume/POC/poc-ai-optimization-test.ts",
+    "eval:resume": "tsx src/features/resume/eval/runEval.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.986.0",

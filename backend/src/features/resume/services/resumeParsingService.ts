@@ -26,7 +26,7 @@ interface ParsedProfileSummary {
   recommendedCourses: string[];
 }
 
-interface ParsedDNA {
+export interface ParsedDNA {
   candidateName: string | null;
   candidateEmail: string | null;
   skills: Array<{
@@ -147,6 +147,15 @@ export class ResumeParsingService {
       skillCount: parsed.skills.length,
       experienceCount: parsed.experience.length,
     };
+  }
+
+  /**
+   * Database-free DNA extraction.
+   * Useful for evaluation harnesses that need to test the parser
+   * against a corpus of resume texts without persisting anything.
+   */
+  static async extractDNAFromText(cleanText: string): Promise<ParsedDNA> {
+    return this.callGeminiForDNA(cleanText);
   }
 
   // ── Gemini call ─────────────────────────────────────────────────
