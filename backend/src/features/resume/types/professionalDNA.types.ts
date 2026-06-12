@@ -41,6 +41,7 @@ export interface IGapAnalysis {
 
 // Assignment-related interfaces
 export interface AssignmentMetadata {
+  solutionFileKey: string;
   detectedLanguage?: string;
   detectedFrameworks?: string[];
   projectScope?: 'small' | 'medium' | 'large';
