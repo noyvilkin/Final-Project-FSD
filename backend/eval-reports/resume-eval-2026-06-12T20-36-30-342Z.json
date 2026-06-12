@@ -1,0 +1,402 @@
+{
+  "generatedAt": "2026-06-12T20:36:30.342Z",
+  "resumes": [
+    {
+      "fixtureId": "junior-fullstack",
+      "candidateName": "Maya Cohen",
+      "totalChecked": 28,
+      "hallucinatedCount": 0,
+      "hallucinationRate": 0,
+      "hallucinatedItems": []
+    },
+    {
+      "fixtureId": "data-analyst",
+      "candidateName": "Daniel Levi",
+      "totalChecked": 24,
+      "hallucinatedCount": 1,
+      "hallucinationRate": 0.041666666666666664,
+      "hallucinatedItems": [
+        {
+          "field": "skill",
+          "value": "Data Cleaning"
+        }
+      ]
+    },
+    {
+      "fixtureId": "devops-engineer",
+      "candidateName": "Roni Bar",
+      "totalChecked": 33,
+      "hallucinatedCount": 0,
+      "hallucinationRate": 0,
+      "hallucinatedItems": []
+    }
+  ],
+  "pairs": [
+    {
+      "resumeId": "junior-fullstack",
+      "jdId": "senior-fullstack",
+      "scoreBefore": 65,
+      "scoreAfter": 65,
+      "scoreBoost": 0,
+      "keywordsBefore": 13,
+      "keywordsAfter": 13,
+      "keywordBoost": 0,
+      "jdHardSkillCount": 20,
+      "faithfulness": {
+        "bullets": [
+          {
+            "index": 0,
+            "keywordsUsed": [
+              "React",
+              "TypeScript",
+              "Tailwind CSS",
+              "Node.js",
+              "Express",
+              "REST API",
+              "MongoDB",
+              "Jest",
+              "AWS EC2",
+              "web applications",
+              "design",
+              "build",
+              "maintain",
+              "production experience"
+            ],
+            "unsupportedKeywords": [
+              "web applications",
+              "design",
+              "build",
+              "maintain",
+              "production experience"
+            ],
+            "atsKeywords": [
+              "React",
+              "TypeScript",
+              "Tailwind CSS",
+              "Node.js",
+              "Express",
+              "REST API",
+              "MongoDB",
+              "Jest"
+            ],
+            "nonAtsKeywords": [
+              "AWS EC2",
+              "web applications",
+              "design",
+              "build",
+              "maintain",
+              "production experience"
+            ]
+          },
+          {
+            "index": 1,
+            "keywordsUsed": [
+              "React",
+              "Node.js",
+              "Express",
+              "Git",
+              "code review",
+              "Agile workflows"
+            ],
+            "unsupportedKeywords": [
+              "Agile workflows"
+            ],
+            "atsKeywords": [
+              "React",
+              "Node.js",
+              "Express",
+              "Git"
+            ],
+            "nonAtsKeywords": [
+              "code review",
+              "Agile workflows"
+            ]
+          }
+        ],
+        "totalKeywordsUsed": 20,
+        "totalSupported": 14,
+        "totalUnsupported": 6,
+        "dnaSupportRate": 0.7,
+        "totalAtsKeywords": 12,
+        "totalNonAtsKeywords": 8,
+        "atsRelevanceRate": 0.6,
+        "missingSkillsTotal": 7,
+        "missingSkillsSurfaced": 7,
+        "missingCoverageRate": 1
+      }
+    },
+    {
+      "resumeId": "junior-fullstack",
+      "jdId": "senior-data-engineer",
+      "scoreBefore": 9,
+      "scoreAfter": 12,
+      "scoreBoost": 3,
+      "keywordsBefore": 0,
+      "keywordsAfter": 1,
+      "keywordBoost": 1,
+      "jdHardSkillCount": 7,
+      "faithfulness": {
+        "bullets": [
+          {
+            "index": 0,
+            "keywordsUsed": [],
+            "unsupportedKeywords": [],
+            "atsKeywords": [],
+            "nonAtsKeywords": []
+          },
+          {
+            "index": 1,
+            "keywordsUsed": [
+              "ETL"
+            ],
+            "unsupportedKeywords": [
+              "ETL"
+            ],
+            "atsKeywords": [
+              "ETL"
+            ],
+            "nonAtsKeywords": []
+          }
+        ],
+        "totalKeywordsUsed": 1,
+        "totalSupported": 0,
+        "totalUnsupported": 1,
+        "dnaSupportRate": 0,
+        "totalAtsKeywords": 1,
+        "totalNonAtsKeywords": 0,
+        "atsRelevanceRate": 1,
+        "missingSkillsTotal": 7,
+        "missingSkillsSurfaced": 7,
+        "missingCoverageRate": 1
+      }
+    },
+    {
+      "resumeId": "data-analyst",
+      "jdId": "senior-fullstack",
+      "scoreBefore": 9,
+      "scoreAfter": 9,
+      "scoreBoost": 0,
+      "keywordsBefore": 0,
+      "keywordsAfter": 0,
+      "keywordBoost": 0,
+      "jdHardSkillCount": 20,
+      "faithfulness": {
+        "bullets": [
+          {
+            "index": 0,
+            "keywordsUsed": [],
+            "unsupportedKeywords": [],
+            "atsKeywords": [],
+            "nonAtsKeywords": []
+          },
+          {
+            "index": 1,
+            "keywordsUsed": [],
+            "unsupportedKeywords": [],
+            "atsKeywords": [],
+            "nonAtsKeywords": []
+          }
+        ],
+        "totalKeywordsUsed": 0,
+        "totalSupported": 0,
+        "totalUnsupported": 0,
+        "dnaSupportRate": 1,
+        "totalAtsKeywords": 0,
+        "totalNonAtsKeywords": 0,
+        "atsRelevanceRate": 0,
+        "missingSkillsTotal": 24,
+        "missingSkillsSurfaced": 24,
+        "missingCoverageRate": 1
+      }
+    },
+    {
+      "resumeId": "data-analyst",
+      "jdId": "senior-data-engineer",
+      "scoreBefore": 60,
+      "scoreAfter": 72,
+      "scoreBoost": 12,
+      "keywordsBefore": 4,
+      "keywordsAfter": 5,
+      "keywordBoost": 1,
+      "jdHardSkillCount": 7,
+      "faithfulness": {
+        "bullets": [
+          {
+            "index": 0,
+            "keywordsUsed": [
+              "Tableau",
+              "SQL",
+              "PostgreSQL",
+              "Snowflake",
+              "Python",
+              "pandas",
+              "ETL workflows",
+              "product managers",
+              "A/B testing",
+              "relational databases"
+            ],
+            "unsupportedKeywords": [
+              "ETL workflows",
+              "relational databases"
+            ],
+            "atsKeywords": [
+              "SQL",
+              "PostgreSQL",
+              "Python",
+              "pandas"
+            ],
+            "nonAtsKeywords": [
+              "Tableau",
+              "Snowflake",
+              "ETL workflows",
+              "product managers",
+              "A/B testing",
+              "relational databases"
+            ]
+          },
+          {
+            "index": 1,
+            "keywordsUsed": [
+              "ETL",
+              "SQL",
+              "business intelligence"
+            ],
+            "unsupportedKeywords": [
+              "ETL",
+              "business intelligence"
+            ],
+            "atsKeywords": [
+              "ETL",
+              "SQL"
+            ],
+            "nonAtsKeywords": [
+              "business intelligence"
+            ]
+          }
+        ],
+        "totalKeywordsUsed": 13,
+        "totalSupported": 9,
+        "totalUnsupported": 4,
+        "dnaSupportRate": 0.6923076923076923,
+        "totalAtsKeywords": 6,
+        "totalNonAtsKeywords": 7,
+        "atsRelevanceRate": 0.46153846153846156,
+        "missingSkillsTotal": 3,
+        "missingSkillsSurfaced": 3,
+        "missingCoverageRate": 1
+      }
+    },
+    {
+      "resumeId": "devops-engineer",
+      "jdId": "senior-fullstack",
+      "scoreBefore": 27,
+      "scoreAfter": 47,
+      "scoreBoost": 20,
+      "keywordsBefore": 6,
+      "keywordsAfter": 6,
+      "keywordBoost": 0,
+      "jdHardSkillCount": 20,
+      "faithfulness": {
+        "bullets": [
+          {
+            "index": 0,
+            "keywordsUsed": [
+              "AWS",
+              "EC2",
+              "S3",
+              "CI/CD",
+              "GitHub Actions",
+              "Docker"
+            ],
+            "unsupportedKeywords": [],
+            "atsKeywords": [
+              "AWS",
+              "EC2",
+              "S3",
+              "CI/CD",
+              "GitHub Actions",
+              "Docker"
+            ],
+            "nonAtsKeywords": []
+          },
+          {
+            "index": 1,
+            "keywordsUsed": [
+              "CI/CD"
+            ],
+            "unsupportedKeywords": [],
+            "atsKeywords": [
+              "CI/CD"
+            ],
+            "nonAtsKeywords": []
+          }
+        ],
+        "totalKeywordsUsed": 7,
+        "totalSupported": 7,
+        "totalUnsupported": 0,
+        "dnaSupportRate": 1,
+        "totalAtsKeywords": 7,
+        "totalNonAtsKeywords": 0,
+        "atsRelevanceRate": 1,
+        "missingSkillsTotal": 16,
+        "missingSkillsSurfaced": 16,
+        "missingCoverageRate": 1
+      }
+    },
+    {
+      "resumeId": "devops-engineer",
+      "jdId": "senior-data-engineer",
+      "scoreBefore": 0,
+      "scoreAfter": 21,
+      "scoreBoost": 21,
+      "keywordsBefore": 0,
+      "keywordsAfter": 0,
+      "keywordBoost": 0,
+      "jdHardSkillCount": 7,
+      "faithfulness": {
+        "bullets": [
+          {
+            "index": 0,
+            "keywordsUsed": [
+              "relational databases"
+            ],
+            "unsupportedKeywords": [
+              "relational databases"
+            ],
+            "atsKeywords": [],
+            "nonAtsKeywords": [
+              "relational databases"
+            ]
+          },
+          {
+            "index": 1,
+            "keywordsUsed": [],
+            "unsupportedKeywords": [],
+            "atsKeywords": [],
+            "nonAtsKeywords": []
+          }
+        ],
+        "totalKeywordsUsed": 1,
+        "totalSupported": 0,
+        "totalUnsupported": 1,
+        "dnaSupportRate": 0,
+        "totalAtsKeywords": 0,
+        "totalNonAtsKeywords": 1,
+        "atsRelevanceRate": 0,
+        "missingSkillsTotal": 7,
+        "missingSkillsSurfaced": 7,
+        "missingCoverageRate": 1
+      }
+    }
+  ],
+  "summary": {
+    "avgHallucinationRate": 0.011764705882352941,
+    "totalHallucinations": 1,
+    "avgScoreBoost": 9.333333333333334,
+    "avgKeywordBoost": 0.3333333333333333,
+    "avgDnaSupportRate": 0.7142857142857143,
+    "totalUnsupportedKeywords": 12,
+    "avgAtsRelevanceRate": 0.6190476190476191,
+    "avgMissingCoverageRate": 1
+  }
+}
