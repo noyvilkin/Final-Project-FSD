@@ -21,4 +21,4 @@ Thumbs.db
 
 coverage/
 
-backend/src/features/assignment/tests/results
+/src/features/assignment/tests/results
