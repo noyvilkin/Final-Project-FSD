@@ -1,0 +1,337 @@
+{
+  "generatedAt": "2026-06-13T17:42:40.545Z",
+  "rows": [
+    {
+      "packageId": "pkg-01",
+      "violationKey": "wrong_api_style",
+      "violationDescription": "GraphQL (Apollo) instead of REST (Express)",
+      "elapsedMs": 9819,
+      "noise": {
+        "packageId": "pkg-01",
+        "totalEntries": 2,
+        "sourceCount": 2,
+        "noiseCount": 0,
+        "nonSourceCount": 0,
+        "filteredCorrectly": 0,
+        "leakedPaths": [],
+        "noiseReductionRate": 1
+      },
+      "detection": {
+        "primaryDetected": true,
+        "primaryMatchedKeywords": [
+          "graphql",
+          "apollo"
+        ],
+        "secondaryDetected": true,
+        "secondaryMatchedKeywords": [
+          "error handling",
+          "validation",
+          "input validation"
+        ],
+        "feedbackText": "this submission demonstrates a fundamental failure to adhere to the assignment specifications. the requirement was to implement a rest api using express; however, the student delivered a graphql api using apollo server. this intentional deviation from the core technology requirement is unacceptable and results in a failing grade. furthermore, the solution lacks essential features such as persistence, comprehensive error handling, validation, tests, and documentation, which would be expected even if the correct technology were used. the student must re-evaluate their understanding of assignment instructions and core api paradigms. \n completely ignores the requirement for a rest api with express. \n no error handling beyond default apollo server behavior. \n no input validation (though no inputs are defined). \n lack of comments or documentation. \n minimalistic structure, not suitable for a real-world application. \n the provided graphql server is syntactically correct and functional for its intended (though incorrect) purpose. \n the entire rest api paradigm (endpoints, http methods, status codes). \n express framework implementation. \n data persistence (e.g., database integration). \n proper error handling for a rest api. \n input validation for rest endpoints. \n adhere strictly to assignment requirements regarding technology stack and api type. \n implement a rest api using express, defining appropriate routes and http methods. \n integrate robust error handling mechanisms for all api endpoints. \n implement input validation for all incoming data. \n add comprehensive unit and integration tests. \n provide clear documentation for api endpoints, request/response structures, and setup instructions."
+      },
+      "calibration": {
+        "functionalInRange": true,
+        "functionalActual": 10,
+        "functionalExpected": {
+          "min": 0,
+          "max": 45
+        },
+        "codeQualityInRange": true,
+        "codeQualityActual": 40,
+        "codeQualityExpected": {
+          "min": 40,
+          "max": 70
+        },
+        "gradeMatches": true,
+        "gradeActual": "F",
+        "gradeExpected": [
+          "F",
+          "D"
+        ],
+        "allInRange": true
+      },
+      "feedback": {
+        "codeQuality": {
+          "score": 40,
+          "strengths": [
+            "The provided GraphQL server is syntactically correct and functional for its intended (though incorrect) purpose."
+          ],
+          "weaknesses": [
+            "Completely ignores the requirement for a REST API with Express.",
+            "No error handling beyond default Apollo Server behavior.",
+            "No input validation (though no inputs are defined).",
+            "Lack of comments or documentation.",
+            "Minimalistic structure, not suitable for a real-world application."
+          ]
+        },
+        "functionalCorrectness": {
+          "score": 10,
+          "meetsRequirements": false,
+          "missingFeatures": [
+            "The entire REST API paradigm (endpoints, HTTP methods, status codes).",
+            "Express framework implementation.",
+            "Data persistence (e.g., database integration).",
+            "Proper error handling for a REST API.",
+            "Input validation for REST endpoints."
+          ]
+        },
+        "bestPractices": {
+          "score": 20,
+          "followsConventions": false,
+          "suggestions": [
+            "Adhere strictly to assignment requirements regarding technology stack and API type.",
+            "Implement a REST API using Express, defining appropriate routes and HTTP methods.",
+            "Integrate robust error handling mechanisms for all API endpoints.",
+            "Implement input validation for all incoming data.",
+            "Add comprehensive unit and integration tests.",
+            "Provide clear documentation for API endpoints, request/response structures, and setup instructions."
+          ]
+        },
+        "overall": {
+          "score": 23,
+          "grade": "F",
+          "summary": "This submission demonstrates a fundamental failure to adhere to the assignment specifications. The requirement was to implement a REST API using Express; however, the student delivered a GraphQL API using Apollo Server. This intentional deviation from the core technology requirement is unacceptable and results in a failing grade. Furthermore, the solution lacks essential features such as persistence, comprehensive error handling, validation, tests, and documentation, which would be expected even if the correct technology were used. The student must re-evaluate their understanding of assignment instructions and core API paradigms."
+        }
+      }
+    },
+    {
+      "packageId": "pkg-04",
+      "violationKey": "missing_tests",
+      "violationDescription": "No unit test files",
+      "elapsedMs": 11934,
+      "noise": {
+        "packageId": "pkg-04",
+        "totalEntries": 2,
+        "sourceCount": 2,
+        "noiseCount": 0,
+        "nonSourceCount": 0,
+        "filteredCorrectly": 0,
+        "leakedPaths": [],
+        "noiseReductionRate": 1
+      },
+      "detection": {
+        "primaryDetected": true,
+        "primaryMatchedKeywords": [
+          "unit test",
+          "unit tests"
+        ],
+        "secondaryDetected": true,
+        "secondaryMatchedKeywords": [
+          "complete absence of unit tests"
+        ],
+        "feedbackText": "this submission is a clear failure. the student explicitly ignored a fundamental assignment requirement by intentionally omitting unit tests for core endpoints. this demonstrates a severe disregard for specifications and basic software engineering practices. while the server code itself is syntactically correct for its minimal scope, the complete absence of required tests, coupled with a lack of error handling and validation, renders the solution unacceptable. intentional deviation from requirements results in a failing grade. \n complete absence of unit tests, which was a core requirement. \n no error handling implemented for api endpoints. \n no input validation, even for potential future parameters. \n minimalistic implementation lacks robustness expected in production-grade code. \n the provided server code is simple and readable for its limited functionality. \n unit tests for core endpoints (explicitly required and noted as missing by the student). \n implement comprehensive unit tests for all core endpoints, as explicitly required by the assignment. \n integrate robust error handling mechanisms for api requests. \n add input validation to all endpoints to ensure data integrity and security. \n consider adding basic logging for server operations and errors."
+      },
+      "calibration": {
+        "functionalInRange": false,
+        "functionalActual": 40,
+        "functionalExpected": {
+          "min": 55,
+          "max": 90
+        },
+        "codeQualityInRange": false,
+        "codeQualityActual": 50,
+        "codeQualityExpected": {
+          "min": 75,
+          "max": 90
+        },
+        "gradeMatches": false,
+        "gradeActual": "F",
+        "gradeExpected": [
+          "C",
+          "C+"
+        ],
+        "allInRange": false
+      },
+      "feedback": {
+        "codeQuality": {
+          "score": 50,
+          "strengths": [
+            "The provided server code is simple and readable for its limited functionality."
+          ],
+          "weaknesses": [
+            "Complete absence of unit tests, which was a core requirement.",
+            "No error handling implemented for API endpoints.",
+            "No input validation, even for potential future parameters.",
+            "Minimalistic implementation lacks robustness expected in production-grade code."
+          ]
+        },
+        "functionalCorrectness": {
+          "score": 40,
+          "meetsRequirements": false,
+          "missingFeatures": [
+            "Unit tests for core endpoints (explicitly required and noted as missing by the student)."
+          ]
+        },
+        "bestPractices": {
+          "score": 30,
+          "followsConventions": false,
+          "suggestions": [
+            "Implement comprehensive unit tests for all core endpoints, as explicitly required by the assignment.",
+            "Integrate robust error handling mechanisms for API requests.",
+            "Add input validation to all endpoints to ensure data integrity and security.",
+            "Consider adding basic logging for server operations and errors."
+          ]
+        },
+        "overall": {
+          "score": 35,
+          "grade": "F",
+          "summary": "This submission is a clear failure. The student explicitly ignored a fundamental assignment requirement by intentionally omitting unit tests for core endpoints. This demonstrates a severe disregard for specifications and basic software engineering practices. While the server code itself is syntactically correct for its minimal scope, the complete absence of required tests, coupled with a lack of error handling and validation, renders the solution unacceptable. Intentional deviation from requirements results in a failing grade."
+        }
+      }
+    },
+    {
+      "packageId": "pkg-05",
+      "violationKey": "missing_health_endpoint",
+      "violationDescription": "GET /health endpoint missing",
+      "elapsedMs": 8412,
+      "error": "Gemini 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 55.330384017s.",
+      "noise": {
+        "packageId": "pkg-05",
+        "totalEntries": 2,
+        "sourceCount": 2,
+        "noiseCount": 0,
+        "nonSourceCount": 0,
+        "filteredCorrectly": 0,
+        "leakedPaths": [],
+        "noiseReductionRate": 1
+      }
+    },
+    {
+      "packageId": "pkg-02",
+      "violationKey": "wrong_database",
+      "violationDescription": "SQLite instead of PostgreSQL",
+      "elapsedMs": 7567,
+      "error": "Gemini rate limit: 8 req/min exceeded. Retry in 9s.",
+      "noise": {
+        "packageId": "pkg-02",
+        "totalEntries": 2,
+        "sourceCount": 2,
+        "noiseCount": 0,
+        "nonSourceCount": 0,
+        "filteredCorrectly": 0,
+        "leakedPaths": [],
+        "noiseReductionRate": 1
+      }
+    },
+    {
+      "packageId": "pkg-03",
+      "violationKey": "missing_auth",
+      "violationDescription": "No JWT authentication on protected endpoints",
+      "elapsedMs": 10790,
+      "noise": {
+        "packageId": "pkg-03",
+        "totalEntries": 2,
+        "sourceCount": 2,
+        "noiseCount": 0,
+        "nonSourceCount": 0,
+        "filteredCorrectly": 0,
+        "leakedPaths": [],
+        "noiseReductionRate": 1
+      },
+      "detection": {
+        "primaryDetected": true,
+        "primaryMatchedKeywords": [
+          "no auth"
+        ],
+        "secondaryDetected": true,
+        "secondaryMatchedKeywords": [
+          "jwt",
+          "middleware"
+        ],
+        "feedbackText": "this submission is a complete failure. the assignment explicitly required jwt authentication, and the student's code provides absolutely no implementation of this core feature. furthermore, the student explicitly noted the intentional omission of authentication, demonstrating a blatant disregard for the assignment specifications. this is an unacceptable submission that fails to meet any significant requirement. \n complete absence of any security implementation, specifically jwt authentication. \n no modularity or structure for authentication logic. \n no error handling or validation related to authentication. \n the explicit comment 'intentionally no auth middleware or jwt usage' indicates a deliberate choice to omit a core requirement, severely impacting the solution's quality. \n basic express server setup is syntactically correct and functional for its limited scope. \n code is minimal and readable. \n jwt authentication (token generation, validation, protected routes) \n authorization middleware \n user registration/login flow (implied by authentication requirement) \n secure handling of credentials \n implement jwt authentication using a library like 'jsonwebtoken' and 'express-jwt'. \n define protected routes that require a valid jwt. \n implement robust error handling for authentication failures (e.g., invalid token, expired token). \n use environment variables for sensitive information (e.g., jwt secret key). \n separate authentication logic into dedicated modules or middleware."
+      },
+      "calibration": {
+        "functionalInRange": false,
+        "functionalActual": 0,
+        "functionalExpected": {
+          "min": 15,
+          "max": 45
+        },
+        "codeQualityInRange": false,
+        "codeQualityActual": 30,
+        "codeQualityExpected": {
+          "min": 50,
+          "max": 75
+        },
+        "gradeMatches": true,
+        "gradeActual": "F",
+        "gradeExpected": [
+          "F",
+          "D"
+        ],
+        "allInRange": false
+      },
+      "feedback": {
+        "codeQuality": {
+          "score": 30,
+          "strengths": [
+            "Basic Express server setup is syntactically correct and functional for its limited scope.",
+            "Code is minimal and readable."
+          ],
+          "weaknesses": [
+            "Complete absence of any security implementation, specifically JWT authentication.",
+            "No modularity or structure for authentication logic.",
+            "No error handling or validation related to authentication.",
+            "The explicit comment 'intentionally no auth middleware or JWT usage' indicates a deliberate choice to omit a core requirement, severely impacting the solution's quality."
+          ]
+        },
+        "functionalCorrectness": {
+          "score": 0,
+          "meetsRequirements": false,
+          "missingFeatures": [
+            "JWT authentication (token generation, validation, protected routes)",
+            "Authorization middleware",
+            "User registration/login flow (implied by authentication requirement)",
+            "Secure handling of credentials"
+          ]
+        },
+        "bestPractices": {
+          "score": 10,
+          "followsConventions": false,
+          "suggestions": [
+            "Implement JWT authentication using a library like 'jsonwebtoken' and 'express-jwt'.",
+            "Define protected routes that require a valid JWT.",
+            "Implement robust error handling for authentication failures (e.g., invalid token, expired token).",
+            "Use environment variables for sensitive information (e.g., JWT secret key).",
+            "Separate authentication logic into dedicated modules or middleware."
+          ]
+        },
+        "overall": {
+          "score": 10,
+          "grade": "F",
+          "summary": "This submission is a complete failure. The assignment explicitly required JWT authentication, and the student's code provides absolutely no implementation of this core feature. Furthermore, the student explicitly noted the intentional omission of authentication, demonstrating a blatant disregard for the assignment specifications. This is an unacceptable submission that fails to meet any significant requirement."
+        }
+      }
+    },
+    {
+      "packageId": "pkg-06",
+      "violationKey": "none",
+      "violationDescription": "Good solution — all requirements met",
+      "elapsedMs": 8571,
+      "error": "Gemini 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 19.482100967s.",
+      "noise": {
+        "packageId": "pkg-06",
+        "totalEntries": 3,
+        "sourceCount": 3,
+        "noiseCount": 0,
+        "nonSourceCount": 0,
+        "filteredCorrectly": 0,
+        "leakedPaths": [],
+        "noiseReductionRate": 1
+      }
+    }
+  ],
+  "summary": {
+    "faultyPackages": 5,
+    "primaryDetections": 3,
+    "detectionRate": 0.6,
+    "secondaryDetections": 3,
+    "calibrationPasses": 1,
+    "overallNoiseReductionRate": 1,
+    "totalNoiseFiles": 0,
+    "totalNonSourceFiles": 0,
+    "totalLeaked": 0,
+    "goodPackageFalsePositive": true
+  }
+}

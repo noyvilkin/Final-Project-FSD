@@ -78,12 +78,18 @@ export class AIAnalysisService {
       throw new Error(`Assignment ${assignmentId} missing analysis data`);
     }
 
-      const metadata = {
-        ...(assignment.metadata || {}),
-        // include top-level keys so mock generator can identify package under test
-        solutionFileKey: assignment.solutionFileKey,
-        requirementsFileKey: assignment.requirementsFileKey
-      } as any;
+    // `assignment.metadata` is a Mongoose subdocument. Spreading it directly drops
+    // Mixed-type fields like `sourceCodeContent`, so we serialize via toObject() first.
+    const baseMetadata = assignment.metadata && typeof (assignment.metadata as any).toObject === 'function'
+      ? (assignment.metadata as any).toObject()
+      : (assignment.metadata || {});
+
+    const metadata = {
+      ...baseMetadata,
+      // surface the top-level keys so the mock generator can identify the package under test
+      solutionFileKey: assignment.solutionFileKey,
+      requirementsFileKey: assignment.requirementsFileKey,
+    } as any;
     
     // Extract requirements text (if available)
     const requirements = metadata.requirements || 'No specific requirements provided';
@@ -115,84 +121,8 @@ export class AIAnalysisService {
   static async analyzeAssignmentWithAI(assignmentId: string): Promise<AIAnalysisResult> {
     try {
       appLogger.info("[AIAnalysisService] Starting AI analysis", { assignmentId });
-
-      // Construct unified payload
       const payload = await this.constructUnifiedPayload(assignmentId);
-      // If mock mode is enabled, generate a deterministic local response
-      if (process.env.SEMANTIC_AUDIT_USE_MOCK_AI === 'true') {
-        appLogger.info('[AIAnalysisService] Using mock AI response (SEMANTIC_AUDIT_USE_MOCK_AI=true)', { assignmentId });
-        const rawResponse = this.generateMockRawResponse(payload);
-        appLogger.info('[AIAnalysisService] Mock AI response generated', { assignmentId, responsePreview: rawResponse.substring(0, 200) });
-
-        const feedback = this.parseAIResponse(rawResponse);
-        appLogger.info('[AIAnalysisService] AI analysis completed (mock)', {
-          assignmentId,
-          overallScore: feedback?.overall?.score
-        });
-
-        return {
-          success: true,
-          feedback
-        };
-      }
-
-      // Prepare Gemini payload
-      const geminiPayload: GeminiPayload = {
-        system_instruction: {
-          parts: [{
-            text: `You are a strict university professor grading programming assignments. 
-                   Provide honest, critical evaluation. Do NOT be lenient.
-                   When requirements are ignored or core features are missing, assign low scores.
-                   Intentional deviations from specifications result in failing grades.
-                   Always respond with valid JSON only, no markdown code blocks or extra text.`
-          }]
-        },
-        contents: [{
-          role: 'user',
-          parts: [{
-            text: this.buildAnalysisPrompt(payload)
-          }]
-        }]
-      };
-
-      // Call Gemini API
-      const client = this.getGeminiClient();
-      const rawResponse = await client.generate(geminiPayload);
-      
-      // Log raw response for debugging
-      appLogger.info("[AIAnalysisService] Raw AI response received", {
-        assignmentId,
-        responseLength: rawResponse.length,
-        responsePreview: rawResponse.substring(0, 200)
-      });
-      
-      // Parse the response
-      const feedback = this.parseAIResponse(rawResponse);
-      
-      // Check if parsing returned error feedback (score of 0 indicates parse failure)
-      if (feedback && feedback.overall.score === 0 && feedback.overall.summary.includes('failed')) {
-        appLogger.error("[AIAnalysisService] AI response parsing failed", {
-          assignmentId,
-          rawResponse: rawResponse.substring(0, 1000)
-        });
-        
-        return {
-          success: false,
-          error: `Failed to parse AI response. Raw: ${rawResponse.substring(0, 500)}`,
-          feedback  // Include the error feedback structure
-        };
-      }
-      
-      appLogger.info("[AIAnalysisService] AI analysis completed", {
-        assignmentId,
-        overallScore: feedback?.overall?.score
-      });
-
-      return {
-        success: true,
-        feedback
-      };
-
+      return await this.runAnalysisFromPayload(payload, { assignmentId });
     } catch (error) {
       appLogger.error("[AIAnalysisService] AI analysis failed", {
         assignmentId,
@@ -204,6 +134,103 @@ export class AIAnalysisService {
         error: error instanceof Error ? error.message : 'AI analysis failed'
       };
     }
+  }
+
+  /** DB-free variant of `analyzeAssignmentWithAI` — used by the eval harness. */
+  static async analyzeFromMetadata(input: {
+    metadata: AssignmentMetadata;
+    requirementsFileKey?: string;
+    solutionFileKey?: string;
+  }): Promise<AIAnalysisResult> {
+    try {
+      const requirements = input.metadata.requirements || 'No specific requirements provided';
+      const sourceCode = this.consolidateSourceCode(input.metadata);
+      const analysisPrompt = this.generateAnalysisPrompt(input.metadata);
+
+      const payload: UnifiedAnalysisPayload = {
+        requirements,
+        sourceCode,
+        metadata: {
+          ...input.metadata,
+          solutionFileKey: input.solutionFileKey,
+          requirementsFileKey: input.requirementsFileKey,
+        } as AssignmentMetadata,
+        analysisPrompt,
+      };
+
+      return await this.runAnalysisFromPayload(payload, {
+        assignmentId: input.solutionFileKey || 'eval-run',
+      });
+    } catch (error) {
+      appLogger.error("[AIAnalysisService] DB-free AI analysis failed", {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'AI analysis failed',
+      };
+    }
+  }
+
+  /** Shared core for both `analyzeAssignmentWithAI` and `analyzeFromMetadata`. */
+  private static async runAnalysisFromPayload(
+    payload: UnifiedAnalysisPayload,
+    ctx: { assignmentId: string }
+  ): Promise<AIAnalysisResult> {
+    const { assignmentId } = ctx;
+
+    if (process.env.SEMANTIC_AUDIT_USE_MOCK_AI === 'true') {
+      appLogger.info('[AIAnalysisService] Using mock AI response (SEMANTIC_AUDIT_USE_MOCK_AI=true)', { assignmentId });
+      const rawResponse = this.generateMockRawResponse(payload);
+      const feedback = this.parseAIResponse(rawResponse);
+      return { success: true, feedback };
+    }
+
+    const geminiPayload: GeminiPayload = {
+      system_instruction: {
+        parts: [{
+          text: `You are a strict university professor grading programming assignments. 
+                 Provide honest, critical evaluation. Do NOT be lenient.
+                 When requirements are ignored or core features are missing, assign low scores.
+                 Intentional deviations from specifications result in failing grades.
+                 Always respond with valid JSON only, no markdown code blocks or extra text.`
+        }]
+      },
+      contents: [{
+        role: 'user',
+        parts: [{ text: this.buildAnalysisPrompt(payload) }]
+      }]
+    };
+
+    const client = this.getGeminiClient();
+    const rawResponse = await client.generate(geminiPayload);
+
+    appLogger.info("[AIAnalysisService] Raw AI response received", {
+      assignmentId,
+      responseLength: rawResponse.length,
+      responsePreview: rawResponse.substring(0, 200)
+    });
+
+    const feedback = this.parseAIResponse(rawResponse);
+
+    if (feedback && feedback.overall.score === 0 && feedback.overall.summary.includes('failed')) {
+      appLogger.error("[AIAnalysisService] AI response parsing failed", {
+        assignmentId,
+        rawResponse: rawResponse.substring(0, 1000)
+      });
+      return {
+        success: false,
+        error: `Failed to parse AI response. Raw: ${rawResponse.substring(0, 500)}`,
+        feedback
+      };
+    }
+
+    appLogger.info("[AIAnalysisService] AI analysis completed", {
+      assignmentId,
+      overallScore: feedback?.overall?.score
+    });
+
+    return { success: true, feedback };
   }
 
   /**

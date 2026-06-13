@@ -99,6 +99,10 @@ export interface ZipScanResult {
   projectScope: 'small' | 'medium' | 'large';
   totalSourceSize: number;
   errors: string[];
+  /** Paths skipped because they matched NOISE_PATTERNS (node_modules, .git, dist, …). */
+  noiseFilesIgnored: string[];
+  /** Paths skipped because they aren't recognized source files (README.md, *.lock, …). */
+  nonSourceFilesIgnored: string[];
   metadata: {
     hasPackageJson: boolean;
     hasReadme: boolean;
@@ -283,6 +287,8 @@ export class ZipProcessor {
       projectScope: 'small',
       totalSourceSize: 0,
       errors: [],
+      noiseFilesIgnored: [],
+      nonSourceFilesIgnored: [],
       metadata: {
         hasPackageJson: false,
         hasReadme: false,
@@ -320,16 +326,15 @@ export class ZipProcessor {
           zipfile.readEntry();
 
           zipfile.on('entry', (entry) => {
-            totalFiles++;
-
-            // Skip directories
             if (entry.fileName.endsWith('/')) {
               zipfile.readEntry();
               return;
             }
 
-            // Skip noise files
+            totalFiles++;
+
             if (this.isNoiseFile(entry.fileName)) {
+              result.noiseFilesIgnored.push(entry.fileName);
               zipfile.readEntry();
               return;
             }
@@ -396,6 +401,8 @@ export class ZipProcessor {
               });
 
               processedFiles.push(filePromise);
+            } else {
+              result.nonSourceFilesIgnored.push(entry.fileName);
             }
 
             zipfile.readEntry();
