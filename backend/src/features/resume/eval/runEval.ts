@@ -391,7 +391,7 @@ function printFaithfulnessTable(rows: PairEvalRow[]) {
 
 function writeJsonReport(report: FullEvalReport) {
   const __dirname = dirname(fileURLToPath(import.meta.url));
-  const outDir = join(__dirname, '..', '..', '..', '..', 'eval-reports');
+  const outDir = join(__dirname, 'eval-reports');
   mkdirSync(outDir, { recursive: true });
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
