@@ -22,3 +22,4 @@ Thumbs.db
 coverage/
 
 /src/features/assignment/tests/results
+src/features/resume/eval/eval-reports/

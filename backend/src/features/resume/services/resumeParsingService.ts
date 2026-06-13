@@ -13,7 +13,20 @@ import {
 
 const MODEL_NAME = 'gemini-2.5-flash';
 
-interface ParsedDNA {
+interface ParsedProfileSummary {
+  hasDegree: boolean;
+  highestDegree?: string;
+  fieldOfStudy?: string;
+  institution?: string;
+  gradeAverage?: number;
+  totalYearsOfExperience?: number;
+  lastRoleTitle?: string;
+  lastRoleCompany?: string;
+  topSkills: string[];
+  recommendedCourses: string[];
+}
+
+export interface ParsedDNA {
   candidateName: string | null;
   candidateEmail: string | null;
   skills: Array<{
@@ -39,6 +52,7 @@ interface ParsedDNA {
     endDate?: string;
     gpa?: number;
   }>;
+  profileSummary: ParsedProfileSummary;
 }
 
 export class ResumeParsingService {
@@ -105,6 +119,8 @@ export class ResumeParsingService {
       userId: new Types.ObjectId(userId),
       analysisStatus: 'completed',
       rawResumeText: cleanText,
+      candidateName: parsed.candidateName ?? undefined,
+      candidateEmail: parsed.candidateEmail ?? undefined,
       skills: parsed.skills,
       experience: parsed.experience.map((exp) => ({
         ...exp,
@@ -116,6 +132,7 @@ export class ResumeParsingService {
         startDate: new Date(edu.startDate),
         endDate: edu.endDate ? new Date(edu.endDate) : undefined,
       })),
+      profileSummary: parsed.profileSummary,
     });
 
     await User.findByIdAndUpdate(userId, { latestProfessionalDNA: dna._id });
@@ -130,6 +147,15 @@ export class ResumeParsingService {
       skillCount: parsed.skills.length,
       experienceCount: parsed.experience.length,
     };
+  }
+
+  /**
+   * Database-free DNA extraction.
+   * Useful for evaluation harnesses that need to test the parser
+   * against a corpus of resume texts without persisting anything.
+   */
+  static async extractDNAFromText(cleanText: string): Promise<ParsedDNA> {
+    return this.callGeminiForDNA(cleanText);
   }
 
   // ── Gemini call ─────────────────────────────────────────────────
@@ -191,6 +217,7 @@ export class ResumeParsingService {
           endDate: ed.endDate ? String(ed.endDate) : undefined,
           gpa: ed.gpa != null ? Number(ed.gpa) : undefined,
         })),
+        profileSummary: this.normalizeProfileSummary(parsed.profileSummary),
       };
     } catch (err) {
       appLogger.error('[ResumeParser] Failed to parse Gemini response', {
@@ -229,5 +256,37 @@ export class ResumeParsingService {
     });
 
     return user._id.toString();
+  }
+
+  // ── Profile-summary normalization ───────────────────────────────
+
+  private static normalizeProfileSummary(raw: unknown): ParsedProfileSummary {
+    const src = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+
+    const toStringOrUndef = (v: unknown): string | undefined => {
+      if (v == null) return undefined;
+      const s = String(v).trim();
+      return s.length === 0 ? undefined : s;
+    };
+    const toNumberOrUndef = (v: unknown): number | undefined => {
+      if (v == null || v === '') return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    const toStringArray = (v: unknown): string[] =>
+      Array.isArray(v) ? v.map((x) => String(x)).filter((x) => x.trim().length > 0) : [];
+
+    return {
+      hasDegree: Boolean(src.hasDegree),
+      highestDegree: toStringOrUndef(src.highestDegree),
+      fieldOfStudy: toStringOrUndef(src.fieldOfStudy),
+      institution: toStringOrUndef(src.institution),
+      gradeAverage: toNumberOrUndef(src.gradeAverage),
+      totalYearsOfExperience: toNumberOrUndef(src.totalYearsOfExperience),
+      lastRoleTitle: toStringOrUndef(src.lastRoleTitle),
+      lastRoleCompany: toStringOrUndef(src.lastRoleCompany),
+      topSkills: toStringArray(src.topSkills),
+      recommendedCourses: toStringArray(src.recommendedCourses),
+    };
   }
 }

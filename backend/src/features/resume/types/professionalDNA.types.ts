@@ -39,6 +39,20 @@ export interface IGapAnalysis {
   recommendations: IRecommendation[];
 }
 
+// Consumed by the My Profile page; the optimizer ignores it.
+export interface IProfileSummary {
+  hasDegree: boolean;
+  highestDegree?: string;
+  fieldOfStudy?: string;
+  institution?: string;
+  gradeAverage?: number;
+  totalYearsOfExperience?: number;
+  lastRoleTitle?: string;
+  lastRoleCompany?: string;
+  topSkills: string[];
+  recommendedCourses: string[];
+}
+
 // Assignment-related interfaces
 export interface AssignmentMetadata {
   solutionFileKey: string;
