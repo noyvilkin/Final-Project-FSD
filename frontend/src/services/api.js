@@ -217,10 +217,6 @@ export async function uploadInterview({ mediaFile, userId, jobId, onProgress }) 
   }
 }
 
-/**
- * Upload a media file using the dedicated media upload endpoint.
- * This endpoint supports large files (up to 500 MB) via streaming.
- */
 export async function uploadInterviewMedia({ mediaFile, userId, jobId, onProgress }) {
   const formData = new FormData();
   formData.append("media", mediaFile);
@@ -235,7 +231,7 @@ export async function uploadInterviewMedia({ mediaFile, userId, jobId, onProgres
       method: "POST",
       headers: userId ? { "x-user-id": userId } : {},
       data: formData,
-      timeout: 10 * 60 * 1000, // 10 minute timeout for large files
+      timeout: 10 * 60 * 1000,
       onUploadProgress: (event) => {
         if (typeof onProgress === "function" && event.total) {
           onProgress(Math.round((event.loaded / event.total) * 100));
@@ -246,6 +242,10 @@ export async function uploadInterviewMedia({ mediaFile, userId, jobId, onProgres
   } catch (error) {
     throw toApiError(error);
   }
+}
+
+export function getInterviewHistory() {
+  return request("/api/interviews/history");
 }
 
 export const apiConfig = {
