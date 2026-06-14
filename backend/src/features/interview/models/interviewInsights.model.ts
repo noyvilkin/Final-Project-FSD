@@ -46,6 +46,9 @@ export interface IInterviewInsights extends Document {
   transcript?: string;
   insights?: IInsights;
   jobId?: string;
+  fileSizeBytes?: number;
+  mimeType?: string;
+  errorMessage?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -100,7 +103,10 @@ const InterviewInsightsSchema = new Schema<IInterviewInsights>(
     },
     transcript: { type: String },
     insights:   { type: InsightsSchema },
-    jobId:      { type: String },
+    jobId:         { type: String },
+    fileSizeBytes: { type: Number },
+    mimeType:      { type: String },
+    errorMessage:  { type: String },
   },
   { timestamps: true }
 );
