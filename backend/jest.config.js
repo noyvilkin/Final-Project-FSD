@@ -14,9 +14,12 @@ const config = {
   setupFiles: ["<rootDir>/src/tests/setup-env.js"],
   collectCoverageFrom: [
     "src/common/auth/**/*.ts",
+    "src/common/services/**/*.ts",
     "src/features/auth/**/*.ts",
+    "src/services/aiServices/**/*.ts",
     "!src/**/*.d.ts",
     "!src/tests/**",
+    "!src/**/POC/**",
   ],
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
