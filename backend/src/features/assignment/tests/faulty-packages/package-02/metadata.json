@@ -1,0 +1,7 @@
+{
+  "id": "pkg-02",
+  "violation_key": "wrong_database",
+  "violation_description": "Assignment requires PostgreSQL, solution uses SQLite (in-memory file).",
+  "secondary_violation": "missing_input_validation",
+  "secondary_violation_description": "No input validation on auth endpoints, user registration accepts empty fields, endpoints lack parameter type checking."
+}

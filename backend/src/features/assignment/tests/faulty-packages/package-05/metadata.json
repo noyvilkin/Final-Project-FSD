@@ -1,0 +1,7 @@
+{
+  "id": "pkg-05",
+  "violation_key": "missing_health_endpoint",
+  "violation_description": "Assignment requires GET /health returning 200, solution does not provide a /health endpoint.",
+  "secondary_violation": "wrong_endpoint_name",
+  "secondary_violation_description": "Solution provides /status and /api/server-status endpoints that are health-check-like but do not satisfy the specific /health endpoint requirement."
+}
