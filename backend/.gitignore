@@ -23,3 +23,5 @@ coverage/
 
 /src/features/assignment/tests/results
 src/features/resume/eval/eval-reports/
+src/features/interview/eval/eval-reports/
+src/features/assignment/eval/eval-reports/
