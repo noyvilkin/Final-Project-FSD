@@ -2,17 +2,19 @@ import { Router } from "express";
 import multer from "multer";
 import { asyncHandler } from "../../../common/middlewares/asyncHandler.js";
 import { validateUploads } from "../../../common/middlewares/validateUploads.js";
-import { uploadFileToS3, deleteFileFromS3 } from "../../../common/services/s3Upload.js";
+import { uploadFileToS3 } from "../../../common/services/s3Upload.js";
 import { ZipProcessor, type ZipScanResult } from "../../../common/utils/zipProcessor.js";
 import { AssignmentService, type UploadedFile } from "../../assignment/services/assignmentService.js";
-import { InterviewService } from "../../interview/services/interviewService.js";
+import { InterviewInsights } from "../../interview/models/interviewInsights.model.js";
 import type { StoragePath } from "../../../common/services/s3Upload.js";
 import { appLogger } from "../../../common/services/logger.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 500 * 1024 * 1024, // 500MB to support large media files
+    // 200 MB: large enough for interview audio/video recordings.
+    // Per-field size constraints are enforced in validateUploads middleware.
+    fileSize: 200 * 1024 * 1024,
     files: 10,
   },
 });
@@ -164,44 +166,43 @@ router.post(
         }
       }
 
-      // Create InterviewInsights records for each uploaded interview file
-      if (interviewMeta.length > 0) {
-        const jobId = typeof req.body?.jobId === 'string' ? req.body.jobId : undefined;
-        const createdInterviews: Array<{ id: string; status: string }> = [];
+      // Create InterviewInsights records for uploaded interview files
+      const interviewFiles = uploadResults.filter((file: UploadedFile) =>
+        file.key.startsWith('interviews/')
+      );
 
-        for (const meta of interviewMeta) {
-          const uploadResult = uploadResults[meta.taskIndex];
-          const mediaType = uploadResult.mimeType.startsWith('audio/') ? 'audio' : 'video';
-
+      if (interviewFiles.length > 0) {
+        const createdInterviewIds: string[] = [];
+        for (const file of interviewFiles) {
           try {
-            const result = await InterviewService.createInterview(
-              userId,
-              uploadResult.key,
+            const mediaType = file.mimeType.startsWith('video/') ? 'video' : 'audio';
+            const { Types } = await import('mongoose');
+            const resolvedUserId = Types.ObjectId.isValid(userId)
+              ? new Types.ObjectId(userId)
+              : new Types.ObjectId();
+            const interview = await InterviewInsights.create({
+              userId:          resolvedUserId,
+              mediaFileKey:    file.key,
               mediaType,
-              jobId,
-              meta.preGeneratedId
-            );
-            createdInterviews.push({ id: result.interviewId, status: result.status });
-
-            appLogger.info('Interview record created from upload', {
-              interviewId: result.interviewId,
-              userId,
-              mediaType,
+              processingStatus: 'uploaded',
+              status:           'pending',
             });
-          } catch (error) {
-            // Clean up orphaned S3 object on DB failure
-            if (uploadResult?.key) {
-              await deleteFileFromS3(uploadResult.key);
-            }
-            appLogger.error('Interview creation failed during upload:', error);
-            response.interviewError = error instanceof Error
-              ? error.message
-              : 'Failed to create interview record';
+            createdInterviewIds.push(interview._id.toString());
+            appLogger.info('InterviewInsights record created from upload', {
+              interviewId: interview._id.toString(),
+              userId,
+              mediaType,
+              key: file.key,
+            });
+          } catch (err) {
+            appLogger.error('Failed to create InterviewInsights record', {
+              key: file.key,
+              error: err instanceof Error ? err.message : 'Unknown error',
+            });
           }
         }
-
-        if (createdInterviews.length > 0) {
-          response.interviews = createdInterviews;
+        if (createdInterviewIds.length > 0) {
+          response.interviews = createdInterviewIds;
         }
       }
 

@@ -251,3 +251,46 @@ export async function uploadInterviewMedia({ mediaFile, userId, jobId, onProgres
 export const apiConfig = {
   baseUrl: API_BASE_URL,
 };
+
+// ─── Interview API ────────────────────────────────────────────────────────────
+
+/**
+ * Trigger the full processing pipeline (transcription + insights) for an interview.
+ * Returns 202 immediately; processing runs asynchronously.
+ */
+export function processInterview(interviewId, userId) {
+  return request(`/api/interviews/${interviewId}/process`, {
+    method: "POST",
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+/**
+ * Poll processing status for an interview.
+ * Returns { processingStatus, insightsStatus, hasTranscript, hasInsights, ... }
+ */
+export function getInterviewStatus(interviewId, userId) {
+  return request(`/api/interviews/${interviewId}/status`, {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+/**
+ * Fetch the completed transcript and segment metadata.
+ * Returns 400 if transcription has not completed yet.
+ */
+export function getInterviewTranscript(interviewId, userId) {
+  return request(`/api/interviews/${interviewId}/transcript`, {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+/**
+ * Fetch the final Gemini insight results.
+ * Returns 400 if insights have not completed yet.
+ */
+export function getInterviewInsights(interviewId, userId) {
+  return request(`/api/interviews/${interviewId}/insights`, {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
