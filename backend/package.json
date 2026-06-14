@@ -18,7 +18,8 @@
     "poc:optimize": "tsx src/features/resume/POC/poc-ai-optimization-test.ts",
     "eval:resume": "tsx src/features/resume/eval/runEval.ts",
     "eval:assignment": "tsx src/features/assignment/eval/runEval.ts",
-    "db:ensure-indexes": "tsx src/scripts/ensureIndexes.ts"
+    "db:ensure-indexes": "tsx src/scripts/ensureIndexes.ts",
+    "eval:interview": "tsx src/features/interview/eval/runEval.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.986.0",
