@@ -6,7 +6,7 @@ import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Progress } from "../components/ui/progress";
 import { useAuth } from "../context/AuthContext";
-import { uploadInterview } from "../services/api";
+import { uploadInterviewMedia } from "../services/api";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -252,6 +252,7 @@ export default function InterviewUpload() {
   const [errorMessage, setErrorMessage] = useState("");
   const [uploadResult, setUploadResult] = useState(null);
   const [previewUrl, setPreviewUrl]     = useState(null);
+  const abortRef                        = useRef(null);
 
   // Object-URL: created on file selection, revoked on change or unmount.
   useEffect(() => {
@@ -294,12 +295,16 @@ export default function InterviewUpload() {
     setProgress(0);
     setStatus("preparing");
 
+    // Create an AbortController so the user can cancel large uploads
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       await new Promise((r) => setTimeout(r, 280)); // let browser paint "preparing"
 
       setStatus("uploading");
 
-      const result = await uploadInterview({
+      const result = await uploadInterviewMedia({
         mediaFile: file,
         userId: userId ?? undefined,
         jobId: jobId || undefined,
@@ -315,8 +320,21 @@ export default function InterviewUpload() {
       setStatus("done");
     } catch (err) {
       setProgress(0);
-      setStatus("error");
-      setErrorMessage(friendlyError(err));
+      if (controller.signal.aborted) {
+        setStatus(file ? "selected" : "idle");
+        setErrorMessage("");
+      } else {
+        setStatus("error");
+        setErrorMessage(friendlyError(err));
+      }
+    } finally {
+      abortRef.current = null;
+    }
+  }
+
+  function handleCancel() {
+    if (abortRef.current) {
+      abortRef.current.abort();
     }
   }
 
@@ -337,8 +355,9 @@ export default function InterviewUpload() {
     setUploadResult(null);
   }
 
-  const interviewRecord = uploadResult?.interviews?.[0] ?? null;
-  const uploadedFile    = uploadResult?.files?.[0] ?? null;
+  // Support both the dedicated endpoint shape and the legacy generic upload shape
+  const interviewRecord = uploadResult?.interview ?? uploadResult?.interviews?.[0] ?? null;
+  const uploadedFile    = uploadResult?.file ?? uploadResult?.files?.[0] ?? null;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -386,6 +405,15 @@ export default function InterviewUpload() {
                 <p className="mt-1.5 text-right text-xs text-[#94a3b8]" aria-hidden="true">
                   {status === "finalizing" ? 100 : progress}%
                 </p>
+              </div>
+            )}
+
+            {/* Cancel button — only during active upload, not finalizing */}
+            {status === "uploading" && (
+              <div className="mt-4 text-center">
+                <Button variant="outline" size="sm" onClick={handleCancel}>
+                  Cancel Upload
+                </Button>
               </div>
             )}
           </Card>

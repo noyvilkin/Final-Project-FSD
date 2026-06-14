@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { asyncHandler } from "../../../common/middlewares/asyncHandler.js";
 import { validateUploads } from "../../../common/middlewares/validateUploads.js";
-import { uploadFileToS3 } from "../../../common/services/s3Upload.js";
+import { uploadFileToS3, deleteFileFromS3 } from "../../../common/services/s3Upload.js";
 import { ZipProcessor, type ZipScanResult } from "../../../common/utils/zipProcessor.js";
 import { AssignmentService, type UploadedFile } from "../../assignment/services/assignmentService.js";
 import { InterviewService } from "../../interview/services/interviewService.js";
@@ -12,7 +12,7 @@ import { appLogger } from "../../../common/services/logger.js";
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB to support ZIP files
+    fileSize: 500 * 1024 * 1024, // 500MB to support large media files
     files: 10,
   },
 });
@@ -189,6 +189,10 @@ router.post(
               mediaType,
             });
           } catch (error) {
+            // Clean up orphaned S3 object on DB failure
+            if (uploadResult?.key) {
+              await deleteFileFromS3(uploadResult.key);
+            }
             appLogger.error('Interview creation failed during upload:', error);
             response.interviewError = error instanceof Error
               ? error.message

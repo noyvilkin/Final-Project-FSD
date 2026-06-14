@@ -13,7 +13,9 @@ export class InterviewService {
     mediaFileKey: string,
     mediaType: 'audio' | 'video',
     jobId?: string,
-    preGeneratedId?: string
+    preGeneratedId?: string,
+    fileSizeBytes?: number,
+    mimeType?: string,
   ): Promise<InterviewCreationResult> {
     const resolvedUserId = Types.ObjectId.isValid(userId)
       ? new Types.ObjectId(userId)
@@ -31,6 +33,8 @@ export class InterviewService {
       mediaType,
       status: 'pending',
       jobId: jobId?.trim() || undefined,
+      fileSizeBytes,
+      mimeType,
     };
 
     if (preGeneratedId) {

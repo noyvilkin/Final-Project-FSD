@@ -15,6 +15,7 @@ import internalRoutes from "./features/assignment/routes/internal.routes.js";
 import resumeOptimizationRoutes from "./features/resume/routes/resumeOptimization.routes.js";
 import profileAnalysisRoutes from "./features/profile-analysis/routes/profileAnalysis.routes.js";
 import interviewRoutes from "./features/interview/routes/interview.routes.js";
+import mediaUploadRoutes from "./features/interview/routes/mediaUpload.routes.js";
 
 const app: Express = express();
 
@@ -48,6 +49,7 @@ app.use("/api/assignments", assignmentRoutes);
 app.use("/api/v1/internal", internalRoutes);
 app.use("/api/resume", resumeOptimizationRoutes);
 app.use("/api/profile-analysis", profileAnalysisRoutes);
+app.use("/api/interviews", mediaUploadRoutes);
 app.use("/api/interviews", interviewRoutes);
 
 app.use(errorHandler);

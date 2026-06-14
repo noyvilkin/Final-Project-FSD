@@ -7,7 +7,7 @@ import InterviewUpload from "../pages/InterviewUpload";
 
 // Mock the API so no real HTTP calls are made.
 vi.mock("../services/api", () => ({
-  uploadInterview: vi.fn(),
+  uploadInterviewMedia: vi.fn(),
 }));
 
 // Mock the auth context so the component gets a stable userId.
@@ -15,7 +15,7 @@ vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ userId: "test-user-123" }),
 }));
 
-import { uploadInterview } from "../services/api";
+import { uploadInterviewMedia } from "../services/api";
 
 // ── Global setup ──────────────────────────────────────────────────────────────
 
@@ -52,12 +52,11 @@ function selectFile(container, file) {
   fireEvent.change(input, { target: { files: [file] } });
 }
 
-/** Build a resolved-value shape that matches what uploadInterview returns. */
+/** Build a resolved-value shape that matches what uploadInterviewMedia returns. */
 function makeUploadResponse(mimeType = "audio/mpeg") {
   return {
-    count: 1,
-    files: [{ bucket: "b", key: "k", url: "http://minio/k", mimeType, size: 2048 }],
-    interviews: [{ id: "interview-abc", status: "pending" }],
+    interview: { id: "interview-abc", status: "pending" },
+    file: { key: "k", url: "http://minio/k", mimeType, size: 2048 },
     requestId: "req-1",
   };
 }
@@ -133,8 +132,8 @@ describe("InterviewUpload", () => {
   // ── 5. Upload progress ─────────────────────────────────────────────────────
 
   it("shows Preparing upload status immediately after clicking Upload", () => {
-    // uploadInterview never resolves so we stay in the active states
-    uploadInterview.mockReturnValue(new Promise(() => {}));
+    // uploadInterviewMedia never resolves so we stay in the active states
+    uploadInterviewMedia.mockReturnValue(new Promise(() => {}));
 
     const { container } = renderPage();
     selectFile(container, makeFile("interview.mp3", "audio/mpeg"));
@@ -147,7 +146,7 @@ describe("InterviewUpload", () => {
 
   it("hides the upload button while upload is active", async () => {
     vi.useFakeTimers();
-    uploadInterview.mockReturnValue(new Promise(() => {})); // never resolves
+    uploadInterviewMedia.mockReturnValue(new Promise(() => {})); // never resolves
 
     const { container } = renderPage();
     selectFile(container, makeFile("interview.mp3", "audio/mpeg"));
@@ -168,7 +167,7 @@ describe("InterviewUpload", () => {
 
   it("shows an audio player after a successful audio upload", async () => {
     vi.useFakeTimers();
-    uploadInterview.mockResolvedValue(makeUploadResponse("audio/mpeg"));
+    uploadInterviewMedia.mockResolvedValue(makeUploadResponse("audio/mpeg"));
 
     const { container } = renderPage();
     selectFile(container, makeFile("voice.mp3", "audio/mpeg"));
@@ -187,7 +186,7 @@ describe("InterviewUpload", () => {
 
   it("shows a video player after a successful video upload", async () => {
     vi.useFakeTimers();
-    uploadInterview.mockResolvedValue(makeUploadResponse("video/mp4"));
+    uploadInterviewMedia.mockResolvedValue(makeUploadResponse("video/mp4"));
 
     const { container } = renderPage();
     selectFile(container, makeFile("session.mp4", "video/mp4"));
@@ -207,7 +206,7 @@ describe("InterviewUpload", () => {
   it("shows a retry button and friendly error message after a network failure", async () => {
     vi.useFakeTimers();
     const networkError = Object.assign(new Error("Network Error"), { status: 0 });
-    uploadInterview.mockRejectedValue(networkError);
+    uploadInterviewMedia.mockRejectedValue(networkError);
 
     const { container } = renderPage();
     selectFile(container, makeFile("interview.mp3", "audio/mpeg"));
@@ -228,7 +227,7 @@ describe("InterviewUpload", () => {
 
   it("re-enables the form after clicking Retry", async () => {
     vi.useFakeTimers();
-    uploadInterview.mockRejectedValue(new Error("fail"));
+    uploadInterviewMedia.mockRejectedValue(new Error("fail"));
 
     const { container } = renderPage();
     selectFile(container, makeFile("interview.mp3", "audio/mpeg"));
