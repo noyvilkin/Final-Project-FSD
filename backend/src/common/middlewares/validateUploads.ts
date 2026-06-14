@@ -15,8 +15,7 @@ const allowedMimeByField: Record<string, string[]> = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
   ],
-  // Audio and video only — images and PDFs cannot be transcribed
-  interviews: ["audio/*", "video/*"],
+  interviews: ["audio/*", "video/*", "image/*", "application/pdf"],
 };
 
 const isAllowedMime = (mimeType: string, allowed: string[]) => {

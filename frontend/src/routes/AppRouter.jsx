@@ -67,6 +67,15 @@ export default function AppRouter() {
       <Route path="/resume-upload" element={<ResumeUploadPage />} />
 
       <Route
+        path="/interview"
+        element={
+          <ProtectedRoute>
+            <InterviewUpload />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/assignment"
         element={
           <ProtectedRoute>
@@ -125,15 +134,6 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <OptimizationRunDetail />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/interview"
-        element={
-          <ProtectedRoute>
-            <InterviewUpload />
           </ProtectedRoute>
         }
       />

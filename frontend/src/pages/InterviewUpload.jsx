@@ -146,7 +146,7 @@ export default function InterviewUpload() {
         }
       ).then((r) => r.data);
 
-      const interviewId = uploadResult?.interviews?.[0];
+      const interviewId = uploadResult?.interviews?.[0]?.id;
       if (!interviewId) {
         throw new Error("Upload succeeded but interview ID was not returned. Please try again.");
       }
