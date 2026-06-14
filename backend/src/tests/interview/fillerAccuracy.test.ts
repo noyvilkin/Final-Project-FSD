@@ -1,5 +1,5 @@
-import { evaluateFillerAccuracy } from '../../features/interview/eval/fillerAccuracy';
-import type { FillerWordsSummary } from '../../features/interview/eval/fixtures';
+import { evaluateFillerAccuracy } from '../../features/interview/eval/fillerAccuracy.js';
+import type { FillerWordsSummary } from '../../features/interview/eval/fixtures.js';
 
 describe('evaluateFillerAccuracy', () => {
   it('returns withinTolerance=true when counts match exactly', () => {

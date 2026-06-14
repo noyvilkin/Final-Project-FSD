@@ -6,8 +6,9 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { randomUUID } from "crypto";
-import { createWriteStream, unlink } from "fs";
+import { createReadStream, createWriteStream, unlink } from "fs";
 import { mkdir } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -60,6 +61,8 @@ const getBucketReady = (): Promise<void> => {
 
 const sanitizeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
+const MULTIPART_THRESHOLD = 10 * 1024 * 1024; // 10 MB
+
 export type StoragePath = "resumes" | "assignments" | "interviews";
 
 type UploadInput = {
@@ -101,6 +104,75 @@ export const uploadFileToS3 = async ({ file, path, userId, assignmentId, intervi
     mimeType: file.mimetype,
     size: file.size,
   };
+};
+
+export const uploadMediaToS3 = async ({
+  filePath,
+  originalName,
+  mimeType,
+  fileSize,
+  storagePath,
+  userId,
+  interviewId,
+}: {
+  filePath: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  storagePath: StoragePath;
+  userId: string;
+  interviewId: string;
+}): Promise<{ bucket: string; key: string; url: string; mimeType: string; size: number }> => {
+  await getBucketReady();
+
+  const key = `${storagePath}/${userId}/${interviewId}/${randomUUID()}-${sanitizeName(originalName)}`;
+
+  if (fileSize > MULTIPART_THRESHOLD) {
+    const stream = createReadStream(filePath);
+    const upload = new Upload({
+      client: s3,
+      params: {
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: stream,
+        ContentType: mimeType,
+      },
+      partSize: MULTIPART_THRESHOLD,
+      queueSize: 4,
+    });
+
+    await upload.done();
+    appLogger.info("[s3] Multipart upload completed", { bucket: S3_BUCKET, key, size: fileSize });
+  } else {
+    const { readFile } = await import("fs/promises");
+    const buffer = await readFile(filePath);
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: mimeType,
+      })
+    );
+    appLogger.info("[s3] File uploaded", { bucket: S3_BUCKET, key, size: fileSize });
+  }
+
+  return {
+    bucket: S3_BUCKET,
+    key,
+    url: `${S3_ENDPOINT}/${S3_BUCKET}/${key}`,
+    mimeType,
+    size: fileSize,
+  };
+};
+
+export const deleteFileFromS3 = async (key: string): Promise<void> => {
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+    appLogger.info("[s3] Cleanup: file deleted", { bucket: S3_BUCKET, key });
+  } catch (err) {
+    appLogger.error("[s3] Cleanup: failed to delete file", { key, error: err });
+  }
 };
 
 const streamToBuffer = async (stream: unknown): Promise<Buffer> => {

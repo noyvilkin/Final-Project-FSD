@@ -1,4 +1,4 @@
-import { calculateWer, normaliseTranscript } from '../../features/interview/eval/werCalculator';
+import { calculateWer, normaliseTranscript } from '../../features/interview/eval/werCalculator.js';
 
 describe('normaliseTranscript', () => {
   it('lowercases and strips punctuation', () => {

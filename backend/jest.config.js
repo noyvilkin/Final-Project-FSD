@@ -14,11 +14,8 @@ const config = {
   setupFiles: ["<rootDir>/src/tests/setup-env.js"],
   collectCoverageFrom: [
     "src/common/auth/**/*.ts",
-<<<<<<< HEAD
     "src/common/services/**/*.ts",
-=======
     "src/common/middlewares/**/*.ts",
->>>>>>> issue-30-db-indexing
     "src/features/auth/**/*.ts",
     "src/services/aiServices/**/*.ts",
     "!src/**/*.d.ts",

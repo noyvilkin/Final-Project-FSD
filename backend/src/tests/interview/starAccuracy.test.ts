@@ -1,5 +1,5 @@
-import { evaluateStarAccuracy } from '../../features/interview/eval/starAccuracy';
-import type { StarSegment } from '../../features/interview/eval/fixtures';
+import { evaluateStarAccuracy } from '../../features/interview/eval/starAccuracy.js';
+import type { StarSegment } from '../../features/interview/eval/fixtures.js';
 
 describe('evaluateStarAccuracy', () => {
   const fullTruthMap: StarSegment[] = [
