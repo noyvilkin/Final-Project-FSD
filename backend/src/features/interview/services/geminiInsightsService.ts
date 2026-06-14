@@ -56,7 +56,7 @@ export class GeminiInsightsService {
         apiKey,
         model:           process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
         temperature:     0.2,
-        maxOutputTokens: 3_072,
+        maxOutputTokens: 8_192,
         rateLimiter: {
           requestsPerMinute: 8,
           requestsPerDay:    1_200,
