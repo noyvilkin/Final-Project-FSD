@@ -105,6 +105,15 @@ const InterviewInsightsSchema = new Schema<IInterviewInsights>(
   { timestamps: true }
 );
 
+// Compound index for user history queries sorted by date
+InterviewInsightsSchema.index({ userId: 1, createdAt: -1 });
+
+// Status index for pipeline/admin queries filtering by processing state
+InterviewInsightsSchema.index({ status: 1 });
+
+// Compound index for user-scoped status filtering
+InterviewInsightsSchema.index({ userId: 1, status: 1 });
+
 export const InterviewInsights = mongoose.model<IInterviewInsights>(
   'InterviewInsights',
   InterviewInsightsSchema
