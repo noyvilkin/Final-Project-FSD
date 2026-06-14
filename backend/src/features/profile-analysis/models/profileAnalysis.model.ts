@@ -56,6 +56,9 @@ const ProfileAnalysisSchema = new Schema<IProfileAnalysis>(
 
 ProfileAnalysisSchema.index({ userId: 1, updatedAt: -1 });
 
+// Status index for pipeline queries filtering by analysis state
+ProfileAnalysisSchema.index({ analysisStatus: 1 });
+
 export const ProfileAnalysis = mongoose.model<IProfileAnalysis>(
   "ProfileAnalysis",
   ProfileAnalysisSchema

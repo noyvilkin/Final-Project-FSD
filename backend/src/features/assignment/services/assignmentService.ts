@@ -209,7 +209,7 @@ export class AssignmentService {
    * Get a single assignment by ID
    */
   static async getAssignment(assignmentId: string): Promise<IAssignmentFeedback | null> {
-    return AssignmentFeedback.findById(assignmentId);
+    return AssignmentFeedback.findById(assignmentId).lean();
   }
 
   /**
@@ -222,8 +222,17 @@ export class AssignmentService {
   ): Promise<IAssignmentFeedback[]> {
     return AssignmentFeedback.find({ userId })
       .sort({ createdAt: -1 })
+      .select('userId status requirementsFileKey solutionFileKey userNotes metadata feedback createdAt updatedAt')
       .limit(limit)
-      .skip(offset);
+      .skip(offset)
+      .lean();
+  }
+
+  /**
+   * Count all assignments for a user (for pagination metadata)
+   */
+  static async countUserAssignments(userId: string): Promise<number> {
+    return AssignmentFeedback.countDocuments({ userId });
   }
 
   /**
@@ -233,7 +242,9 @@ export class AssignmentService {
     userId: string,
     status: string
   ): Promise<IAssignmentFeedback[]> {
-    return AssignmentFeedback.find({ userId, status }).sort({ createdAt: -1 });
+    return AssignmentFeedback.find({ userId, status })
+      .sort({ createdAt: -1 })
+      .lean();
   }
 
   /**

@@ -7,6 +7,7 @@ import type { RequestHandler } from "express";
 import { errorHandler } from "./common/middlewares/errorHandler.js";
 import { logger } from "./common/middlewares/logger.js";
 import { requestId } from "./common/middlewares/requestId.js";
+import { responseTime } from "./common/middlewares/responseTime.js";
 import authRoutes from "./features/auth/routes/auth.routes.js";
 import uploadRouter from "./features/upload/routes/upload.routes.js";
 import userRoutes from "./features/user/routes/user.routes.js";
@@ -35,6 +36,7 @@ app.use(cookieParser());
 const helmetMiddleware = helmet as unknown as (...args: unknown[]) => RequestHandler;
 app.use(helmetMiddleware());
 app.use(requestId);
+app.use(responseTime({ slowThresholdMs: 1000 }));
 app.use(logger);
 
 app.get("/health", (_req, res) => {
