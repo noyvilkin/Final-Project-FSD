@@ -285,6 +285,13 @@ describe('Insight pipeline — happy path', () => {
 
 describe('Insight pipeline — failure handling', () => {
   it('sets insightsStatus to failed when Gemini returns invalid JSON', async () => {
+    // Clear the cached GeminiClient so the next call creates a fresh instance
+    // using the overridden mock implementation
+    const geminiService = await import(
+      '../../features/interview/services/geminiInsightsService.js'
+    );
+    (geminiService.GeminiInsightsService as any).geminiClient = null;
+
     const { GeminiClient } = require('../../common/services/geminiClient.js') as {
       GeminiClient: jest.Mock;
     };

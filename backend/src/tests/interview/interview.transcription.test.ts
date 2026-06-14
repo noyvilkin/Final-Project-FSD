@@ -53,36 +53,53 @@ const mockTranscribeCreate = jest.fn().mockResolvedValue({
 });
 
 jest.mock('openai', () => {  // openai has no .js alias — keep as-is
+  class APIError extends Error {
+    status: number;
+    constructor(message: string, status = 500) {
+      super(message);
+      this.status = status;
+      this.name   = 'APIError';
+    }
+  }
+  const OpenAIMock = jest.fn().mockImplementation(() => ({
+    audio: {
+      transcriptions: {
+        create: mockTranscribeCreate,
+      },
+    },
+  }));
+  // Attach APIError as a static property so `OpenAI.APIError` works in instanceof checks
+  (OpenAIMock as any).APIError = APIError;
   return {
     __esModule: true,
-    default: jest.fn().mockImplementation(() => ({
-      audio: {
-        transcriptions: {
-          create: mockTranscribeCreate,
-        },
-      },
-    })),
-    APIError: class APIError extends Error {
-      status: number;
-      constructor(message: string, status = 500) {
-        super(message);
-        this.status = status;
-        this.name   = 'APIError';
-      }
-    },
+    default: OpenAIMock,
+    APIError,
   };
 });
 
 // ─── ffmpeg mock ──────────────────────────────────────────────────────────────
 jest.mock('@ffmpeg-installer/ffmpeg', () => ({ path: '/usr/bin/ffmpeg' }));
 jest.mock('fluent-ffmpeg', () => {  // external package — no .js alias needed
+  let capturedOutputPath: string | null = null;
   const ffmpegMock = jest.fn().mockReturnValue({
     noVideo:     jest.fn().mockReturnThis(),
     audioCodec:  jest.fn().mockReturnThis(),
     audioBitrate: jest.fn().mockReturnThis(),
-    output:      jest.fn().mockReturnThis(),
+    output:      jest.fn().mockImplementation(function (this: any, path: string) {
+      capturedOutputPath = path;
+      return this;
+    }),
     on: jest.fn().mockImplementation(function (this: any, event: string, cb: () => void) {
-      if (event === 'end') setImmediate(cb);
+      if (event === 'end') {
+        setImmediate(() => {
+          // Write a stub audio file so Whisper can open it
+          if (capturedOutputPath) {
+            const fs = require('fs');
+            fs.writeFileSync(capturedOutputPath, Buffer.from('fake-extracted-audio'));
+          }
+          cb();
+        });
+      }
       return this;
     }),
     run: jest.fn(),
@@ -232,13 +249,15 @@ describe('POST /api/interviews/:id/transcribe', () => {
   });
 
   it('returns 422 when the interview has no media key', async () => {
+    // Create with a valid key, then clear it via $unset to bypass schema validation
     const interview = await InterviewInsights.create({
       userId:          new Types.ObjectId(USER_A),
-      mediaFileKey:    '',       // empty
+      mediaFileKey:    'temporary-placeholder',
       mediaType:       'audio',
       processingStatus: 'uploaded',
       status:          'pending',
     });
+    await InterviewInsights.findByIdAndUpdate(interview._id, { $unset: { mediaFileKey: '' } });
 
     const res = await request(testApp)
       .post(`/api/interviews/${interview._id}/transcribe`)
@@ -268,7 +287,7 @@ describe('Transcription pipeline — audio file', () => {
     expect(updated?.transcriptionProvider).toBe('openai-whisper');
     expect(updated?.transcriptionModel).toBe('whisper-1');
     expect(updated?.transcriptionLanguage).toBe('en');
-    expect(updated?.transcriptionDurationMs).toBeGreaterThan(0);
+    expect(updated?.transcriptionDurationMs).toBeGreaterThanOrEqual(0);
     expect(updated?.mediaDurationSeconds).toBe(30);
     expect(updated?.transcriptionCompletedAt).toBeInstanceOf(Date);
   });

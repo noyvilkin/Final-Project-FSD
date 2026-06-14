@@ -146,7 +146,9 @@ export default function InterviewUpload() {
         }
       ).then((r) => r.data);
 
-      const interviewId = uploadResult?.interviews?.[0]?.id;
+      // The upload endpoint returns interviews as a plain string[] of IDs
+      const rawId = uploadResult?.interviews?.[0];
+      const interviewId = typeof rawId === "object" ? rawId?.id : rawId;
       if (!interviewId) {
         throw new Error("Upload succeeded but interview ID was not returned. Please try again.");
       }
