@@ -11,12 +11,16 @@ export interface GeminiContent {
 export interface GeminiPayload {
   system_instruction?: { parts: GeminiPart[] };
   contents:            GeminiContent[];
+  /** Per-call overrides merged over the client's default generationConfig. */
+  generationConfig?:   Partial<GeminiGenerationConfig>;
 }
 
 export interface GeminiGenerationConfig {
   temperature?:      number;
   maxOutputTokens?:  number;
   responseMimeType?: string;
+  /** OpenAPI-subset schema constraining the model to valid, structured JSON. */
+  responseSchema?:   unknown;
 }
 
 export interface GeminiRequestBody {

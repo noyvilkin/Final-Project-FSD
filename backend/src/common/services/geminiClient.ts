@@ -192,12 +192,15 @@ export class GeminiClient {
   private async callAPI(payload: GeminiPayload): Promise<string> {
     const url = `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`;
 
+    const { generationConfig: overrides, ...rest } = payload;
+
     const body: GeminiRequestBody = {
-      ...payload,
+      ...rest,
       generationConfig: {
         temperature:      this.temperature,
         maxOutputTokens:  this.maxOutputTokens,
         responseMimeType: 'application/json',
+        ...overrides,
       },
     };
 
@@ -227,7 +230,15 @@ export class GeminiClient {
       throw new GeminiAPIError('Gemini blocked response due to safety filters', 400);
     }
 
-    return candidate.content.parts.map(p => p.text).join('');
+    const text = candidate.content.parts.map(p => p.text).join('');
+
+    // A MAX_TOKENS finish almost always yields truncated (invalid) JSON. Surface it
+    // as a retryable server error so callers/back-off can re-request a full response.
+    if (candidate.finishReason === 'MAX_TOKENS') {
+      throw new GeminiAPIError('Gemini response truncated (MAX_TOKENS) — increase maxOutputTokens', 500);
+    }
+
+    return text;
   }
 
   private sleep(ms: number): Promise<void> {
