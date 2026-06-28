@@ -191,6 +191,14 @@ export function deleteOptimizationRun(runId, userId) {
   );
 }
 
+export function getInterviewInsights(interviewId) {
+  return request(`/api/interviews/${interviewId}/insights`);
+}
+
+export function getInterviewHistory() {
+  return request("/api/interviews/history");
+}
+
 export const apiConfig = {
   baseUrl: API_BASE_URL,
 };
