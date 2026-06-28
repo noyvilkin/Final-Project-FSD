@@ -5,13 +5,16 @@ import { validateUploads } from "../../../common/middlewares/validateUploads.js"
 import { uploadFileToS3 } from "../../../common/services/s3Upload.js";
 import { ZipProcessor, type ZipScanResult } from "../../../common/utils/zipProcessor.js";
 import { AssignmentService, type UploadedFile } from "../../assignment/services/assignmentService.js";
+import { InterviewInsights } from "../../interview/models/interviewInsights.model.js";
 import type { StoragePath } from "../../../common/services/s3Upload.js";
 import { appLogger } from "../../../common/services/logger.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB to support ZIP files
+    // 200 MB: large enough for interview audio/video recordings.
+    // Per-field size constraints are enforced in validateUploads middleware.
+    fileSize: 200 * 1024 * 1024,
     files: 10,
   },
 });
@@ -48,61 +51,65 @@ router.post(
 
     const uploadTasks: Promise<any>[] = [];
     const zipScanResults: Record<string, ZipScanResult> = {};
-    
-    // Pre-generate assignment ID and get user ID for assignment uploads
+
     const userId = req.headers['x-user-id'] as string || 'anonymous';
+    const { Types } = await import('mongoose');
+
+    // Pre-generate assignment ID
     let assignmentId: string | undefined = undefined;
-    
-    // Check if this is an assignment upload
-    const hasAssignmentFiles = files['assignments'] && files['assignments'].length > 0;
+    const hasAssignmentFiles = !!(files['assignments']?.length);
     if (hasAssignmentFiles) {
-      // Pre-generate assignment ID using MongoDB ObjectId format
-      const { Types } = await import('mongoose');
       assignmentId = new Types.ObjectId().toString();
       appLogger.info('Pre-generated assignment ID for upload', { assignmentId, userId });
     }
 
-    // Upload all files to S3 with userId and assignmentId for organization
+    // Pre-generate interview IDs (one per file, tracked alongside task index)
+    const interviewMeta: Array<{ preGeneratedId: string; taskIndex: number }> = [];
+
+    // Upload all files to S3 with userId and domain IDs for organization
     for (const [field, list] of Object.entries(files)) {
       const path = FIELD_TO_PATH[field];
       if (!path) continue;
 
       for (const file of list) {
-        // Check if this is a ZIP file for assignments (still scan for validation)
-        const isZipFile = (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed');
-        
-        if (isZipFile && field === 'assignments') {
-          // Quick validation scan for ZIP files
-          const scanTask = ZipProcessor.scanZipFile(file.buffer)
-            .then((scanResult) => {
-              zipScanResults[file.originalname] = scanResult;
-              
-              if (!scanResult.isValid) {
-                appLogger.warn(`ZIP scan failed for ${file.originalname}:`, scanResult.errors);
-              } else {
-                appLogger.info(`ZIP validation passed for ${file.originalname}:`, {
-                  language: scanResult.detectedLanguage,
-                  scope: scanResult.projectScope,
-                  sourceFiles: scanResult.sourceFiles.length
-                });
-              }
-              
-              // Upload file to S3 with userId and assignmentId
-              return uploadFileToS3({ file, path, userId, assignmentId });
-            })
-            .catch((error) => {
-              appLogger.error(`ZIP processing failed for ${file.originalname}:`, error);
-              // Continue with normal file upload even if ZIP processing fails
-              return uploadFileToS3({ file, path, userId, assignmentId });
-            });
-            
-          uploadTasks.push(scanTask);
+        if (field === 'interviews') {
+          const interviewId = new Types.ObjectId().toString();
+          const taskIndex = uploadTasks.length;
+          interviewMeta.push({ preGeneratedId: interviewId, taskIndex });
+          uploadTasks.push(uploadFileToS3({ file, path, userId, interviewId }));
         } else {
-          // Normal file upload (with userId/assignmentId for assignments)
-          const uploadParams = field === 'assignments' 
-            ? { file, path, userId, assignmentId }
-            : { file, path };
-          uploadTasks.push(uploadFileToS3(uploadParams));
+          // Check if this is a ZIP file for assignments (still scan for validation)
+          const isZipFile = (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed');
+
+          if (isZipFile && field === 'assignments') {
+            const scanTask = ZipProcessor.scanZipFile(file.buffer)
+              .then((scanResult) => {
+                zipScanResults[file.originalname] = scanResult;
+
+                if (!scanResult.isValid) {
+                  appLogger.warn(`ZIP scan failed for ${file.originalname}:`, scanResult.errors);
+                } else {
+                  appLogger.info(`ZIP validation passed for ${file.originalname}:`, {
+                    language: scanResult.detectedLanguage,
+                    scope: scanResult.projectScope,
+                    sourceFiles: scanResult.sourceFiles.length
+                  });
+                }
+
+                return uploadFileToS3({ file, path, userId, assignmentId });
+              })
+              .catch((error) => {
+                appLogger.error(`ZIP processing failed for ${file.originalname}:`, error);
+                return uploadFileToS3({ file, path, userId, assignmentId });
+              });
+
+            uploadTasks.push(scanTask);
+          } else {
+            const uploadParams = field === 'assignments'
+              ? { file, path, userId, assignmentId }
+              : { file, path };
+            uploadTasks.push(uploadFileToS3(uploadParams));
+          }
         }
       }
     }
@@ -129,9 +136,9 @@ router.post(
         // This is an assignment upload - create assignment with the pre-generated ID
         try {
           const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
-          
+
           const categorizedFiles = AssignmentService.categorizeUploadedFiles(assignmentFiles);
-          
+
           if (categorizedFiles.solution) {
             const assignmentResult = await AssignmentService.createAssignment(userId, {
               requirements: categorizedFiles.requirements,
@@ -156,6 +163,46 @@ router.post(
           response.assignmentError = error instanceof Error
             ? error.message
             : 'Failed to create assignment record';
+        }
+      }
+
+      // Create InterviewInsights records for uploaded interview files
+      const interviewFiles = uploadResults.filter((file: UploadedFile) =>
+        file.key.startsWith('interviews/')
+      );
+
+      if (interviewFiles.length > 0) {
+        const createdInterviewIds: string[] = [];
+        for (const file of interviewFiles) {
+          try {
+            const mediaType = file.mimeType.startsWith('video/') ? 'video' : 'audio';
+            const { Types } = await import('mongoose');
+            const resolvedUserId = Types.ObjectId.isValid(userId)
+              ? new Types.ObjectId(userId)
+              : new Types.ObjectId();
+            const interview = await InterviewInsights.create({
+              userId:          resolvedUserId,
+              mediaFileKey:    file.key,
+              mediaType,
+              processingStatus: 'uploaded',
+              status:           'pending',
+            });
+            createdInterviewIds.push(interview._id.toString());
+            appLogger.info('InterviewInsights record created from upload', {
+              interviewId: interview._id.toString(),
+              userId,
+              mediaType,
+              key: file.key,
+            });
+          } catch (err) {
+            appLogger.error('Failed to create InterviewInsights record', {
+              key: file.key,
+              error: err instanceof Error ? err.message : 'Unknown error',
+            });
+          }
+        }
+        if (createdInterviewIds.length > 0) {
+          response.interviews = createdInterviewIds;
         }
       }
 
