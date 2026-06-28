@@ -3,6 +3,7 @@ import { ZipProcessor } from "../utils/zipProcessor.js";
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_ZIP_SIZE_BYTES = 50 * 1024 * 1024; // 50MB for ZIP files
+const MAX_MEDIA_SIZE_BYTES = 500 * 1024 * 1024; // 500MB for audio/video
 
 const allowedMimeByField: Record<string, string[]> = {
   resumes: ["application/pdf"],
@@ -14,7 +15,7 @@ const allowedMimeByField: Record<string, string[]> = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
   ],
-  interviews: ["image/*", "video/*", "application/pdf"],
+  interviews: ["audio/*", "video/*", "image/*", "application/pdf"],
 };
 
 const isAllowedMime = (mimeType: string, allowed: string[]) => {
@@ -49,9 +50,14 @@ export const validateUploads = async (req: Request, res: Response, next: NextFun
     const allowed = allowedMimeByField[field];
 
     list.forEach((file) => {
-      // Check file size - use different limits for ZIP files
+      // Check file size - use different limits per field/type
       const isZipFile = file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed';
-      const maxSize = isZipFile && field === 'assignments' ? MAX_ZIP_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
+      const isMediaFile = file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/');
+      const maxSize = field === 'interviews' && isMediaFile
+        ? MAX_MEDIA_SIZE_BYTES
+        : isZipFile && field === 'assignments'
+          ? MAX_ZIP_SIZE_BYTES
+          : MAX_FILE_SIZE_BYTES;
       
       if (file.size > maxSize) {
         errors.push({
