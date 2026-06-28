@@ -1,6 +1,8 @@
 const request = require('supertest');
 const app = require('./server');
 
+const CREDENTIALS = { username: 'testuser', password: 'password123' };
+
 describe('Core API Endpoints', () => {
   describe('GET /health', () => {
     test('should return 200 with ok status', async () => {
@@ -17,10 +19,25 @@ describe('Core API Endpoints', () => {
     test('should return JWT token on successful login', async () => {
       const res = await request(app)
         .post('/auth/login')
+        .send(CREDENTIALS)
         .expect(200);
 
       expect(res.body).toHaveProperty('token');
       expect(typeof res.body.token).toBe('string');
+    });
+
+    test('should reject invalid credentials', async () => {
+      await request(app)
+        .post('/auth/login')
+        .send({ username: 'testuser', password: 'wrong' })
+        .expect(401);
+    });
+
+    test('should reject missing credentials', async () => {
+      await request(app)
+        .post('/auth/login')
+        .send({})
+        .expect(400);
     });
   });
 
@@ -29,7 +46,8 @@ describe('Core API Endpoints', () => {
 
     beforeAll(async () => {
       const loginRes = await request(app)
-        .post('/auth/login');
+        .post('/auth/login')
+        .send(CREDENTIALS);
       token = loginRes.body.token;
     });
 
@@ -59,7 +77,8 @@ describe('Core API Endpoints', () => {
 
     beforeAll(async () => {
       const loginRes = await request(app)
-        .post('/auth/login');
+        .post('/auth/login')
+        .send(CREDENTIALS);
       token = loginRes.body.token;
     });
 
@@ -69,6 +88,14 @@ describe('Core API Endpoints', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Test Item' })
         .expect([201, 500]); // 500 if DB unreachable in test
+    });
+
+    test('should reject items without a name', async () => {
+      await request(app)
+        .post('/api/items')
+        .set('Authorization', `Bearer ${token}`)
+        .send({})
+        .expect(400);
     });
   });
 });
