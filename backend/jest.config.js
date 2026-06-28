@@ -14,6 +14,7 @@ const config = {
   setupFiles: ["<rootDir>/src/tests/setup-env.js"],
   collectCoverageFrom: [
     "src/common/auth/**/*.ts",
+    "src/common/middlewares/**/*.ts",
     "src/features/auth/**/*.ts",
     "!src/**/*.d.ts",
     "!src/tests/**",

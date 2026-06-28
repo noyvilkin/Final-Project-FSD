@@ -184,6 +184,15 @@ const AssignmentFeedbackSchema = new Schema<IAssignmentFeedback>(
   { timestamps: true }
 );
 
+// Compound index for user history queries sorted by date
+AssignmentFeedbackSchema.index({ userId: 1, createdAt: -1 });
+
+// Status index for pipeline/admin queries filtering by processing state
+AssignmentFeedbackSchema.index({ status: 1 });
+
+// Compound index for user-scoped status filtering (used by getAssignmentsByStatus)
+AssignmentFeedbackSchema.index({ userId: 1, status: 1 });
+
 export const AssignmentFeedback = mongoose.model<IAssignmentFeedback>(
   'AssignmentFeedback',
   AssignmentFeedbackSchema
