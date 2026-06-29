@@ -13,12 +13,18 @@ export interface IProfessionalDNA extends Document {
   resumeId?: Types.ObjectId;
   candidateName?: string;
   candidateEmail?: string;
+  candidatePhone?: string;
+  candidateLocation?: string;
+  candidateLinks?: string[];
+  aboutMe?: string;
   skills: ISkill[];
   experience: IExperience[];
   education: IEducation[];
   gapAnalysis?: IGapAnalysis;
   profileSummary?: IProfileSummary;
   rawResumeText?: string;
+  /** The original uploaded PDF, kept so accepted changes can be overlaid onto it */
+  originalResumePdf?: Buffer;
   analysisStatus: 'pending' | 'processing' | 'completed' | 'failed';
   createdAt: Date;
   updatedAt: Date;
@@ -91,12 +97,17 @@ const ProfessionalDNASchema = new Schema<IProfessionalDNA>(
     resumeId: { type: Schema.Types.ObjectId, ref: 'Resume' },
     candidateName:  { type: String },
     candidateEmail: { type: String },
+    candidatePhone: { type: String },
+    candidateLocation: { type: String },
+    candidateLinks: { type: [String], default: [] },
+    aboutMe:        { type: String },
     skills:        { type: [SkillSchema],      default: [] },
     experience:    { type: [ExperienceSchema], default: [] },
     education:     { type: [EducationSchema],  default: [] },
     gapAnalysis:   { type: GapAnalysisSchema },
     profileSummary:{ type: ProfileSummarySchema },
     rawResumeText: { type: String },
+    originalResumePdf: { type: Buffer },
     analysisStatus: {
       type: String,
       enum: ['pending', 'processing', 'completed', 'failed'],

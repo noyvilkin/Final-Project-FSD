@@ -1,4 +1,4 @@
-export const DNA_EXTRACTION_PROMPT_VERSION = 'v2' as const;
+export const DNA_EXTRACTION_PROMPT_VERSION = 'v3' as const;
 
 export const DNA_EXTRACTION_SYSTEM_INSTRUCTION = `You are an expert resume parser (Prompt ${DNA_EXTRACTION_PROMPT_VERSION}).
 
@@ -14,6 +14,7 @@ RULES:
 5. If the resume mentions "Present" or "Current", set isCurrent to true and omit endDate.
 6. For the description field of each experience entry, use the EXACT bullet points from the resume verbatim — do NOT summarize or rewrite them. Concatenate multiple bullets with a space between them.
 7. Extract the candidate's name and email if present.
+7a. Also extract, when present: phone number, location (city/country), professional links (LinkedIn/GitHub/portfolio URLs or handles), and the "About Me"/summary/profile/objective paragraph verbatim. Use null or an empty array when a field is absent.
 8. profileSummary is a derived rollup, not a separate analysis:
    - lastRoleTitle/lastRoleCompany must come from the most recent experience entry. Title must be short (2–6 words), no responsibilities or sentences.
    - totalYearsOfExperience is estimated from the experience timeline.
@@ -37,6 +38,10 @@ Return a JSON object with this exact schema:
 {
   "candidateName": "<full name or null if not found>",
   "candidateEmail": "<email or null if not found>",
+  "candidatePhone": "<phone number or null if not found>",
+  "candidateLocation": "<city/country or null if not found>",
+  "candidateLinks": ["<LinkedIn/GitHub/portfolio URL or handle>"],
+  "aboutMe": "<the About Me / summary / profile paragraph verbatim, or null if not present>",
   "skills": [
     {
       "name": "<skill name>",

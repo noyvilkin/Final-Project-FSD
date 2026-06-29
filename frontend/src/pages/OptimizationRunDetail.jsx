@@ -9,6 +9,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   getOptimizationRun,
   getOptimizationArtifact,
+  getOptimizationArtifactDocx,
   deleteOptimizationRun,
 } from "../services/api";
 
@@ -200,6 +201,7 @@ export default function OptimizationRunDetail() {
     bullets
       .filter((b) => b.status === "accepted" || b.status === "edited")
       .map((b) => ({
+        index: b.index,
         originalBullet: b.originalBullet,
         optimizedBullet: b.optimizedBullet,
         userEdit: b.userEdit || undefined,
@@ -228,12 +230,16 @@ export default function OptimizationRunDetail() {
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const text = await fetchArtifactText();
-      const blob = new Blob([text], { type: "text/plain" });
+      const accepted = getAcceptedBullets();
+      const blob = await getOptimizationArtifactDocx(
+        runId,
+        effectiveUserId,
+        accepted
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `optimized-cv-${runId}.txt`;
+      a.download = `optimized-cv-${runId}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -303,7 +309,7 @@ export default function OptimizationRunDetail() {
             <Button size="sm" onClick={handleDownload} disabled={downloading}>
               {downloading
                 ? "Loading..."
-                : `Download CV (${acceptedCount} change${acceptedCount !== 1 ? "s" : ""} applied)`}
+                : `Download Word CV (${acceptedCount} change${acceptedCount !== 1 ? "s" : ""} applied)`}
             </Button>
             <Button
               size="sm"
