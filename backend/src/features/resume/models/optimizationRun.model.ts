@@ -10,6 +10,9 @@ export interface IOptimizationRun extends Document {
   /** The user's original resume text — base for reconstruction */
   originalResumeText: string;
 
+  /** The user's original uploaded PDF — base for in-place overlay editing */
+  originalResumePdf?: Buffer;
+
   /** S3/MinIO key for the finalized CV file (set on first download) */
   artifactKey?: string;
 
@@ -36,6 +39,7 @@ const OptimizationRunSchema = new Schema<IOptimizationRun>(
     dashboardData: { type: Schema.Types.Mixed, required: true },
 
     originalResumeText: { type: String, required: true },
+    originalResumePdf: { type: Buffer },
 
     artifactKey:  { type: String },
     versionTag:   { type: String, required: true },

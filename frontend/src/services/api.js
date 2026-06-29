@@ -184,6 +184,42 @@ export async function getOptimizationArtifact(
   }
 }
 
+export async function getOptimizationArtifactDocx(
+  runId,
+  userId,
+  acceptedBullets = []
+) {
+  try {
+    const response = await apiClient.post(
+      `/api/resume/history/${runId}/artifact`,
+      { userId, acceptedBullets, format: "docx" },
+      {
+        responseType: "blob",
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    // With responseType "blob", error bodies arrive as a Blob — read it so we
+    // can surface the backend's message (e.g. the re-upload prompt).
+    if (error?.payload instanceof Blob) {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(await error.payload.text());
+      } catch {
+        parsed = null;
+      }
+      if (parsed) {
+        const apiError = new Error(parsed.error || error.message);
+        apiError.status = error.status;
+        apiError.code = parsed.code;
+        throw apiError;
+      }
+    }
+    throw error;
+  }
+}
+
 export function deleteOptimizationRun(runId, userId) {
   return request(
     `/api/resume/history/${runId}?userId=${encodeURIComponent(userId)}`,
