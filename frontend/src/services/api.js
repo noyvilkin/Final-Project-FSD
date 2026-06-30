@@ -244,8 +244,21 @@ export async function uploadInterviewMedia({ mediaFile, userId, jobId, onProgres
   }
 }
 
-export function getInterviewHistory() {
-  return request("/api/interviews/history");
+export function getInterviewHistory(userId) {
+  return request("/api/interviews/history", {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+export function getInterviewArchive(userId) {
+  return request("/api/interviews/archive", {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+
+}
+
+export function getInterviewMediaUrl(interviewId) {
+  return `${API_BASE_URL}/api/interviews/${interviewId}/media`;
 }
 
 export const apiConfig = {

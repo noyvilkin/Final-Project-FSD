@@ -86,7 +86,9 @@ router.post(
     const { Types } = await import('mongoose');
     const interviewId = new Types.ObjectId().toString();
     const mediaType = file.mimetype.startsWith('audio/') ? 'audio' as const : 'video' as const;
-    const jobId = typeof req.body?.jobId === 'string' ? req.body.jobId.trim() : undefined;
+    const jobId    = typeof req.body?.jobId    === 'string' ? req.body.jobId.trim()    : undefined;
+    const jobTitle = typeof req.body?.jobTitle === 'string' ? req.body.jobTitle.trim() : undefined;
+    const company  = typeof req.body?.company  === 'string' ? req.body.company.trim()  : undefined;
 
     let s3Key: string | null = null;
 
@@ -108,10 +110,12 @@ router.post(
         userId,
         s3Result.key,
         mediaType,
-        jobId || undefined,
+        jobId    || undefined,
         interviewId,
         file.size,
         file.mimetype,
+        jobTitle || undefined,
+        company  || undefined,
       );
 
       appLogger.info('[media-upload] Interview created', {
