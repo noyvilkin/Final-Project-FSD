@@ -40,7 +40,9 @@ export class ResultsService {
     try {
       appLogger.info("[ResultsService] Generating results summary", { assignmentId });
 
-      const assignment = await AssignmentFeedback.findById(assignmentId);
+      const assignment = await AssignmentFeedback.findById(assignmentId)
+        .select('userId status aiFeedback metadata createdAt updatedAt aiAnalysisCompletedAt')
+        .lean();
       
       if (!assignment) {
         appLogger.error("[ResultsService] Assignment not found", { assignmentId });

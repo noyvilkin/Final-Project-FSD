@@ -7,6 +7,7 @@ import type { RequestHandler } from "express";
 import { errorHandler } from "./common/middlewares/errorHandler.js";
 import { logger } from "./common/middlewares/logger.js";
 import { requestId } from "./common/middlewares/requestId.js";
+import { responseTime } from "./common/middlewares/responseTime.js";
 import authRoutes from "./features/auth/routes/auth.routes.js";
 import uploadRouter from "./features/upload/routes/upload.routes.js";
 import userRoutes from "./features/user/routes/user.routes.js";
@@ -14,6 +15,8 @@ import assignmentRoutes from "./features/assignment/routes/assignment.routes.js"
 import internalRoutes from "./features/assignment/routes/internal.routes.js";
 import resumeOptimizationRoutes from "./features/resume/routes/resumeOptimization.routes.js";
 import profileAnalysisRoutes from "./features/profile-analysis/routes/profileAnalysis.routes.js";
+import interviewRoutes from "./features/interview/routes/interview.routes.js";
+import mediaUploadRoutes from "./features/interview/routes/mediaUpload.routes.js";
 
 const app: Express = express();
 
@@ -33,6 +36,7 @@ app.use(cookieParser());
 const helmetMiddleware = helmet as unknown as (...args: unknown[]) => RequestHandler;
 app.use(helmetMiddleware());
 app.use(requestId);
+app.use(responseTime({ slowThresholdMs: 1000 }));
 app.use(logger);
 
 app.get("/health", (_req, res) => {
@@ -47,6 +51,8 @@ app.use("/api/assignments", assignmentRoutes);
 app.use("/api/v1/internal", internalRoutes);
 app.use("/api/resume", resumeOptimizationRoutes);
 app.use("/api/profile-analysis", profileAnalysisRoutes);
+app.use("/api/interviews", mediaUploadRoutes);
+app.use("/api/interviews", interviewRoutes);
 
 app.use(errorHandler);
 

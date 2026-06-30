@@ -63,8 +63,9 @@ router.get(
   '/user/:userId',
   asyncHandler(async (req: Request, res: Response) => {
     const userId = req.params.userId as string;
-    const { limit = '10', offset = '0' } = req.query;
-    
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 10, 100);
+    const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+
     if (!userId) {
       res.status(400).json({
         error: {
@@ -76,11 +77,10 @@ router.get(
       return;
     }
 
-    const assignments = await AssignmentService.getUserAssignments(
-      userId,
-      parseInt(limit as string, 10),
-      parseInt(offset as string, 10)
-    );
+    const [assignments, total] = await Promise.all([
+      AssignmentService.getUserAssignments(userId, limit, offset),
+      AssignmentService.countUserAssignments(userId),
+    ]);
 
     res.json({
       assignments: assignments.map(assignment => ({
@@ -95,6 +95,9 @@ router.get(
         updatedAt: assignment.updatedAt
       })),
       count: assignments.length,
+      total,
+      limit,
+      offset,
       requestId: req.requestId ?? '-'
     });
   })

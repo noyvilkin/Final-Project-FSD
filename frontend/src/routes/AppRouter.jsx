@@ -12,6 +12,11 @@ import AssignmentProcessing from "../pages/AssignmentProcessing";
 import ResumeOptimization from "../pages/ResumeOptimization";
 import OptimizationHistory from "../pages/OptimizationHistory";
 import OptimizationRunDetail from "../pages/OptimizationRunDetail";
+import InterviewUpload from "../pages/InterviewUpload";
+import InterviewProcessing from "../pages/InterviewProcessing";
+import InterviewInsights from "../pages/InterviewInsights";
+import InterviewPlayerPage from "../pages/InterviewPlayer";
+import InterviewHistory from "../pages/InterviewHistory";
 
 function PublicRoute({ children }) {
   const { isAuthenticated, isAuthLoading } = useAuth();
@@ -62,6 +67,15 @@ export default function AppRouter() {
       />
 
       <Route path="/resume-upload" element={<ResumeUploadPage />} />
+
+      <Route
+        path="/interview"
+        element={
+          <ProtectedRoute>
+            <InterviewUpload />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/assignment"
@@ -122,6 +136,42 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <OptimizationRunDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/interview/:id/processing"
+        element={
+          <ProtectedRoute>
+            <InterviewProcessing />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/interview/:id/insights"
+        element={
+          <ProtectedRoute>
+            <InterviewInsights />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/interview/history"
+        element={
+          <ProtectedRoute>
+            <InterviewHistory />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/interview/:id"
+        element={
+          <ProtectedRoute>
+            <InterviewPlayerPage />
           </ProtectedRoute>
         }
       />

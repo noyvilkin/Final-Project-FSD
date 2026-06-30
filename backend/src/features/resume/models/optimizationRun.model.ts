@@ -46,6 +46,9 @@ const OptimizationRunSchema = new Schema<IOptimizationRun>(
 
 OptimizationRunSchema.index({ userId: 1, createdAt: -1 });
 
+// Text index on job description for potential search functionality
+OptimizationRunSchema.index({ jobDescriptionText: 'text' });
+
 export const OptimizationRun = mongoose.model<IOptimizationRun>(
   'OptimizationRun',
   OptimizationRunSchema
