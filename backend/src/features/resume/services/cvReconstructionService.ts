@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { appLogger } from '../../../common/services/logger.js';
 import { uploadBlob, deleteBlob, fetchBlobAsText } from '../../../common/services/s3Upload.js';
 
@@ -65,32 +64,6 @@ export class CvReconstructionService {
   }
 
   /**
-   * Apply accepted/edited bullets to a single text segment (e.g. one
-   * experience entry's description) using the same exact → normalized
-   * matching, but WITHOUT the append fallback. Bullets that don't match
-   * this segment are simply left untouched so they can match elsewhere.
-   */
-  static applyAcceptedToSegment(
-    text: string,
-    acceptedBullets: AcceptedBullet[]
-  ): string {
-    let result = text;
-    for (const bullet of acceptedBullets) {
-      const replacement = (bullet.userEdit || bullet.optimizedBullet || '').trim();
-      const search = (bullet.originalBullet || '').trim();
-      if (!replacement || !search) continue;
-
-      if (result.includes(search)) {
-        result = result.replace(search, replacement);
-        continue;
-      }
-      const normalized = this.replaceNormalized(result, search, replacement);
-      if (normalized !== null) result = normalized;
-    }
-    return result;
-  }
-
-  /**
    * Locate `search` inside `text` ignoring differences in whitespace,
    * punctuation and case, then replace the matched region (mapped back
    * to the real characters) with `replacement`. Returns null if the
@@ -142,82 +115,6 @@ export class CvReconstructionService {
     const realEnd = endOffsets[idx + normSearch.length - 1];
 
     return text.slice(0, realStart) + replacement + text.slice(realEnd);
-  }
-
-  /**
-   * Render the reconstructed CV text into a paginated PDF document.
-   * Wraps long lines to fit the page width and preserves blank lines.
-   */
-  static async buildPdf(cvText: string): Promise<Uint8Array> {
-    const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-    const pageWidth = 595.28; // A4 width in points
-    const pageHeight = 841.89; // A4 height in points
-    const margin = 56; // ~2cm
-    const fontSize = 11;
-    const lineHeight = fontSize * 1.4;
-    const maxTextWidth = pageWidth - margin * 2;
-
-    // Sanitize characters that the standard font cannot encode.
-    const safeText = cvText.replace(/[\t]/g, '    ').replace(/[^\x00-\x7F]/g, ' ');
-
-    const wrapLine = (line: string): string[] => {
-      if (line.trim() === '') return [''];
-      const words = line.split(/\s+/);
-      const wrapped: string[] = [];
-      let current = '';
-
-      for (const word of words) {
-        const candidate = current ? `${current} ${word}` : word;
-        if (font.widthOfTextAtSize(candidate, fontSize) <= maxTextWidth) {
-          current = candidate;
-        } else {
-          if (current) wrapped.push(current);
-          // Break a single word that is itself too long.
-          if (font.widthOfTextAtSize(word, fontSize) > maxTextWidth) {
-            let chunk = '';
-            for (const char of word) {
-              if (font.widthOfTextAtSize(chunk + char, fontSize) <= maxTextWidth) {
-                chunk += char;
-              } else {
-                wrapped.push(chunk);
-                chunk = char;
-              }
-            }
-            current = chunk;
-          } else {
-            current = word;
-          }
-        }
-      }
-      if (current) wrapped.push(current);
-      return wrapped;
-    };
-
-    const allLines = safeText.split(/\r?\n/).flatMap(wrapLine);
-
-    let page = pdfDoc.addPage([pageWidth, pageHeight]);
-    let cursorY = pageHeight - margin;
-
-    for (const line of allLines) {
-      if (cursorY < margin) {
-        page = pdfDoc.addPage([pageWidth, pageHeight]);
-        cursorY = pageHeight - margin;
-      }
-      if (line !== '') {
-        page.drawText(line, {
-          x: margin,
-          y: cursorY,
-          size: fontSize,
-          font,
-          color: rgb(0.1, 0.1, 0.1),
-        });
-      }
-      cursorY -= lineHeight;
-    }
-
-    return pdfDoc.save();
   }
 
   /**

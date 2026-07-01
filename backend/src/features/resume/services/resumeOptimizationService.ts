@@ -136,7 +136,6 @@ export class ResumeOptimizationService {
       gapAnalysis: dnaDoc.gapAnalysis,
       skillNames: dnaDoc.skills.map(s => s.name),
       rawResumeText: dnaDoc.rawResumeText,
-      originalResumePdf: dnaDoc.originalResumePdf,
     };
   }
 }

@@ -197,6 +197,21 @@ export async function getOptimizationArtifact(
   }
 }
 
+function parseContentDispositionFilename(header) {
+  if (!header) return null;
+  // Prefer RFC 5987 (filename*=UTF-8''...) then fall back to plain filename="...".
+  const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8[1]);
+    } catch {
+      /* fall through */
+    }
+  }
+  const plain = header.match(/filename="?([^"]+)"?/i);
+  return plain ? plain[1] : null;
+}
+
 export async function getOptimizationArtifactDocx(
   runId,
   userId,
@@ -211,7 +226,12 @@ export async function getOptimizationArtifactDocx(
       }
     );
 
-    return response.data;
+    return {
+      blob: response.data,
+      fileName: parseContentDispositionFilename(
+        response.headers?.["content-disposition"]
+      ),
+    };
   } catch (error) {
     // With responseType "blob", error bodies arrive as a Blob — read it so we
     // can surface the backend's message (e.g. the re-upload prompt).

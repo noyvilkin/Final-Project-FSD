@@ -9,7 +9,8 @@ import {
   TabStopType,
   TextRun,
 } from 'docx';
-import { ProfessionalDNA, type IProfessionalDNA } from '../models/professionalDNA.model.js';
+import { ProfessionalDNA } from '../models/professionalDNA.model.js';
+import type { ICvSnapshot } from '../models/optimizationRun.model.js';
 import { User } from '../../user/models/user.model.js';
 
 interface AcceptedBullet {
@@ -18,16 +19,6 @@ interface AcceptedBullet {
   userEdit?: string;
   index?: number;
 }
-
-// Common words ignored when matching an optimized rewrite back to the
-// original bullet it came from.
-const STOP_WORDS = new Set([
-  'the', 'and', 'for', 'with', 'using', 'used', 'from', 'into', 'that', 'this',
-  'was', 'were', 'are', 'has', 'had', 'have', 'our', 'their', 'its', 'across',
-  'within', 'over', 'under', 'a', 'an', 'of', 'to', 'in', 'on', 'by', 'at',
-  'as', 'or', 'but', 'is', 'be', 'it', 'we', 'they', 'including', 'such',
-  'various', 'variety', 'enabling', 'ensure', 'ensuring', 'while', 'through',
-]);
 
 const ACCENT = '1F3864'; // navy heading color
 const TEXT = '262626';
@@ -57,18 +48,30 @@ function clean(value?: string): string {
  * Sections (each rendered only when data exists):
  *   NAME · CONTACT · ABOUT ME · EDUCATION · WORK EXPERIENCE · SKILLS · LANGUAGE
  */
-export class CvDocumentService {
-  static async buildDocxForUser(
-    userId: string,
-    acceptedBullets: AcceptedBullet[]
-  ): Promise<{ buffer: Buffer; fileName: string } | null> {
-    const dna = await this.loadDna(userId);
-    if (!dna) return null;
+// Only the structured fields the composer actually renders — keeps the
+// DNA read lean (no rawResumeText).
+const SNAPSHOT_FIELDS =
+  'candidateName candidateEmail candidatePhone candidateLocation candidateLinks ' +
+  'aboutMe profileSummary skills experience education';
 
-    const doc = this.compose(dna, acceptedBullets || []);
+export class CvDocumentService {
+  /**
+   * Compose the CV from a frozen DNA snapshot captured at optimization
+   * time. This is the source of truth for downloads: accepted-bullet
+   * indexes always line up with the experience entries they were
+   * optimized against.
+   */
+  static async buildDocxFromSnapshot(
+    snapshot: ICvSnapshot,
+    acceptedBullets: AcceptedBullet[]
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const doc = this.compose(snapshot, acceptedBullets || []);
     const buffer = await Packer.toBuffer(doc);
 
-    const base = (dna.candidateName || 'optimized').trim().replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+    const base = (snapshot.candidateName || 'optimized')
+      .trim()
+      .replace(/[^a-z0-9]+/gi, '_')
+      .replace(/^_+|_+$/g, '');
     const fileName = `${base || 'optimized'}_CV.docx`;
 
     return { buffer, fileName };
@@ -76,25 +79,46 @@ export class CvDocumentService {
 
   // ── Data access ─────────────────────────────────────────────────
 
-  private static async loadDna(userId: string): Promise<IProfessionalDNA | null> {
+  /**
+   * Build a structured DNA snapshot for the user's current profile.
+   * Used at optimize time to freeze the DNA onto the run, and as a
+   * fallback for legacy runs that predate snapshots.
+   */
+  static async snapshotForUser(userId: string): Promise<ICvSnapshot | null> {
     if (!Types.ObjectId.isValid(userId)) return null;
 
     const user = await User.findById(userId).lean();
-    let dna: IProfessionalDNA | null = null;
+    let dna = null;
     if (user?.latestProfessionalDNA) {
-      dna = await ProfessionalDNA.findById(user.latestProfessionalDNA).lean();
+      dna = await ProfessionalDNA.findById(user.latestProfessionalDNA)
+        .select(SNAPSHOT_FIELDS)
+        .lean();
     }
     if (!dna) {
       dna = await ProfessionalDNA.findOne({ userId: new Types.ObjectId(userId) })
+        .select(SNAPSHOT_FIELDS)
         .sort({ updatedAt: -1 })
         .lean();
     }
-    return dna;
+    if (!dna) return null;
+
+    return {
+      candidateName: dna.candidateName,
+      candidateEmail: dna.candidateEmail,
+      candidatePhone: dna.candidatePhone,
+      candidateLocation: dna.candidateLocation,
+      candidateLinks: dna.candidateLinks,
+      aboutMe: dna.aboutMe,
+      profileSummary: dna.profileSummary,
+      skills: dna.skills || [],
+      experience: dna.experience || [],
+      education: dna.education || [],
+    };
   }
 
   // ── Composition ─────────────────────────────────────────────────
 
-  private static compose(dna: IProfessionalDNA, acceptedBullets: AcceptedBullet[]): Document {
+  private static compose(dna: ICvSnapshot, acceptedBullets: AcceptedBullet[]): Document {
     const children: Paragraph[] = [];
 
     // NAME
@@ -185,10 +209,16 @@ export class CvDocumentService {
     }
 
     // WORK EXPERIENCE
-    const experience = (dna.experience || []).filter((e) => e && (clean(e.company) || clean(e.role)));
+    // Keep each entry's ORIGINAL array position: accepted-bullet `index`
+    // values come from the (unfiltered) experience array the run was
+    // optimized against, so matching must use that original index — not
+    // the position within this filtered/displayed list.
+    const experience = (dna.experience || [])
+      .map((exp, originalIndex) => ({ exp, originalIndex }))
+      .filter(({ exp }) => exp && (clean(exp.company) || clean(exp.role)));
     if (experience.length > 0) {
       children.push(this.sectionHeading('WORK EXPERIENCE'));
-      experience.forEach((exp, idx) => {
+      experience.forEach(({ exp, originalIndex }, idx) => {
         const role = clean(exp.role);
         const company = clean(exp.company);
         const dateRange = this.formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
@@ -212,7 +242,7 @@ export class CvDocumentService {
         const originalBullets = this.splitBullets(exp.description || '');
         const acceptedForExp = acceptedBullets.filter((b) =>
           typeof b.index === 'number'
-            ? b.index === idx
+            ? b.index === originalIndex
             : this.sameSegment(b.originalBullet, exp.description || '')
         );
         const finalBullets = this.mergeAccepted(originalBullets, acceptedForExp);
@@ -366,45 +396,28 @@ export class CvDocumentService {
   }
 
   /**
-   * Merge accepted/edited rewrites into the experience's original bullets.
+   * Merge accepted/edited rewrites into an experience's bullets.
    *
-   * Every suggestion card for an experience carries the WHOLE description
-   * as its `originalBullet`, but each `optimizedBullet` only rewrites one
-   * of the original sentences. So we match each accepted rewrite back to
-   * the single original bullet it most resembles (by keyword overlap) and
-   * replace just that one — leaving every other original bullet intact.
-   * Accepted rewrites that match nothing are appended as new bullets.
+   * Each suggestion carries the WHOLE concatenated description as its
+   * `originalBullet`, and each `optimizedBullet` is a full rewrite of that
+   * same description (the prompt emits one entry per experience). So once
+   * any rewrite is accepted for a role, it supersedes the entire original
+   * description: we replace ALL original bullets with the accepted
+   * rewrite(s), re-split into individual bullets. This avoids leaving
+   * stale original sentences alongside the rewrite. Roles with no accepted
+   * rewrites keep their original bullets untouched.
    */
   private static mergeAccepted(
     originalBullets: string[],
     accepted: AcceptedBullet[]
   ): string[] {
-    const slots = originalBullets.map((text) => ({ text, replaced: false }));
-    const extras: string[] = [];
+    const replacements = accepted
+      .map((acc) => (acc.userEdit || acc.optimizedBullet || '').trim())
+      .filter(Boolean);
 
-    for (const acc of accepted) {
-      const replacement = (acc.userEdit || acc.optimizedBullet || '').trim();
-      if (!replacement) continue;
+    if (replacements.length === 0) return originalBullets;
 
-      let bestIdx = -1;
-      let bestScore = 0;
-      for (let i = 0; i < slots.length; i += 1) {
-        if (slots[i].replaced) continue;
-        const score = this.similarity(slots[i].text, replacement);
-        if (score > bestScore) {
-          bestScore = score;
-          bestIdx = i;
-        }
-      }
-
-      if (bestIdx >= 0 && bestScore >= 0.2) {
-        slots[bestIdx] = { text: replacement, replaced: true };
-      } else {
-        extras.push(replacement);
-      }
-    }
-
-    return [...slots.map((s) => s.text), ...extras];
+    return replacements.flatMap((text) => this.splitBullets(text));
   }
 
   /** Whether two texts refer to the same experience description. */
@@ -414,22 +427,5 @@ export class CvDocumentService {
     const nb = norm(b);
     if (!na || !nb) return false;
     return na === nb || na.includes(nb) || nb.includes(na);
-  }
-
-  /** Keyword overlap coefficient between two texts (0–1). */
-  private static similarity(a: string, b: string): number {
-    const ta = this.tokenize(a);
-    const tb = this.tokenize(b);
-    if (ta.size === 0 || tb.size === 0) return 0;
-    let intersection = 0;
-    for (const w of ta) if (tb.has(w)) intersection += 1;
-    return intersection / Math.min(ta.size, tb.size);
-  }
-
-  private static tokenize(text: string): Set<string> {
-    const words = (text.toLowerCase().match(/[a-z0-9]+/g) || []).filter(
-      (w) => w.length > 2 && !STOP_WORDS.has(w)
-    );
-    return new Set(words);
   }
 }

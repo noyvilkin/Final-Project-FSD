@@ -77,14 +77,18 @@ router.post('/optimize', async (req: Request, res: Response): Promise<void> => {
 
     const versionTag = Date.now().toString(36);
     const originalResumeText = payload.professionalDNA.rawResumeText || '';
-    const originalResumePdf = payload.professionalDNA.originalResumePdf;
+
+    // Freeze the structured DNA onto the run so the downloadable CV is
+    // composed from the exact profile that was optimized — not whatever
+    // the user's latest DNA happens to be at download time.
+    const dnaSnapshot = await CvDocumentService.snapshotForUser(userId);
 
     const run = await OptimizationRun.create({
       userId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId,
       jobDescriptionText,
       dashboardData: dashboardData as unknown as Record<string, unknown>,
       originalResumeText,
-      originalResumePdf,
+      dnaSnapshot: dnaSnapshot ?? undefined,
       versionTag,
     });
 
@@ -180,7 +184,8 @@ router.get('/history/:runId', async (req: Request, res: Response): Promise<void>
       _id: runId,
       userId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId,
     })
-      .select('-originalResumePdf')
+      // dnaSnapshot is only needed server-side when composing the docx.
+      .select('-dnaSnapshot')
       .lean();
 
     if (!run) {
@@ -233,9 +238,11 @@ router.post('/history/:runId/artifact', async (req: Request, res: Response): Pro
     }
 
     if (format === 'docx') {
-      const result = await CvDocumentService.buildDocxForUser(userId, acceptedBullets || []);
+      // Compose from the run's frozen snapshot. Legacy runs created before
+      // snapshots existed fall back to the user's current DNA.
+      const snapshot = run.dnaSnapshot ?? (await CvDocumentService.snapshotForUser(userId));
 
-      if (!result) {
+      if (!snapshot) {
         res.status(409).json({
           success: false,
           code: 'NO_PROFILE',
@@ -244,6 +251,8 @@ router.post('/history/:runId/artifact', async (req: Request, res: Response): Pro
         });
         return;
       }
+
+      const result = await CvDocumentService.buildDocxFromSnapshot(snapshot, acceptedBullets || []);
 
       appLogger.info('[ResumeOptimization] Composed Word CV generated', {
         runId,

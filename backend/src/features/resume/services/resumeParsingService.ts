@@ -123,7 +123,6 @@ export class ResumeParsingService {
       userId: new Types.ObjectId(userId),
       analysisStatus: 'completed',
       rawResumeText: cleanText,
-      originalResumePdf: pdfBuffer,
       candidateName: parsed.candidateName ?? undefined,
       candidateEmail: parsed.candidateEmail ?? undefined,
       candidatePhone: parsed.candidatePhone ?? undefined,

@@ -231,7 +231,7 @@ export default function OptimizationRunDetail() {
     setDownloading(true);
     try {
       const accepted = getAcceptedBullets();
-      const blob = await getOptimizationArtifactDocx(
+      const { blob, fileName } = await getOptimizationArtifactDocx(
         runId,
         effectiveUserId,
         accepted
@@ -239,7 +239,7 @@ export default function OptimizationRunDetail() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `optimized-cv-${runId}.docx`;
+      a.download = fileName || `optimized-cv-${runId}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();

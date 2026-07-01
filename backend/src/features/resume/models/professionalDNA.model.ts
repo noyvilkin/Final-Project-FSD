@@ -23,8 +23,6 @@ export interface IProfessionalDNA extends Document {
   gapAnalysis?: IGapAnalysis;
   profileSummary?: IProfileSummary;
   rawResumeText?: string;
-  /** The original uploaded PDF, kept so accepted changes can be overlaid onto it */
-  originalResumePdf?: Buffer;
   analysisStatus: 'pending' | 'processing' | 'completed' | 'failed';
   createdAt: Date;
   updatedAt: Date;
@@ -107,7 +105,6 @@ const ProfessionalDNASchema = new Schema<IProfessionalDNA>(
     gapAnalysis:   { type: GapAnalysisSchema },
     profileSummary:{ type: ProfileSummarySchema },
     rawResumeText: { type: String },
-    originalResumePdf: { type: Buffer },
     analysisStatus: {
       type: String,
       enum: ['pending', 'processing', 'completed', 'failed'],

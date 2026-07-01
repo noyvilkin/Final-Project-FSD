@@ -29,6 +29,8 @@ app.use(
       "https://skillup.cs.colman.ac.il",
     ],
     credentials: true,
+    // Let the browser read the composed CV filename on downloads.
+    exposedHeaders: ["Content-Disposition"],
   })
 );
 app.use(express.json());
