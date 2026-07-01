@@ -172,7 +172,7 @@ export default function AssignmentProcessing() {
   }, [attempt, currentStatus]);
 
   return (
-    <PageLayout title="Technical Assignment" subtitle="Analyzing your submission" showBack>
+    <PageLayout title="Technical Assignment" subtitle="Analyzing your submission" showBack backTo="/assignment">
       <Card className="p-6">
         <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
 

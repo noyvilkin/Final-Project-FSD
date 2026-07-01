@@ -156,7 +156,7 @@ export default function AssignmentResults() {
 
   if (loading) {
     return (
-      <PageLayout title="Technical Assignment" subtitle="Loading your analysis" showBack>
+      <PageLayout title="Technical Assignment" subtitle="Loading your analysis" showBack backTo="/assignment/history">
         <Card className="p-6">
           <p className="text-sm text-gray-600">Fetching your results...</p>
         </Card>
@@ -166,7 +166,7 @@ export default function AssignmentResults() {
 
   if (error || !viewModel) {
     return (
-      <PageLayout title="Technical Assignment" subtitle="Results unavailable" showBack>
+      <PageLayout title="Technical Assignment" subtitle="Results unavailable" showBack backTo="/assignment/history">
         <Card className="p-6">
           <p className="text-sm text-red-600">{error || "Could not load results."}</p>
           <div className="mt-4 flex gap-2">
@@ -183,7 +183,18 @@ export default function AssignmentResults() {
       title="Technical Assignment"
       subtitle="Upload your completed homework for review"
       showBack
+      backTo="/assignment/history"
     >
+      <div className="mb-4 flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate("/assignment/history")}
+        >
+          View History
+        </Button>
+      </div>
+
       <div className="space-y-4">
         <Card className={["p-5 ring-1", viewModel.tone.ringClass].join(" ")}>
           <div className="text-center">

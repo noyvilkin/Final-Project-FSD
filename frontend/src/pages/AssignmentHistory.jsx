@@ -233,6 +233,7 @@ export default function AssignmentHistory() {
       title="Assignment History"
       subtitle="Your past submissions"
       showBack
+      backTo="/assignment"
     >
       {effectiveUserId && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
