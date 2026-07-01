@@ -126,6 +126,19 @@ export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
 }
 
+export function getAssignmentHistory(userId, { limit = 20, offset = 0 } = {}) {
+  return request(
+    `/api/assignments/user/${encodeURIComponent(userId)}?limit=${limit}&offset=${offset}`
+  );
+}
+
+export function deleteAssignment(assignmentId, userId) {
+  return request(
+    `/api/assignments/${assignmentId}?userId=${encodeURIComponent(userId)}`,
+    { method: "DELETE" }
+  );
+}
+
 export function uploadResume(file, userId) {
   const formData = new FormData();
   formData.append("resume", file);

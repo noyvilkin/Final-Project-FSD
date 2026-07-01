@@ -151,8 +151,14 @@ export class AIAnalysisService {
       requirementsFileKey: assignment.requirementsFileKey,
     } as any;
     
-    // Extract requirements text (if available)
-    const requirements = metadata.requirements || 'No specific requirements provided';
+    // Extract requirements text (if available). The upload pipeline stores the
+    // extracted assignment description under `extractedRequirements`, while the
+    // eval harness sets `requirements` directly — support both so the AI always
+    // grades against the stated requirements.
+    const requirements =
+      metadata.requirements ||
+      metadata.extractedRequirements ||
+      'No specific requirements provided';
     
     // Consolidate source code
     const sourceCode = this.consolidateSourceCode(metadata);
