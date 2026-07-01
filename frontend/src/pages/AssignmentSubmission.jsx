@@ -197,6 +197,18 @@ export default function AssignmentSubmission() {
       subtitle="Upload your completed homework for review"
       showBack
     >
+      {userId && (
+        <div className="mb-4 flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/assignment/history")}
+          >
+            View History
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-4">
         <UploadTile
           inputId="assignment-description-file"
