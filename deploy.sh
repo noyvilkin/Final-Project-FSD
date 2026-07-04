@@ -51,7 +51,7 @@ fi
 echo ""
 echo "Step 2: Installing frontend dependencies..."
 cd frontend
-if npm install; then
+if npm install --include=dev; then
     print_success "Frontend dependencies installed"
 else
     print_error "Frontend dependency installation failed"
@@ -74,7 +74,7 @@ cd ..
 echo ""
 echo "Step 4: Installing backend dependencies..."
 cd backend
-if npm install; then
+if npm install --include=dev; then
     print_success "Backend dependencies installed"
 else
     print_error "Backend dependency installation failed"
