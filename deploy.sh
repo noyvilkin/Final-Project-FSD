@@ -81,10 +81,20 @@ else
     exit 1
 fi
 
-# Step 5: Build backend
+# Step 4b: Load production environment (server.ts reads .env; NODE_ENV=production enables HTTPS)
+echo ""
+echo "Step 4b: Loading production environment (.envprod -> .env)..."
+if [ -f ".envprod" ]; then
+    cp .envprod .env
+    print_success "Production environment loaded (.envprod -> .env)"
+else
+    print_warning ".envprod not found; using existing .env"
+fi
+
+# Step 5: Build backend (production config excludes test/POC files from compilation)
 echo ""
 echo "Step 5: Building backend..."
-if npm run build; then
+if npm run build -- -p tsconfig_prod.json; then
     print_success "Backend build completed"
 else
     print_error "Backend build failed"

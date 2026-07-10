@@ -1,4 +1,7 @@
 import "dotenv/config";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Express } from "express";
@@ -23,6 +26,7 @@ app.use(
       "http://localhost:5173",
       "http://localhost:5174",
       "http://localhost:3000",
+      "https://skillup.cs.colman.ac.il",
     ],
     credentials: true,
   })
@@ -47,6 +51,16 @@ app.use("/api/assignments", assignmentRoutes);
 app.use("/api/v1/internal", internalRoutes);
 app.use("/api/resume", resumeOptimizationRoutes);
 app.use("/api/profile-analysis", profileAnalysisRoutes);
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const clientDistPath = path.resolve(currentDir, "../../frontend/dist");
+
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get(/^\/(?!api\/).*/, (_req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
+}
 
 app.use(errorHandler);
 
