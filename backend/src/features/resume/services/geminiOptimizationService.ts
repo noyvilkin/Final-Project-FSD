@@ -1,4 +1,5 @@
-import { GeminiClient } from '../../../common/services/geminiClient.js';
+import { createLLMClient } from '../../../common/services/llmClientFactory.js';
+import type { LLMClient } from '../../../common/services/llmClient.js';
 import type { GeminiPayload } from '../../../common/types/geminiTypes.js';
 import { appLogger } from '../../../common/services/logger.js';
 
@@ -19,23 +20,14 @@ import type {
 
 import { HybridScoringService } from './hybridScoringService.js';
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = process.env.COLMAN_LLM_MODEL ?? 'gpt-oss-120b';
 
 export class GeminiOptimizationService {
-  private static geminiClient: GeminiClient | null = null;
+  private static geminiClient: LLMClient | null = null;
 
-  private static getClient(): GeminiClient {
+  private static getClient(): LLMClient {
     if (!this.geminiClient) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error('GEMINI_API_KEY environment variable is required');
-
-      this.geminiClient = new GeminiClient({
-        apiKey,
-        model: MODEL_NAME,
-        temperature: 0.3,
-        maxOutputTokens: 8192,
-        rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
-      });
+      this.geminiClient = createLLMClient({ model: MODEL_NAME, temperature: 0.3, maxOutputTokens: 8192 });
     }
     return this.geminiClient;
   }

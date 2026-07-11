@@ -1,7 +1,6 @@
 
-import { GeminiContent } from '../types/geminiTypes.js'
+import { GeminiContent, GeminiPayload } from '../types/geminiTypes.js'
 import { PromptMetadata, PromptVersion } from '../types/promptTypes.js'
-import { GeminiPayload } from '../services/geminiClient.js'
 
 
 const PROMPT_VERSIONS: Record<PromptVersion, string> = {

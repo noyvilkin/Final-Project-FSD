@@ -1,4 +1,6 @@
-import { GeminiClient, GeminiPayload } from "../../../common/services/geminiClient.js";
+import { createLLMClient } from "../../../common/services/llmClientFactory.js";
+import type { LLMClient } from "../../../common/services/llmClient.js";
+import type { GeminiPayload } from "../../../common/types/geminiTypes.js";
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { appLogger } from "../../../common/services/logger.js";
 import type { AssignmentMetadata } from "../../resume/types/professionalDNA.types.js"
@@ -94,31 +96,16 @@ const ANALYSIS_RESPONSE_SCHEMA = {
 } as const;
 
 export class AIAnalysisService {
-  private static geminiClient: GeminiClient | null = null;
+  private static geminiClient: LLMClient | null = null;
 
-  private static getGeminiClient(): GeminiClient {
+  private static getGeminiClient(): LLMClient {
     if (!this.geminiClient) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('GEMINI_API_KEY environment variable is required');
-      }
-      
-      this.geminiClient = new GeminiClient({
-        apiKey,
-        model: 'gemini-2.5-flash',
+      this.geminiClient = createLLMClient({
         temperature: 0,        // Grading must be reproducible — no sampling variance.
         maxOutputTokens: 4096, // Headroom so structured JSON is never truncated.
-        rateLimiter: {
-          // Google free tier for gemini-2.5-flash (per GCP project, NOT per API key).
-          // Official: 10 RPM / 250 RPD. NOTE: since Dec 2025 some accounts are silently
-          // throttled to ~20 RPD — if you keep seeing 429s, check AI Studio → Rate Limits
-          // and lower requestsPerDay to match. RPD resets at midnight US Pacific.
-          requestsPerMinute: 10,
-          requestsPerDay: 250
-        }
       });
     }
-    
+
     return this.geminiClient;
   }
 

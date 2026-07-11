@@ -1,4 +1,5 @@
-import { GeminiClient } from '../../../common/services/geminiClient.js';
+import { createLLMClient } from '../../../common/services/llmClientFactory.js';
+import type { LLMClient } from '../../../common/services/llmClient.js';
 import type { GeminiPayload } from '../../../common/types/geminiTypes.js';
 import { appLogger } from '../../../common/services/logger.js';
 
@@ -17,20 +18,11 @@ const HARD_RULE_WEIGHT = 0.4;
 const SEMANTIC_WEIGHT  = 0.6;
 
 export class HybridScoringService {
-  private static geminiClient: GeminiClient | null = null;
+  private static geminiClient: LLMClient | null = null;
 
-  private static getClient(): GeminiClient {
+  private static getClient(): LLMClient {
     if (!this.geminiClient) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error('GEMINI_API_KEY environment variable is required');
-
-      this.geminiClient = new GeminiClient({
-        apiKey,
-        model: 'gemini-2.5-flash',
-        temperature: 0.2,
-        maxOutputTokens: 4096,
-        rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
-      });
+      this.geminiClient = createLLMClient({ temperature: 0.2, maxOutputTokens: 4096 });
     }
     return this.geminiClient;
   }

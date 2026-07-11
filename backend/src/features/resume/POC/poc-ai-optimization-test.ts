@@ -4,7 +4,7 @@
  * Run:  npx tsx src/features/resume/POC/poc-ai-optimization-test.ts
  *   or: npm run poc:optimize
  *
- * Requires: GEMINI_API_KEY in .env (no database needed).
+ * Requires: COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD in .env (no database needed).
  */
 
 import 'dotenv/config';
@@ -127,8 +127,8 @@ function buildMockPayload(): ResumeOptimizationPayload {
 async function main() {
   printHeader('AI Resume Optimization POC');
 
-  if (!process.env.GEMINI_API_KEY) {
-    console.error('\n  ERROR: GEMINI_API_KEY not set in .env\n');
+  if (!process.env.COLMAN_LLM_USERNAME || !process.env.COLMAN_LLM_PASSWORD) {
+    console.error('\n  ERROR: COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD not set in .env\n');
     process.exit(1);
   }
 

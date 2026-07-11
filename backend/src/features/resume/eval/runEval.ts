@@ -14,7 +14,7 @@
  *   or
  *   npm run eval:resume
  *
- * Requires GEMINI_API_KEY in .env. No database connection is needed —
+ * Requires COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD in .env. No database connection is needed —
  * the harness uses ResumeParsingService.extractDNAFromText which does
  * not persist anything, and builds the optimization payload in-memory.
  */
@@ -405,8 +405,8 @@ function writeJsonReport(report: FullEvalReport) {
 async function main() {
   header('Resume AI Evaluation Harness');
 
-  if (!process.env.GEMINI_API_KEY) {
-    console.error('\n  ERROR: GEMINI_API_KEY is not set in .env\n');
+  if (!process.env.COLMAN_LLM_USERNAME || !process.env.COLMAN_LLM_PASSWORD) {
+    console.error('\n  ERROR: COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD are not set in .env\n');
     process.exit(1);
   }
 
