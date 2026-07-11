@@ -41,6 +41,7 @@ const SkillSchema = new Schema<ISkill>({
     required: true,
   },
   yearsOfExperience: { type: Number },
+  inSkillsSection: { type: Boolean },
 }, { _id: false });
 
 const ExperienceSchema = new Schema<IExperience>({

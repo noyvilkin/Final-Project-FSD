@@ -12,6 +12,7 @@ import {
 import { ProfessionalDNA } from '../models/professionalDNA.model.js';
 import type { ICvSnapshot } from '../models/optimizationRun.model.js';
 import { User } from '../../user/models/user.model.js';
+import { splitBullets } from '../utils/bulletText.js';
 
 interface AcceptedBullet {
   originalBullet: string;
@@ -249,7 +250,7 @@ export class CvDocumentService {
           })
         );
 
-        const originalBullets = this.splitBullets(exp.description || '');
+        const originalBullets = splitBullets(exp.description || '');
         const acceptedForExp = acceptedBullets.filter((b) =>
           typeof b.index === 'number'
             ? b.index === originalIndex
@@ -269,14 +270,20 @@ export class CvDocumentService {
       });
     }
 
-    // SKILLS (technical / tool / soft — languages handled separately)
-    const uniqueSkills = Array.from(
-      new Set(
-        (dna.skills || [])
-          .filter((s) => s && s.category !== 'language' && clean(s.name))
-          .map((s) => s.name.trim())
-      )
+    // SKILLS (technical / tool / soft — languages handled separately).
+    // Only list skills the candidate explicitly had in a dedicated skills
+    // section of the original resume, so the composed CV doesn't promote
+    // every skill merely mentioned inside an experience bullet. Records
+    // parsed before the `inSkillsSection` flag existed (or resumes with no
+    // skills section at all) fall back to all mentioned skills.
+    const nonLanguageSkills = (dna.skills || []).filter(
+      (s) => s && s.category !== 'language' && clean(s.name)
     );
+    const hasSectionFlag = nonLanguageSkills.some((s) => s.inSkillsSection === true);
+    const sourceSkills = hasSectionFlag
+      ? nonLanguageSkills.filter((s) => s.inSkillsSection === true)
+      : nonLanguageSkills;
+    const uniqueSkills = Array.from(new Set(sourceSkills.map((s) => s.name.trim())));
     if (uniqueSkills.length > 0) {
       children.push(this.sectionHeading('SKILLS'));
       children.push(
@@ -374,45 +381,15 @@ export class CvDocumentService {
   }
 
   /**
-   * Break a concatenated description (verbatim bullets joined with
-   * spaces) into individual bullet lines: split on common bullet
-   * glyphs first, then on sentence boundaries.
-   */
-  private static splitBullets(text: string): string[] {
-    if (!text || !text.trim()) return [];
-
-    const normalized = text
-      .replace(/\r/g, '\n')
-      .replace(/\s*[•▪◦‣·]\s*/g, '\n')
-      .replace(/\n\s*[-–]\s+/g, '\n');
-
-    const lines = normalized
-      .split(/\n+/)
-      .map((l) => l.trim())
-      .filter(Boolean);
-
-    const out: string[] = [];
-    for (const line of lines) {
-      const sentences = line
-        .split(/(?<=[.!?])\s+(?=[A-Z(])/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      out.push(...(sentences.length > 0 ? sentences : [line]));
-    }
-
-    return out
-      .map((s) => s.replace(/^[-–•▪◦‣·]\s*/, '').trim())
-      .filter((s) => s.length > 1);
-  }
-
-  /**
    * Merge accepted/edited rewrites into the experience's original bullets.
    *
-   * Each `optimizedBullet` is a condensed 1–2 line rewrite of the whole
-   * description, so we must NOT drop the original detailed bullets. We
-   * match each accepted rewrite to the single original bullet it most
-   * resembles (by keyword overlap) and replace just that one, leaving the
-   * rest of the detail intact. Rewrites that match nothing are appended.
+   * Each rewrite now targets a SINGLE original bullet, so we first try to
+   * match it back to the exact original bullet it was optimized from
+   * (`acc.originalBullet`), replacing just that line. When that isn't
+   * available (e.g. legacy runs whose rewrite condensed the whole job),
+   * we fall back to the closest bullet by keyword overlap. The rest of
+   * the original detail is always preserved; unmatched rewrites are
+   * appended so an accepted edit is never lost.
    */
   private static mergeAccepted(
     originalBullets: string[],
@@ -425,18 +402,22 @@ export class CvDocumentService {
       const replacement = (acc.userEdit || acc.optimizedBullet || '').trim();
       if (!replacement) continue;
 
-      let bestIdx = -1;
-      let bestScore = 0;
-      for (let i = 0; i < slots.length; i += 1) {
-        if (slots[i].replaced) continue;
-        const score = this.similarity(slots[i].text, replacement);
-        if (score > bestScore) {
-          bestScore = score;
-          bestIdx = i;
+      let bestIdx = this.findExactSlot(slots, acc.originalBullet);
+
+      if (bestIdx < 0) {
+        let bestScore = 0;
+        for (let i = 0; i < slots.length; i += 1) {
+          if (slots[i].replaced) continue;
+          const score = this.similarity(slots[i].text, acc.originalBullet || replacement);
+          if (score > bestScore) {
+            bestScore = score;
+            bestIdx = i;
+          }
         }
+        if (bestScore < 0.2) bestIdx = -1;
       }
 
-      if (bestIdx >= 0 && bestScore >= 0.2) {
+      if (bestIdx >= 0) {
         slots[bestIdx] = { text: replacement, replaced: true };
       } else {
         extras.push(replacement);
@@ -444,6 +425,25 @@ export class CvDocumentService {
     }
 
     return [...slots.map((s) => s.text), ...extras];
+  }
+
+  /**
+   * Find the (unreplaced) slot whose text is the same bullet as
+   * `originalBullet`, comparing on alphanumerics only. Returns -1 when
+   * there's no confident exact match.
+   */
+  private static findExactSlot(
+    slots: Array<{ text: string; replaced: boolean }>,
+    originalBullet?: string
+  ): number {
+    const target = (originalBullet || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!target) return -1;
+    for (let i = 0; i < slots.length; i += 1) {
+      if (slots[i].replaced) continue;
+      const slot = slots[i].text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (slot === target) return i;
+    }
+    return -1;
   }
 
   /** Whether two texts refer to the same experience description. */

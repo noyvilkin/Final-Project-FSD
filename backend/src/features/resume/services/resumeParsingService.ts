@@ -38,6 +38,7 @@ export interface ParsedDNA {
     category: 'technical' | 'soft' | 'tool' | 'language';
     proficiencyLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
     yearsOfExperience?: number;
+    inSkillsSection?: boolean;
   }>;
   experience: Array<{
     company: string;
@@ -219,6 +220,7 @@ export class ResumeParsingService {
             ? s.proficiencyLevel
             : 'intermediate') as 'beginner' | 'intermediate' | 'advanced' | 'expert',
           yearsOfExperience: s.yearsOfExperience != null ? Number(s.yearsOfExperience) : undefined,
+          inSkillsSection: s.inSkillsSection != null ? Boolean(s.inSkillsSection) : undefined,
         })),
         experience: (parsed.experience ?? []).map((e: Record<string, unknown>) => ({
           company: String(e.company ?? 'Unknown'),

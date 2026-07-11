@@ -48,7 +48,8 @@ Return a JSON object with this exact schema:
       "name": "<skill name>",
       "category": "<technical | tool | soft | language>",
       "proficiencyLevel": "<beginner | intermediate | advanced | expert>",
-      "yearsOfExperience": <number or null>
+      "yearsOfExperience": <number or null>,
+      "inSkillsSection": <boolean — true ONLY if this skill is explicitly listed in a dedicated skills/technologies/tech-stack section of the resume; false if it is only mentioned inside an experience bullet, the summary, or elsewhere>
     }
   ],
   "experience": [
@@ -88,6 +89,7 @@ Return a JSON object with this exact schema:
 
 Guidelines:
 - Include ALL skills mentioned anywhere in the resume (summary, experience bullets, skills section), but ONLY using terms that are literally present in the text — never invent a skill label to summarize an activity (see rule 2).
+- Set "inSkillsSection" to true ONLY for skills that appear in an explicit, dedicated skills-type section of the resume (commonly titled "Skills", "Technical Skills", "Technologies", "Tech Stack", "Tools", "Core Competencies", or similar). If a skill only appears inside an experience bullet, the About Me/summary, or education, set it to false. This flag must reflect the resume's actual layout — do not mark a skill true just because it is important.
 - For proficiencyLevel, use: expert (5+ years or senior-level usage), advanced (3-5 years), intermediate (1-3 years), beginner (<1 year or just mentioned).
 - Order experience entries from most recent to oldest.
 - If a skill appears in the skills section AND in experience bullets, include it once in the skills array.

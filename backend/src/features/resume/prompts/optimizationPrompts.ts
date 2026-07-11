@@ -1,6 +1,7 @@
 import type { ResumeOptimizationPayload } from '../types/resumeOptimization.types.js';
+import { splitBullets } from '../utils/bulletText.js';
 
-export const PROMPT_VERSION = 'v2' as const;
+export const PROMPT_VERSION = 'v3' as const;
 export const PROMPT_RELEASE_DATE = '2026-07-11';
 
 export const SYSTEM_INSTRUCTION = `You are an expert ATS (Applicant Tracking System) resume optimizer (Prompt ${PROMPT_VERSION}, released ${PROMPT_RELEASE_DATE}).
@@ -28,15 +29,19 @@ Output contract:
 export function buildOptimizationUserMessage(payload: ResumeOptimizationPayload): string {
   const { normalizedJD, extractedKeywords, professionalDNA, alignment } = payload;
 
-  const experienceBullets = professionalDNA.experience.map((exp, i) => ({
-    index: i,
-    company: exp.company,
-    role: exp.role,
-    startDate: exp.startDate,
-    endDate: exp.endDate ?? 'Present',
-    bullet: exp.description || `Worked as ${exp.role} at ${exp.company}`,
-    extractedSkills: exp.extractedSkills,
-  }));
+  // Break every job's description into its individual bullet points so
+  // each one is rewritten on its own — never as a single condensed
+  // paragraph. `experienceIndex` ties each bullet back to its job.
+  const experienceBullets = professionalDNA.experience.flatMap((exp, i) => {
+    const bullets = splitBullets(exp.description || '');
+    return bullets.map((bullet) => ({
+      experienceIndex: i,
+      company: exp.company,
+      role: exp.role,
+      bullet,
+      extractedSkills: exp.extractedSkills,
+    }));
+  });
 
   return `## Job Description (Target)
 """
@@ -57,6 +62,7 @@ Matching Skills (safe to emphasize): ${alignment.matchingSkills.join(', ') || 'N
 Missing Skills (GAPS — DO NOT weave these into bullets or keywordsUsed; they are not part of the candidate's experience): ${alignment.missingSkills.join(', ') || 'None'}
 
 ## Experience Bullets to Optimize
+Each item below is ONE individual bullet point. Treat and rewrite each bullet on its own — never merge several bullets into one, and never condense a whole job into a single line.
 ${JSON.stringify(experienceBullets, null, 2)}
 
 ## Required JSON Output
@@ -65,9 +71,9 @@ Return a JSON object with this exact schema:
 {
   "optimizedBullets": [
     {
-      "index": <number — matches the experience bullet index above>,
-      "originalBullet": "<the original bullet text>",
-      "optimizedBullet": "<rewritten bullet using JD keywords>",
+      "experienceIndex": <number — the experienceIndex of the bullet you rewrote, copied verbatim from the item above>,
+      "originalBullet": "<the original bullet text, copied verbatim from the item above>",
+      "optimizedBullet": "<rewritten version of that single bullet>",
       "explanation": "<1-2 sentences: why this change helps for ATS matching>",
       "confidenceScore": <number 0.0-1.0: how well the candidate's original data supports this rewrite>,
       "keywordsUsed": ["<JD keywords woven into this bullet>"]
@@ -83,8 +89,12 @@ Scoring guide for confidenceScore:
 - Below 0.5: Very thin support — rewrite is borderline; user should verify.
 
 Rules:
-- One entry per experience bullet provided above.
-- If a bullet cannot be meaningfully improved, return it unchanged with confidenceScore: 1.0 and explanation: "Already well-optimized for ATS."
+- Produce AT MOST one entry per input bullet, and rewrite each bullet independently.
+- BE CONSERVATIVE AND SELECTIVE. Do NOT rewrite a bullet unless doing so incorporates at least one JD keyword/phrase that the original bullet does NOT already contain, and that the candidate genuinely supports. In other words, every suggestion you return MUST add real ATS keyword value.
+- Purely cosmetic changes are FORBIDDEN as suggestions: do NOT return a rewrite whose only difference is reworded phrasing, reordered words, swapped synonyms, or a fancier action verb when no NEW JD keyword was added. Those are noise — OMIT them.
+- If a bullet already covers its relevant JD keywords, or you would only be restyling it, OMIT it entirely. An empty "optimizedBullets" array is a valid and correct answer, and returning only 1-2 high-value rewrites is far better than rewriting every bullet.
+- Do NOT return a rewrite that is identical (or trivially identical) to the original.
+- "originalBullet" and "experienceIndex" MUST be copied exactly from the corresponding input item so each rewrite maps back to its source bullet.
 - Do NOT invent experiences. Only rephrase using JD vocabulary the candidate genuinely supports.
 - Every entry in "keywordsUsed" MUST be traceable to that bullet's original text or the candidate's skills above. Never list a keyword from the "Missing Skills (gaps)" section.
 - It is better to leave "keywordsUsed" empty than to include a keyword the candidate cannot back up.`;

@@ -107,8 +107,19 @@ export class GeminiOptimizationService {
         throw new Error('Missing optimizedBullets array in response');
       }
 
+      const validated = parsed.optimizedBullets
+        .map(this.validateBullet)
+        // Only keep suggestions that (a) actually change the bullet and
+        // (b) add real ATS value — i.e. weave in a JD keyword the original
+        // bullet didn't already have. This drops the cosmetic / "stiff"
+        // rephrasings that add no keyword coverage and just feel spammy.
+        .filter(
+          (b: GeminiOptimizedBullet) =>
+            this.isMeaningfulRewrite(b) && this.addsNewKeyword(b)
+        );
+
       return {
-        optimizedBullets: parsed.optimizedBullets.map(this.validateBullet),
+        optimizedBullets: validated,
         generalAdvice: String(parsed.generalAdvice ?? ''),
       };
     } catch (err) {
@@ -129,8 +140,11 @@ export class GeminiOptimizationService {
   }
 
   private static validateBullet(b: Record<string, unknown>): GeminiOptimizedBullet {
+    // `experienceIndex` is the new field name; fall back to the legacy
+    // `index` so responses/runs from the previous prompt still parse.
+    const experienceIndex = Number(b.experienceIndex ?? b.index) || 0;
     return {
-      index: Number(b.index) || 0,
+      experienceIndex,
       originalBullet: String(b.originalBullet ?? ''),
       optimizedBullet: GeminiOptimizationService.stripMarkdown(String(b.optimizedBullet ?? '')),
       explanation: String(b.explanation ?? ''),
@@ -139,18 +153,54 @@ export class GeminiOptimizationService {
     };
   }
 
+  /**
+   * A rewrite is only worth surfacing if it is non-empty and differs
+   * meaningfully from the original bullet (ignoring case, punctuation
+   * and whitespace). This backstops the prompt's "omit unchanged bullets"
+   * instruction so no no-op suggestions reach the UI.
+   */
+  private static isMeaningfulRewrite(b: GeminiOptimizedBullet): boolean {
+    const optimized = b.optimizedBullet.trim();
+    if (!optimized) return false;
+
+    return this.normalizeText(optimized) !== this.normalizeText(b.originalBullet);
+  }
+
+  /**
+   * True only when the rewrite introduces at least one JD keyword that the
+   * original bullet did not already contain. A rewrite that adds no new
+   * keyword is cosmetic (reworded/reordered/synonym-swapped) and is not
+   * worth surfacing — this is what keeps the suggestions from feeling
+   * spammy when every bullet is optimized individually.
+   */
+  private static addsNewKeyword(b: GeminiOptimizedBullet): boolean {
+    if (b.keywordsUsed.length === 0) return false;
+
+    const original = ` ${this.normalizeText(b.originalBullet)} `;
+    return b.keywordsUsed.some((kw) => {
+      const k = this.normalizeText(kw);
+      return k.length > 0 && !original.includes(` ${k} `);
+    });
+  }
+
+  private static normalizeText(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
   // ── Adapter Pattern: Gemini response → UI state ─────────────────
 
   private static adaptToUI(
     response: GeminiOptimizationResponse,
     payload: ResumeOptimizationPayload
   ): OptimizedBulletUI[] {
-    return response.optimizedBullets.map((bullet) => {
-      const experience = payload.professionalDNA.experience[bullet.index];
+    return response.optimizedBullets.map((bullet, i) => {
+      const experience = payload.professionalDNA.experience[bullet.experienceIndex];
 
       return {
-        id: `bullet-${bullet.index}-${Date.now()}`,
-        index: bullet.index,
+        // Several bullets can share the same experienceIndex, so include
+        // the position `i` to keep every UI id unique.
+        id: `bullet-${bullet.experienceIndex}-${i}-${Date.now()}`,
+        index: bullet.experienceIndex,
         company: experience?.company ?? 'Unknown',
         role: experience?.role ?? 'Unknown',
         originalBullet: bullet.originalBullet,
