@@ -1,7 +1,7 @@
 import { AssignmentFeedback, type IAssignmentFeedback } from '../models/assignmentFeedback.model.js';
 import { appLogger } from '../../../common/services/logger.js';
 import { Types } from 'mongoose';
-import { fetchBlobAsBuffer } from '../../../common/services/s3Upload.js';
+import { fetchBlobAsBuffer, deleteBlob } from '../../../common/services/s3Upload.js';
 import { AssignmentAnalysisService } from './assignmentAnalysisService.js';
 import { AIAnalysisService } from './aiAnalysisService.js';
 import { ZipProcessor } from '../../../common/utils/zipProcessor.js';
@@ -213,14 +213,39 @@ export class AssignmentService {
   }
 
   /**
-   * Get all assignments for a user with pagination
+   * Fields returned for the history list. Heavy metadata (source code content,
+   * extracted requirements, detailed feedback) is intentionally excluded so the
+   * list payload stays small.
+   */
+  private static readonly LIST_PROJECTION = [
+    'status',
+    'requirementsFileKey',
+    'solutionFileKey',
+    'userNotes',
+    'aiFeedback.overall',
+    'metadata.detectedLanguage',
+    'metadata.detectedFrameworks',
+    'metadata.projectScope',
+    'metadata.totalFiles',
+    'metadata.totalLines',
+    'createdAt',
+    'updatedAt'
+  ].join(' ');
+
+  /**
+   * Get all assignments for a user with pagination (slim projection for lists)
    */
   static async getUserAssignments(
     userId: string,
     limit: number = 10,
     offset: number = 0
   ): Promise<IAssignmentFeedback[]> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return [];
+    }
+
     return AssignmentFeedback.find({ userId })
+      .select(AssignmentService.LIST_PROJECTION)
       .sort({ createdAt: -1 })
       .select('userId status requirementsFileKey solutionFileKey userNotes metadata feedback createdAt updatedAt')
       .limit(limit)
@@ -233,6 +258,57 @@ export class AssignmentService {
    */
   static async countUserAssignments(userId: string): Promise<number> {
     return AssignmentFeedback.countDocuments({ userId });
+  }
+
+  /**
+   * Count all assignments for a user
+   */
+  static async countUserAssignments(userId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return 0;
+    }
+
+    return AssignmentFeedback.countDocuments({ userId });
+  }
+
+  /**
+   * Delete an assignment (verifying ownership) and clean up its S3 objects.
+   * Returns true when a document was found and deleted, false otherwise.
+   */
+  static async deleteAssignment(
+    assignmentId: string,
+    userId: string
+  ): Promise<boolean> {
+    if (!Types.ObjectId.isValid(assignmentId) || !Types.ObjectId.isValid(userId)) {
+      return false;
+    }
+
+    const deleted = await AssignmentFeedback.findOneAndDelete({
+      _id: assignmentId,
+      userId
+    });
+
+    if (!deleted) {
+      return false;
+    }
+
+    const keys = [deleted.requirementsFileKey, deleted.solutionFileKey].filter(
+      (key): key is string => typeof key === 'string' && key.length > 0
+    );
+
+    for (const key of keys) {
+      try {
+        await deleteBlob(key);
+      } catch (error) {
+        appLogger.warn('Failed to delete assignment blob (orphan possible)', {
+          assignmentId,
+          key,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    return true;
   }
 
   /**

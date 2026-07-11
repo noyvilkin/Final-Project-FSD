@@ -32,6 +32,13 @@ const FINAL_PACKAGE_COOLDOWN_MS = Number(process.env.SEMANTIC_AUDIT_FINAL_PACKAG
 // Easy → hard, good package last (calmer rate-limit window for the final score).
 const RUN_ORDER = ['pkg-01', 'pkg-04', 'pkg-05', 'pkg-02', 'pkg-03', 'pkg-06'];
 
+// Optional subset filter, e.g. EVAL_ONLY=pkg-03,pkg-06 runs just those two packages.
+// Useful for re-checking specific packages without spending quota on the whole suite.
+const ONLY_PACKAGES = (process.env.EVAL_ONLY || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 // ── Pretty printing ─────────────────────────────────────────────────
 
 function header(text: string) {
@@ -289,6 +296,7 @@ interface FullEvalReport {
     totalNonSourceFiles: number;
     totalLeaked: number;
     goodPackageFalsePositive: boolean;
+    goodPackageError: boolean;
   };
 }
 
@@ -316,8 +324,13 @@ async function main() {
   console.log(`  Cooldown / package: ${PACKAGE_COOLDOWN_MS}ms (final: ${FINAL_PACKAGE_COOLDOWN_MS}ms)`);
 
   const orderedFixtures = RUN_ORDER
+    .filter((id) => ONLY_PACKAGES.length === 0 || ONLY_PACKAGES.includes(id))
     .map((id) => PACKAGE_FIXTURES.find((f) => f.id === id))
     .filter((f): f is PackageFixture => Boolean(f));
+
+  if (ONLY_PACKAGES.length > 0) {
+    console.log(`  Filter (EVAL_ONLY) : ${orderedFixtures.map((f) => f.id).join(', ') || '(none matched)'}`);
+  }
 
   const rows: PackageEvalRow[] = [];
   for (let i = 0; i < orderedFixtures.length; i++) {
@@ -388,7 +401,10 @@ async function main() {
   const overallNoiseReductionRate =
     totalToFilter === 0 ? 1 : (totalToFilter - totalLeaked) / totalToFilter;
 
-  const goodFalsePositive = good
+  // An infra/parse error on the good package is NOT a grading false positive —
+  // track it separately so a malformed response doesn't masquerade as a specificity miss.
+  const goodPackageError = good ? Boolean(good.error || !good.calibration) : false;
+  const goodFalsePositive = good && !goodPackageError
     ? !(good.calibration?.functionalInRange && good.calibration?.gradeMatches)
     : false;
 
@@ -404,14 +420,18 @@ async function main() {
   console.log(`  Secondary detections (bonus) : ${secondaryDetections} / ${faulty.length}`);
   console.log(`  Noise reduction (overall)    : ${(overallNoiseReductionRate * 100).toFixed(1)}%  (${totalToFilter - totalLeaked}/${totalToFilter} non-source files filtered)`);
   console.log(`  False positive on pkg-06     : ${goodFalsePositive ? 'YES' : 'no'}`);
+  if (goodPackageError) {
+    console.log(`  pkg-06 status                : ERROR (not graded) — ${good?.error}`);
+  }
 
-  if (detectionRate >= 1 && overallNoiseReductionRate >= 1 && !goodFalsePositive) {
+  if (detectionRate >= 1 && overallNoiseReductionRate >= 1 && !goodFalsePositive && !goodPackageError) {
     console.log(`\n  REQUIREMENT MET: 100% violation detection, 100% noise reduction, no false positives.`);
   } else {
     const missed = faulty.filter((r) => !r.detection?.primaryDetected).map((r) => r.fixture.id);
     if (missed.length > 0) console.log(`\n  REQUIREMENT NOT MET — missed violations on: ${missed.join(', ')}`);
     if (overallNoiseReductionRate < 1) console.log(`  REQUIREMENT NOT MET — ${totalLeaked} non-source files leaked through ZipProcessor.`);
     if (goodFalsePositive) console.log(`  REQUIREMENT NOT MET — pkg-06 was incorrectly flagged.`);
+    if (goodPackageError) console.log(`  INCONCLUSIVE — pkg-06 errored before grading (not a false positive); see error above.`);
   }
 
   const report: FullEvalReport = {
@@ -438,6 +458,7 @@ async function main() {
       totalNonSourceFiles,
       totalLeaked,
       goodPackageFalsePositive: goodFalsePositive,
+      goodPackageError,
     },
   };
 

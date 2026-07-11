@@ -1,4 +1,7 @@
 import "dotenv/config";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Express } from "express";
@@ -26,6 +29,7 @@ app.use(
       "http://localhost:5173",
       "http://localhost:5174",
       "http://localhost:3000",
+      "https://skillup.cs.colman.ac.il",
     ],
     credentials: true,
   })
@@ -34,7 +38,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 const helmetMiddleware = helmet as unknown as (...args: unknown[]) => RequestHandler;
-app.use(helmetMiddleware());
+app.use(
+  helmetMiddleware({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        scriptSrc: ["'self'", "https://accounts.google.com/gsi/client"],
+        connectSrc: ["'self'", "https://accounts.google.com/gsi/"],
+        frameSrc: ["'self'", "https://accounts.google.com/gsi/"],
+        imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
+      },
+    },
+  })
+);
 app.use(requestId);
 app.use(responseTime({ slowThresholdMs: 1000 }));
 app.use(logger);
@@ -53,6 +69,16 @@ app.use("/api/resume", resumeOptimizationRoutes);
 app.use("/api/profile-analysis", profileAnalysisRoutes);
 app.use("/api/interviews", mediaUploadRoutes);
 app.use("/api/interviews", interviewRoutes);
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const clientDistPath = path.resolve(currentDir, "../../frontend/dist");
+
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get(/^\/(?!api\/).*/, (_req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
+}
 
 app.use(errorHandler);
 

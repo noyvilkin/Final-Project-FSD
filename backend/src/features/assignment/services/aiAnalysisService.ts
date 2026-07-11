@@ -37,6 +37,62 @@ export interface AIAnalysisResult {
   error?: string;
 }
 
+/**
+ * OpenAPI-subset schema handed to Gemini (`responseSchema`) so the model is
+ * constrained to emit schema-valid JSON. This eliminates the ad-hoc parse
+ * failures we previously saw on longer responses (e.g. the clean solution).
+ */
+const ANALYSIS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    codeQuality: {
+      type: 'object',
+      properties: {
+        score: { type: 'integer' },
+        strengths: { type: 'array', items: { type: 'string' } },
+        weaknesses: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['score', 'strengths', 'weaknesses'],
+      propertyOrdering: ['score', 'strengths', 'weaknesses'],
+    },
+    functionalCorrectness: {
+      type: 'object',
+      properties: {
+        score: { type: 'integer' },
+        meetsRequirements: { type: 'boolean' },
+        missingFeatures: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['score', 'meetsRequirements', 'missingFeatures'],
+      propertyOrdering: ['score', 'meetsRequirements', 'missingFeatures'],
+    },
+    bestPractices: {
+      type: 'object',
+      properties: {
+        score: { type: 'integer' },
+        followsConventions: { type: 'boolean' },
+        suggestions: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['score', 'followsConventions', 'suggestions'],
+      propertyOrdering: ['score', 'followsConventions', 'suggestions'],
+    },
+    overall: {
+      type: 'object',
+      properties: {
+        score: { type: 'integer' },
+        grade: {
+          type: 'string',
+          enum: ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'F'],
+        },
+        summary: { type: 'string' },
+      },
+      required: ['score', 'grade', 'summary'],
+      propertyOrdering: ['score', 'grade', 'summary'],
+    },
+  },
+  required: ['codeQuality', 'functionalCorrectness', 'bestPractices', 'overall'],
+  propertyOrdering: ['codeQuality', 'functionalCorrectness', 'bestPractices', 'overall'],
+} as const;
+
 export class AIAnalysisService {
   private static geminiClient: GeminiClient | null = null;
 
@@ -50,11 +106,15 @@ export class AIAnalysisService {
       this.geminiClient = new GeminiClient({
         apiKey,
         model: 'gemini-2.5-flash',
-        temperature: 0.3,
-        maxOutputTokens: 3072,
+        temperature: 0,        // Grading must be reproducible — no sampling variance.
+        maxOutputTokens: 4096, // Headroom so structured JSON is never truncated.
         rateLimiter: {
-          requestsPerMinute: 8,  // Conservative limit
-          requestsPerDay: 1200   // Conservative daily limit
+          // Google free tier for gemini-2.5-flash (per GCP project, NOT per API key).
+          // Official: 10 RPM / 250 RPD. NOTE: since Dec 2025 some accounts are silently
+          // throttled to ~20 RPD — if you keep seeing 429s, check AI Studio → Rate Limits
+          // and lower requestsPerDay to match. RPD resets at midnight US Pacific.
+          requestsPerMinute: 10,
+          requestsPerDay: 250
         }
       });
     }
@@ -91,8 +151,14 @@ export class AIAnalysisService {
       requirementsFileKey: assignment.requirementsFileKey,
     } as any;
     
-    // Extract requirements text (if available)
-    const requirements = metadata.requirements || 'No specific requirements provided';
+    // Extract requirements text (if available). The upload pipeline stores the
+    // extracted assignment description under `extractedRequirements`, while the
+    // eval harness sets `requirements` directly — support both so the AI always
+    // grades against the stated requirements.
+    const requirements =
+      metadata.requirements ||
+      metadata.extractedRequirements ||
+      'No specific requirements provided';
     
     // Consolidate source code
     const sourceCode = this.consolidateSourceCode(metadata);
@@ -189,31 +255,46 @@ export class AIAnalysisService {
     const geminiPayload: GeminiPayload = {
       system_instruction: {
         parts: [{
-          text: `You are a strict university professor grading programming assignments. 
-                 Provide honest, critical evaluation. Do NOT be lenient.
-                 When requirements are ignored or core features are missing, assign low scores.
-                 Intentional deviations from specifications result in failing grades.
-                 Always respond with valid JSON only, no markdown code blocks or extra text.`
+          text: `You are an experienced, fair university professor grading programming assignments.
+                 Be honest and critical, but grade PROPORTIONALLY: the penalty must match the
+                 severity of the problem. A submission that works and meets most requirements but
+                 misses one secondary feature is NOT a failing submission. Reserve failing grades
+                 for work that ignores a CORE requirement or does not function.
+                 Score the three dimensions (codeQuality, functionalCorrectness, bestPractices)
+                 INDEPENDENTLY. Respond with a single JSON object that matches the provided schema.`
         }]
       },
       contents: [{
         role: 'user',
         parts: [{ text: this.buildAnalysisPrompt(payload) }]
-      }]
+      }],
+      generationConfig: {
+        responseSchema: ANALYSIS_RESPONSE_SCHEMA,
+      },
     };
 
     const client = this.getGeminiClient();
-    const rawResponse = await client.generate(geminiPayload);
 
+    // First attempt.
+    let rawResponse = await client.generate(geminiPayload);
     appLogger.info("[AIAnalysisService] Raw AI response received", {
       assignmentId,
       responseLength: rawResponse.length,
       responsePreview: rawResponse.substring(0, 200)
     });
 
-    const feedback = this.parseAIResponse(rawResponse);
+    let feedback = this.tryParseAIResponse(rawResponse);
 
-    if (feedback && feedback.overall.score === 0 && feedback.overall.summary.includes('failed')) {
+    // Single retry on parse failure. With responseSchema enforced this should be
+    // rare, but a retry guards against a transient malformed response counting as
+    // a false negative/positive downstream.
+    if (!feedback) {
+      appLogger.warn("[AIAnalysisService] Parse failed, retrying once", { assignmentId });
+      rawResponse = await client.generate(geminiPayload);
+      feedback = this.tryParseAIResponse(rawResponse);
+    }
+
+    if (!feedback) {
       appLogger.error("[AIAnalysisService] AI response parsing failed", {
         assignmentId,
         rawResponse: rawResponse.substring(0, 1000)
@@ -221,7 +302,6 @@ export class AIAnalysisService {
       return {
         success: false,
         error: `Failed to parse AI response. Raw: ${rawResponse.substring(0, 500)}`,
-        feedback
       };
     }
 
@@ -427,20 +507,70 @@ export class AIAnalysisService {
    */
   private static buildAnalysisPrompt(payload: UnifiedAnalysisPayload): string {
     return `
-You are a strict university professor grading programming assignments. Provide honest, critical evaluation.
+Grade the following programming assignment honestly and PROPORTIONALLY.
 
-**GRADING CRITERIA (0-100 scale):**
-- 90-100: Excellent - Meets ALL requirements, no significant issues
-- 80-89: Good - Meets most requirements, minor issues only
-- 70-79: Satisfactory - Meets basic requirements, several issues
-- 60-69: Passing - Missing requirements, significant issues
-- Below 60: Failing - Does not meet requirements, critical issues
+**STEP 1 — Enumerate the requirements.**
+From the assignment text, list every EXPLICIT requirement. For each, decide whether the
+submission MET it, PARTIALLY met it, or did NOT meet it. Base this only on the code provided.
 
-**IMPORTANT - Penalize heavily for:**
-- Intentional deviations from stated requirements
-- Missing core functionality (persistence, error handling, validation)
-- No tests or documentation
-- Ignoring assignment specifications
+**STEP 2 — Score functionalCorrectness from requirement coverage.**
+functionalCorrectness.score ≈ 100 * (met + 0.5 * partial) / total, then adjust by the
+severity of any gap using the tiers below. Set meetsRequirements=true only if every CORE
+requirement is met.
+
+**CRITICAL — Do NOT invent requirements.**
+Judge functionalCorrectness ONLY against requirements that are EXPLICITLY stated in the
+assignment. Do NOT lower functionalCorrectness for things the assignment never asked for
+(e.g. password hashing, input validation, rate limiting, a README, extra error handling,
+file/module splitting). If every explicit requirement is met, functionalCorrectness must be
+HIGH (85–100) and meetsRequirements=true, even if you can think of security or robustness
+improvements. Put those unrequested improvements in bestPractices.suggestions only — they are
+MINOR and must never, on their own, push the overall grade below C.
+
+A requirement is MET when the named mechanism is present and wired up — even if simplified.
+Example: a "JWT authentication" requirement is MET when the code signs a JWT and verifies it in
+middleware on protected routes; do NOT mark it unmet or partial merely because the login is a
+mock, hardcodes the user, or skips password/credential verification, unless the assignment text
+EXPLICITLY requires password verification. Treat such simplifications as bestPractices.suggestions,
+not as missingFeatures.
+
+**SEVERITY TIERS (match the penalty to the problem — do NOT fail everything):**
+- CRITICAL deviation — wrong architecture or stack, or a non-functional app
+  (e.g. GraphQL when REST was required, SQLite when PostgreSQL was required,
+  no authentication where auth is a core requirement):
+  functionalCorrectness 10–45, overall grade F–D.
+- MODERATE gap — the app works and meets MOST requirements, but one secondary
+  requirement is missing or wrong (e.g. no unit tests, one missing endpoint such
+  as /health, weak input validation):
+  functionalCorrectness 55–80, overall grade C–B. Do NOT assign F for a single
+  missing secondary feature on otherwise-correct, working code.
+- MINOR issues only — style, naming, documentation, small refactors:
+  functionalCorrectness 80–100, overall grade A–B.
+
+**SCORE THE THREE DIMENSIONS INDEPENDENTLY:**
+- codeQuality: ONLY the craftsmanship of the code that IS present (structure, readability,
+  naming, error handling). A missing requirement must NOT drag this down — judge the code
+  that exists. Clean, working code that simply omits one feature is still high codeQuality (75–90).
+- functionalCorrectness: requirement coverage, per STEP 2.
+- bestPractices: conventions, security, validation, tests, documentation.
+
+**OVERALL SCORE = weighted blend (requirement coverage dominates):**
+- overall.score ≈ 0.45 * functionalCorrectness + 0.35 * codeQuality + 0.20 * bestPractices.
+- bestPractices is the LIGHTEST factor — unrequested improvements should not sink the grade.
+
+**GRADE MUST MATCH THE OVERALL SCORE:**
+- 90–100 → A    80–89 → B    70–79 → C    60–69 → D    below 60 → F
+- The letter grade MUST be consistent with overall.score (do not output grade "F" with a score of 70).
+
+**CALIBRATION EXAMPLES:**
+- A working REST API that omits unit tests → codeQuality ~80, functionalCorrectness ~70,
+  bestPractices ~55, overall ~71, grade C.
+- A working API missing only the /health endpoint → codeQuality ~85, functionalCorrectness ~60,
+  bestPractices ~70, overall ~71, grade C.
+- An app that uses the wrong framework/database entirely → codeQuality ~50,
+  functionalCorrectness ~10, bestPractices ~40, overall ~30, grade F.
+- A clean app that meets ALL explicit requirements (even with minor unrequested security/validation
+  nits) → codeQuality ~85, functionalCorrectness ~90, bestPractices ~70, overall ~83, grade A/B.
 
 **Assignment Requirements:**
 ${payload.requirements}
@@ -454,105 +584,117 @@ ${payload.sourceCode}
 - Total Files: ${payload.metadata.totalFiles || 0}
 - Total Lines: ${payload.metadata.totalLines || 0}
 
-**Required JSON Response Format (respond ONLY with valid JSON, no other text):**
-{
-  "codeQuality": {
-    "score": 60,
-    "strengths": ["List actual strengths"],
-    "weaknesses": ["List significant weaknesses"]
-  },
-  "functionalCorrectness": {
-    "score": 50,
-    "meetsRequirements": false,
-    "missingFeatures": ["List missing required features"]
-  },
-  "bestPractices": {
-    "score": 55,
-    "followsConventions": false,
-    "suggestions": ["Concrete improvements needed"]
-  },
-  "overall": {
-    "score": 55,
-    "grade": "F",
-    "summary": "Honest assessment: What's wrong and what needs fixing."
-  }
-}
-
-Grade strictly. Do NOT be generous with intentional deviations from specifications. Failing grades reflect work that ignores requirements.
+**Output rules:**
+- Respond with a single JSON object matching the required schema. No markdown, no commentary.
+- Each array (strengths, weaknesses, missingFeatures, suggestions) must contain AT MOST 4 items,
+  each a short sentence (≤ 200 characters). Do not use double quotes inside string values.
+- summary: 1–3 sentences naming the most important issue(s) and the resulting grade.
     `.trim();
   }
 
   /**
-   * Parses the AI response into structured feedback (public for reuse in POC/tests)
+   * Extracts a JSON object string from a raw model response and attempts light
+   * repair (strip code fences / trailing commas / control chars) before parsing.
+   * Returns the parsed object, or null if it cannot be recovered.
+   */
+  private static extractJsonObject(rawResponse: string): any | null {
+    // Strip markdown code fences if the model ignored the "no markdown" instruction.
+    let cleaned = rawResponse.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+
+    // Grab the outermost {...} block.
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    const candidate = match ? match[0] : cleaned;
+
+    const attempts = [
+      candidate,
+      // Remove trailing commas before } or ] and strip stray control chars.
+      candidate.replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' '),
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        return JSON.parse(attempt);
+      } catch {
+        // try next repair
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Parses the AI response into structured feedback, or returns null if the
+   * response is not valid/recoverable JSON. Callers can use null to trigger a retry.
+   */
+  public static tryParseAIResponse(rawResponse: string): AIAnalysisResult['feedback'] | null {
+    const parsed = this.extractJsonObject(rawResponse);
+
+    if (
+      !parsed ||
+      !parsed.codeQuality ||
+      !parsed.functionalCorrectness ||
+      !parsed.bestPractices ||
+      !parsed.overall
+    ) {
+      appLogger.error("[AIAnalysisService] Failed to parse AI response", {
+        rawResponse: rawResponse.substring(0, 500),
+      });
+      return null;
+    }
+
+    return {
+      codeQuality: {
+        score: Number(parsed.codeQuality?.score) || 0,
+        strengths: Array.isArray(parsed.codeQuality?.strengths) ? parsed.codeQuality.strengths : [],
+        weaknesses: Array.isArray(parsed.codeQuality?.weaknesses) ? parsed.codeQuality.weaknesses : []
+      },
+      functionalCorrectness: {
+        score: Number(parsed.functionalCorrectness?.score) || 0,
+        meetsRequirements: Boolean(parsed.functionalCorrectness?.meetsRequirements),
+        missingFeatures: Array.isArray(parsed.functionalCorrectness?.missingFeatures) ? parsed.functionalCorrectness.missingFeatures : []
+      },
+      bestPractices: {
+        score: Number(parsed.bestPractices?.score) || 0,
+        followsConventions: Boolean(parsed.bestPractices?.followsConventions),
+        suggestions: Array.isArray(parsed.bestPractices?.suggestions) ? parsed.bestPractices.suggestions : []
+      },
+      overall: {
+        score: Number(parsed.overall?.score) || 0,
+        grade: String(parsed.overall?.grade) || 'F',
+        summary: String(parsed.overall?.summary) || 'No summary provided'
+      }
+    };
+  }
+
+  /**
+   * Parses the AI response into structured feedback (public for reuse in POC/tests).
+   * Falls back to a default "parsing failed" structure when the response is unrecoverable.
    */
   public static parseAIResponse(rawResponse: string): AIAnalysisResult['feedback'] {
-    try {
-      // Remove markdown code blocks if present
-      let cleanedResponse = rawResponse;
-      
-      // Remove ```json and ``` markers
-      cleanedResponse = cleanedResponse.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
-      
-      // Extract JSON from the response (in case there's extra text)
-      const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-      const jsonText = jsonMatch ? jsonMatch[0] : cleanedResponse;
-      
-      const parsed = JSON.parse(jsonText);
-      
-      // Validate the structure and add defaults for missing fields
-      return {
-        codeQuality: {
-          score: Number(parsed.codeQuality?.score) || 0,
-          strengths: Array.isArray(parsed.codeQuality?.strengths) ? parsed.codeQuality.strengths : [],
-          weaknesses: Array.isArray(parsed.codeQuality?.weaknesses) ? parsed.codeQuality.weaknesses : []
-        },
-        functionalCorrectness: {
-          score: Number(parsed.functionalCorrectness?.score) || 0,
-          meetsRequirements: Boolean(parsed.functionalCorrectness?.meetsRequirements),
-          missingFeatures: Array.isArray(parsed.functionalCorrectness?.missingFeatures) ? parsed.functionalCorrectness.missingFeatures : []
-        },
-        bestPractices: {
-          score: Number(parsed.bestPractices?.score) || 0,
-          followsConventions: Boolean(parsed.bestPractices?.followsConventions),
-          suggestions: Array.isArray(parsed.bestPractices?.suggestions) ? parsed.bestPractices.suggestions : []
-        },
-        overall: {
-          score: Number(parsed.overall?.score) || 0,
-          grade: String(parsed.overall?.grade) || 'F',
-          summary: String(parsed.overall?.summary) || 'No summary provided'
-        }
-      };
+    const feedback = this.tryParseAIResponse(rawResponse);
+    if (feedback) return feedback;
 
-    } catch (error) {
-      appLogger.error("[AIAnalysisService] Failed to parse AI response", { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        rawResponse: rawResponse.substring(0, 500) 
-      });
-
-      // Return default feedback structure
-      return {
-        codeQuality: {
-          score: 0,
-          strengths: [],
-          weaknesses: ['Failed to parse AI analysis']
-        },
-        functionalCorrectness: {
-          score: 0,
-          meetsRequirements: false,
-          missingFeatures: ['Analysis parsing failed']
-        },
-        bestPractices: {
-          score: 0,
-          followsConventions: false,
-          suggestions: ['Unable to provide suggestions due to parsing error']
-        },
-        overall: {
-          score: 0,
-          grade: 'F',
-          summary: 'AI analysis failed to complete successfully'
-        }
-      };
-    }
+    return {
+      codeQuality: {
+        score: 0,
+        strengths: [],
+        weaknesses: ['Failed to parse AI analysis']
+      },
+      functionalCorrectness: {
+        score: 0,
+        meetsRequirements: false,
+        missingFeatures: ['Analysis parsing failed']
+      },
+      bestPractices: {
+        score: 0,
+        followsConventions: false,
+        suggestions: ['Unable to provide suggestions due to parsing error']
+      },
+      overall: {
+        score: 0,
+        grade: 'F',
+        summary: 'AI analysis failed to complete successfully'
+      }
+    };
   }
 
   /**
