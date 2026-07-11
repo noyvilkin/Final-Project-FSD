@@ -247,7 +247,6 @@ export class AssignmentService {
     return AssignmentFeedback.find({ userId })
       .select(AssignmentService.LIST_PROJECTION)
       .sort({ createdAt: -1 })
-      .select('userId status requirementsFileKey solutionFileKey userNotes metadata feedback createdAt updatedAt')
       .limit(limit)
       .skip(offset)
       .lean();
@@ -255,13 +254,6 @@ export class AssignmentService {
 
   /**
    * Count all assignments for a user (for pagination metadata)
-   */
-  static async countUserAssignments(userId: string): Promise<number> {
-    return AssignmentFeedback.countDocuments({ userId });
-  }
-
-  /**
-   * Count all assignments for a user
    */
   static async countUserAssignments(userId: string): Promise<number> {
     if (!Types.ObjectId.isValid(userId)) {
