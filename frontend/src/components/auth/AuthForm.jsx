@@ -136,7 +136,7 @@ export default function AuthForm({ mode = "login" }) {
                 <path d="M4 13h16" />
               </svg>
             </span>
-            <span className="text-4xl font-bold tracking-tight sm:text-5xl">CareerPilot</span>
+            <span className="text-4xl font-bold tracking-tight sm:text-5xl">SkillUp</span>
           </Link>
 
           <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
