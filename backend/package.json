@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "nodemon --watch src --ext ts --exec \"tsx src/server.ts\"",
-    "seed": "tsx src/seed.ts",
+    "seed": "tsx src/database-seeding/index.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "test:ai": "tsx src/POC/simple-test.ts",
