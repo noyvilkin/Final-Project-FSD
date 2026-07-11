@@ -35,7 +35,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 const helmetMiddleware = helmet as unknown as (...args: unknown[]) => RequestHandler;
-app.use(helmetMiddleware());
+app.use(
+  helmetMiddleware({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        scriptSrc: ["'self'", "https://accounts.google.com/gsi/client"],
+        connectSrc: ["'self'", "https://accounts.google.com/gsi/"],
+        frameSrc: ["'self'", "https://accounts.google.com/gsi/"],
+        imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
+      },
+    },
+  })
+);
 app.use(requestId);
 app.use(logger);
 
