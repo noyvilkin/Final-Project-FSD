@@ -84,7 +84,7 @@ export interface GeminiClientConfig {
   apiKey:             string;
   /** Gemini model to use. Defaults to gemini-2.5-flash (free tier) */
   model?:             string;
-  /** Max retries on transient errors. Default: 3 */
+  /** Max retries on transient errors. Default: 5 */
   maxRetries?:        number;
   /** Base delay in ms for exponential back-off. Default: 1000 */
   baseRetryDelayMs?:  number;
@@ -115,7 +115,7 @@ export class GeminiClient {
 
     this.apiKey           = config.apiKey;
     this.model            = config.model            ?? 'gemini-2.5-flash';
-    this.maxRetries       = config.maxRetries        ?? 3;
+    this.maxRetries       = config.maxRetries        ?? 5;
     this.baseRetryDelayMs = config.baseRetryDelayMs  ?? 1_000;
     this.temperature      = config.temperature       ?? 0.2;
     this.maxOutputTokens  = config.maxOutputTokens   ?? 2_048;
@@ -180,7 +180,14 @@ export class GeminiClient {
 
       if (!isRetryable || attempt >= this.maxRetries) throw err;
 
-      const delay = this.baseRetryDelayMs * Math.pow(2, attempt);
+      // Honor the server's suggested back-off when present (e.g. a 429 that
+      // says "Please retry in 20s"). Free-tier per-minute quotas often ask
+      // for waits far longer than plain exponential back-off would give, so
+      // respecting the hint is what lets bursty batch jobs finish.
+      const exponential = this.baseRetryDelayMs * Math.pow(2, attempt);
+      const serverHintMs = this.parseRetryHintMs((err as Error).message);
+      const delay = Math.min(Math.max(exponential, serverHintMs), 65_000);
+
       console.warn(`[GeminiClient] Retrying in ${delay}ms (attempt ${attempt + 1}/${this.maxRetries}): ${(err as Error).message}`);
       await this.sleep(delay);
 
@@ -239,6 +246,20 @@ export class GeminiClient {
     }
 
     return text;
+  }
+
+  /**
+   * Extracts a suggested retry delay (in ms) from a Gemini error message.
+   * Handles both the human-readable "Please retry in 19.6s." phrasing and
+   * the RetryInfo "retryDelay": "20s" field. Returns 0 when no hint found.
+   */
+  private parseRetryHintMs(message: string): number {
+    const match =
+      message.match(/retry(?:\s+in|Delay["'\s:]+)\s*([\d.]+)\s*s/i) ??
+      message.match(/([\d.]+)\s*s(?:econds)?\b/i);
+    if (!match) return 0;
+    const seconds = Number(match[1]);
+    return Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : 0;
   }
 
   private sleep(ms: number): Promise<void> {

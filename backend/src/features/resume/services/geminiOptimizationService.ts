@@ -32,7 +32,9 @@ export class GeminiOptimizationService {
       this.geminiClient = new GeminiClient({
         apiKey,
         model: MODEL_NAME,
-        temperature: 0.3,
+        // Lower temperature keeps rewrites faithful to the source bullet and
+        // reduces the model's tendency to invent unearned keywords/skills.
+        temperature: 0.2,
         maxOutputTokens: 8192,
         rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
       });

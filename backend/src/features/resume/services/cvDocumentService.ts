@@ -20,6 +20,16 @@ interface AcceptedBullet {
   index?: number;
 }
 
+// Common words ignored when matching an optimized rewrite back to the
+// original bullet it came from.
+const STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'using', 'used', 'from', 'into', 'that', 'this',
+  'was', 'were', 'are', 'has', 'had', 'have', 'our', 'their', 'its', 'across',
+  'within', 'over', 'under', 'a', 'an', 'of', 'to', 'in', 'on', 'by', 'at',
+  'as', 'or', 'but', 'is', 'be', 'it', 'we', 'they', 'including', 'such',
+  'various', 'variety', 'enabling', 'ensure', 'ensuring', 'while', 'through',
+]);
+
 const ACCENT = '1F3864'; // navy heading color
 const TEXT = '262626';
 const MUTED = '6B6B6B';
@@ -396,28 +406,44 @@ export class CvDocumentService {
   }
 
   /**
-   * Merge accepted/edited rewrites into an experience's bullets.
+   * Merge accepted/edited rewrites into the experience's original bullets.
    *
-   * Each suggestion carries the WHOLE concatenated description as its
-   * `originalBullet`, and each `optimizedBullet` is a full rewrite of that
-   * same description (the prompt emits one entry per experience). So once
-   * any rewrite is accepted for a role, it supersedes the entire original
-   * description: we replace ALL original bullets with the accepted
-   * rewrite(s), re-split into individual bullets. This avoids leaving
-   * stale original sentences alongside the rewrite. Roles with no accepted
-   * rewrites keep their original bullets untouched.
+   * Each `optimizedBullet` is a condensed 1–2 line rewrite of the whole
+   * description, so we must NOT drop the original detailed bullets. We
+   * match each accepted rewrite to the single original bullet it most
+   * resembles (by keyword overlap) and replace just that one, leaving the
+   * rest of the detail intact. Rewrites that match nothing are appended.
    */
   private static mergeAccepted(
     originalBullets: string[],
     accepted: AcceptedBullet[]
   ): string[] {
-    const replacements = accepted
-      .map((acc) => (acc.userEdit || acc.optimizedBullet || '').trim())
-      .filter(Boolean);
+    const slots = originalBullets.map((text) => ({ text, replaced: false }));
+    const extras: string[] = [];
 
-    if (replacements.length === 0) return originalBullets;
+    for (const acc of accepted) {
+      const replacement = (acc.userEdit || acc.optimizedBullet || '').trim();
+      if (!replacement) continue;
 
-    return replacements.flatMap((text) => this.splitBullets(text));
+      let bestIdx = -1;
+      let bestScore = 0;
+      for (let i = 0; i < slots.length; i += 1) {
+        if (slots[i].replaced) continue;
+        const score = this.similarity(slots[i].text, replacement);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
+      }
+
+      if (bestIdx >= 0 && bestScore >= 0.2) {
+        slots[bestIdx] = { text: replacement, replaced: true };
+      } else {
+        extras.push(replacement);
+      }
+    }
+
+    return [...slots.map((s) => s.text), ...extras];
   }
 
   /** Whether two texts refer to the same experience description. */
@@ -427,5 +453,22 @@ export class CvDocumentService {
     const nb = norm(b);
     if (!na || !nb) return false;
     return na === nb || na.includes(nb) || nb.includes(na);
+  }
+
+  /** Keyword overlap coefficient between two texts (0–1). */
+  private static similarity(a: string, b: string): number {
+    const ta = this.tokenize(a);
+    const tb = this.tokenize(b);
+    if (ta.size === 0 || tb.size === 0) return 0;
+    let intersection = 0;
+    for (const w of ta) if (tb.has(w)) intersection += 1;
+    return intersection / Math.min(ta.size, tb.size);
+  }
+
+  private static tokenize(text: string): Set<string> {
+    const words = (text.toLowerCase().match(/[a-z0-9]+/g) || []).filter(
+      (w) => w.length > 2 && !STOP_WORDS.has(w)
+    );
+    return new Set(words);
   }
 }
