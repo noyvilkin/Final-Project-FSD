@@ -1,7 +1,9 @@
 // ── Gemini Raw Response Shapes ───────────────────────────────────────
 
 export interface GeminiOptimizedBullet {
-  index: number;
+  // Index of the experience entry this bullet belongs to. Multiple
+  // optimized bullets can share the same experienceIndex.
+  experienceIndex: number;
   originalBullet: string;
   optimizedBullet: string;
   explanation: string;
@@ -49,6 +51,8 @@ export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
 export interface OptimizedBulletUI {
   id: string;
+  // Index of the experience entry this bullet belongs to (used to map
+  // accepted rewrites back to the right job at download time).
   index: number;
   company: string;
   role: string;

@@ -4,6 +4,12 @@ export interface ISkill {
   category: 'technical' | 'soft' | 'tool' | 'language';
   proficiencyLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   yearsOfExperience?: number;
+  // True when the skill was explicitly listed in a dedicated skills/
+  // technologies section of the original resume (as opposed to only being
+  // mentioned inside an experience bullet or summary). Used to keep the
+  // composed CV's SKILLS section faithful to the original. Optional for
+  // records parsed before this field existed.
+  inSkillsSection?: boolean;
 }
 
 export interface IExperience {

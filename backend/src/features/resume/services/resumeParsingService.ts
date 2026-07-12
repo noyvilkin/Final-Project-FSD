@@ -29,11 +29,16 @@ interface ParsedProfileSummary {
 export interface ParsedDNA {
   candidateName: string | null;
   candidateEmail: string | null;
+  candidatePhone: string | null;
+  candidateLocation: string | null;
+  candidateLinks: string[];
+  aboutMe: string | null;
   skills: Array<{
     name: string;
     category: 'technical' | 'soft' | 'tool' | 'language';
     proficiencyLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
     yearsOfExperience?: number;
+    inSkillsSection?: boolean;
   }>;
   experience: Array<{
     company: string;
@@ -121,6 +126,10 @@ export class ResumeParsingService {
       rawResumeText: cleanText,
       candidateName: parsed.candidateName ?? undefined,
       candidateEmail: parsed.candidateEmail ?? undefined,
+      candidatePhone: parsed.candidatePhone ?? undefined,
+      candidateLocation: parsed.candidateLocation ?? undefined,
+      candidateLinks: parsed.candidateLinks,
+      aboutMe: parsed.aboutMe ?? undefined,
       skills: parsed.skills,
       experience: parsed.experience.map((exp) => ({
         ...exp,
@@ -185,9 +194,21 @@ export class ResumeParsingService {
         throw new Error('Missing skills array');
       }
 
+      const toStr = (v: unknown): string | null => {
+        if (v == null) return null;
+        const s = String(v).trim();
+        return s.length === 0 || s.toLowerCase() === 'null' ? null : s;
+      };
+
       return {
-        candidateName: parsed.candidateName ?? null,
-        candidateEmail: parsed.candidateEmail ?? null,
+        candidateName: toStr(parsed.candidateName),
+        candidateEmail: toStr(parsed.candidateEmail),
+        candidatePhone: toStr(parsed.candidatePhone),
+        candidateLocation: toStr(parsed.candidateLocation),
+        candidateLinks: Array.isArray(parsed.candidateLinks)
+          ? parsed.candidateLinks.map((x: unknown) => String(x).trim()).filter((x: string) => x.length > 0)
+          : [],
+        aboutMe: toStr(parsed.aboutMe),
         skills: parsed.skills.map((s: Record<string, unknown>) => ({
           name: String(s.name ?? ''),
           category: (['technical', 'soft', 'tool', 'language'].includes(String(s.category))
@@ -199,6 +220,7 @@ export class ResumeParsingService {
             ? s.proficiencyLevel
             : 'intermediate') as 'beginner' | 'intermediate' | 'advanced' | 'expert',
           yearsOfExperience: s.yearsOfExperience != null ? Number(s.yearsOfExperience) : undefined,
+          inSkillsSection: s.inSkillsSection != null ? Boolean(s.inSkillsSection) : undefined,
         })),
         experience: (parsed.experience ?? []).map((e: Record<string, unknown>) => ({
           company: String(e.company ?? 'Unknown'),
