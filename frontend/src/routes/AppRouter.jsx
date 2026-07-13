@@ -9,6 +9,7 @@ import ResumeUploadPage from "../pages/ResumeUploadPage";
 import AssignmentSubmission from "../pages/AssignmentSubmission";
 import AssignmentResults from "../pages/AssignmentResults";
 import AssignmentProcessing from "../pages/AssignmentProcessing";
+import AssignmentHistory from "../pages/AssignmentHistory";
 import ResumeOptimization from "../pages/ResumeOptimization";
 import OptimizationHistory from "../pages/OptimizationHistory";
 import OptimizationRunDetail from "../pages/OptimizationRunDetail";
@@ -17,6 +18,7 @@ import InterviewProcessing from "../pages/InterviewProcessing";
 import InterviewInsights from "../pages/InterviewInsights";
 import InterviewPlayerPage from "../pages/InterviewPlayer";
 import InterviewHistory from "../pages/InterviewHistory";
+import InterviewArchive from "../pages/InterviewArchive";
 
 function PublicRoute({ children }) {
   const { isAuthenticated, isAuthLoading } = useAuth();
@@ -82,6 +84,15 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <AssignmentSubmission />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/assignment/history"
+        element={
+          <ProtectedRoute>
+            <AssignmentHistory />
           </ProtectedRoute>
         }
       />
@@ -163,6 +174,15 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <InterviewHistory />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/interview/archive"
+        element={
+          <ProtectedRoute>
+            <InterviewArchive />
           </ProtectedRoute>
         }
       />

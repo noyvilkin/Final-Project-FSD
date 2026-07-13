@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -126,6 +126,19 @@ export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
 }
 
+export function getAssignmentHistory(userId, { limit = 20, offset = 0 } = {}) {
+  return request(
+    `/api/assignments/user/${encodeURIComponent(userId)}?limit=${limit}&offset=${offset}`
+  );
+}
+
+export function deleteAssignment(assignmentId, userId) {
+  return request(
+    `/api/assignments/${assignmentId}?userId=${encodeURIComponent(userId)}`,
+    { method: "DELETE" }
+  );
+}
+
 export function uploadResume(file, userId) {
   const formData = new FormData();
   formData.append("resume", file);
@@ -244,8 +257,21 @@ export async function uploadInterviewMedia({ mediaFile, userId, jobId, onProgres
   }
 }
 
-export function getInterviewHistory() {
-  return request("/api/interviews/history");
+export function getInterviewHistory(userId) {
+  return request("/api/interviews/history", {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+export function getInterviewArchive(userId) {
+  return request("/api/interviews/archive", {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+
+}
+
+export function getInterviewMediaUrl(interviewId) {
+  return `${API_BASE_URL}/api/interviews/${interviewId}/media`;
 }
 
 export const apiConfig = {
