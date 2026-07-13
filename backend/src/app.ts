@@ -32,6 +32,8 @@ app.use(
       "https://skillup.cs.colman.ac.il",
     ],
     credentials: true,
+    // Let the browser read the composed CV filename on downloads.
+    exposedHeaders: ["Content-Disposition"],
   })
 );
 app.use(express.json());
@@ -49,6 +51,13 @@ app.use(
         imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
       },
     },
+    // Helmet's defaults break Google Sign-In (GSI):
+    // - "no-referrer" hides the page origin from the GSI iframe, so Google
+    //   rejects it with "the given origin is not allowed for the given client ID".
+    // - COOP "same-origin" blocks the sign-in popup from posting the credential
+    //   back to the page (white screen after picking an account).
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
   })
 );
 app.use(requestId);
