@@ -209,7 +209,7 @@ export class AssignmentService {
    * Get a single assignment by ID
    */
   static async getAssignment(assignmentId: string): Promise<IAssignmentFeedback | null> {
-    return AssignmentFeedback.findById(assignmentId);
+    return AssignmentFeedback.findById(assignmentId).lean();
   }
 
   /**
@@ -248,11 +248,12 @@ export class AssignmentService {
       .select(AssignmentService.LIST_PROJECTION)
       .sort({ createdAt: -1 })
       .limit(limit)
-      .skip(offset);
+      .skip(offset)
+      .lean();
   }
 
   /**
-   * Count all assignments for a user
+   * Count all assignments for a user (for pagination metadata)
    */
   static async countUserAssignments(userId: string): Promise<number> {
     if (!Types.ObjectId.isValid(userId)) {
@@ -309,7 +310,9 @@ export class AssignmentService {
     userId: string,
     status: string
   ): Promise<IAssignmentFeedback[]> {
-    return AssignmentFeedback.find({ userId, status }).sort({ createdAt: -1 });
+    return AssignmentFeedback.find({ userId, status })
+      .sort({ createdAt: -1 })
+      .lean();
   }
 
   /**

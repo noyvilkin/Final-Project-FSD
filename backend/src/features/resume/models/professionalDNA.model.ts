@@ -117,6 +117,12 @@ const ProfessionalDNASchema = new Schema<IProfessionalDNA>(
 
 ProfessionalDNASchema.index({ userId: 1, updatedAt: -1 });
 
+// Status index for pipeline queries filtering by analysis state
+ProfessionalDNASchema.index({ analysisStatus: 1 });
+
+// Compound index for user-scoped status filtering
+ProfessionalDNASchema.index({ userId: 1, analysisStatus: 1 });
+
 export const ProfessionalDNA = mongoose.model<IProfessionalDNA>(
   'ProfessionalDNA',
   ProfessionalDNASchema

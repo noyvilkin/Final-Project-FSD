@@ -6,7 +6,13 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { randomUUID } from "crypto";
+import { createReadStream, createWriteStream, unlink } from "fs";
+import { mkdir } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { pipeline } from "stream/promises";
 import { appLogger } from "./logger.js";
 
 const S3_ENDPOINT = process.env.S3_ENDPOINT;
@@ -55,6 +61,8 @@ const getBucketReady = (): Promise<void> => {
 
 const sanitizeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
+const MULTIPART_THRESHOLD = 10 * 1024 * 1024; // 10 MB
+
 export type StoragePath = "resumes" | "assignments" | "interviews";
 
 type UploadInput = {
@@ -62,18 +70,19 @@ type UploadInput = {
   path: StoragePath;
   userId?: string;
   assignmentId?: string;
+  interviewId?: string;
 };
 
-export const uploadFileToS3 = async ({ file, path, userId, assignmentId }: UploadInput) => {
+export const uploadFileToS3 = async ({ file, path, userId, assignmentId, interviewId }: UploadInput) => {
   await getBucketReady();
 
   let key: string;
-  
-  // For assignments, organize by userId and assignmentId
+
   if (path === 'assignments' && userId && assignmentId) {
     key = `${path}/${userId}/${assignmentId}/${randomUUID()}-${sanitizeName(file.originalname)}`;
+  } else if (path === 'interviews' && userId && interviewId) {
+    key = `${path}/${userId}/${interviewId}/${randomUUID()}-${sanitizeName(file.originalname)}`;
   } else {
-    // For other paths or if userId/assignmentId not provided, use simple structure
     key = `${path}/${randomUUID()}-${sanitizeName(file.originalname)}`;
   }
 
@@ -95,6 +104,75 @@ export const uploadFileToS3 = async ({ file, path, userId, assignmentId }: Uploa
     mimeType: file.mimetype,
     size: file.size,
   };
+};
+
+export const uploadMediaToS3 = async ({
+  filePath,
+  originalName,
+  mimeType,
+  fileSize,
+  storagePath,
+  userId,
+  interviewId,
+}: {
+  filePath: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  storagePath: StoragePath;
+  userId: string;
+  interviewId: string;
+}): Promise<{ bucket: string; key: string; url: string; mimeType: string; size: number }> => {
+  await getBucketReady();
+
+  const key = `${storagePath}/${userId}/${interviewId}/${randomUUID()}-${sanitizeName(originalName)}`;
+
+  if (fileSize > MULTIPART_THRESHOLD) {
+    const stream = createReadStream(filePath);
+    const upload = new Upload({
+      client: s3,
+      params: {
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: stream,
+        ContentType: mimeType,
+      },
+      partSize: MULTIPART_THRESHOLD,
+      queueSize: 4,
+    });
+
+    await upload.done();
+    appLogger.info("[s3] Multipart upload completed", { bucket: S3_BUCKET, key, size: fileSize });
+  } else {
+    const { readFile } = await import("fs/promises");
+    const buffer = await readFile(filePath);
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: mimeType,
+      })
+    );
+    appLogger.info("[s3] File uploaded", { bucket: S3_BUCKET, key, size: fileSize });
+  }
+
+  return {
+    bucket: S3_BUCKET,
+    key,
+    url: `${S3_ENDPOINT}/${S3_BUCKET}/${key}`,
+    mimeType,
+    size: fileSize,
+  };
+};
+
+export const deleteFileFromS3 = async (key: string): Promise<void> => {
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+    appLogger.info("[s3] Cleanup: file deleted", { bucket: S3_BUCKET, key });
+  } catch (err) {
+    appLogger.error("[s3] Cleanup: failed to delete file", { key, error: err });
+  }
 };
 
 const streamToBuffer = async (stream: unknown): Promise<Buffer> => {
@@ -174,6 +252,56 @@ export const deleteBlob = async (
   await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
   appLogger.info("[s3] Blob deleted", { bucket, key });
 };
+
+// ─── Temp-file helpers ────────────────────────────────────────────────────────
+
+const CAREERPILOT_TMP_DIR = join(tmpdir(), 'careerpilot');
+
+/**
+ * Stream an S3 object directly to a temporary file on disk.
+ * Avoids loading large video/audio files into memory.
+ *
+ * @returns Absolute path of the temp file — caller MUST call `cleanupTempFile` when done.
+ */
+export const downloadToTempFile = async (
+  fileKey: string,
+  extension: string = '',
+  bucket: string = S3_BUCKET
+): Promise<string> => {
+  await getBucketReady();
+  await mkdir(CAREERPILOT_TMP_DIR, { recursive: true });
+
+  const suffix  = extension.startsWith('.') ? extension : extension ? `.${extension}` : '';
+  const tmpPath = join(CAREERPILOT_TMP_DIR, `${randomUUID()}${suffix}`);
+
+  const response = await s3.send(
+    new GetObjectCommand({ Bucket: bucket, Key: fileKey })
+  );
+
+  if (!response.Body || !(Symbol.asyncIterator in (response.Body as object))) {
+    throw new Error(`[s3] Could not obtain a readable stream for key: ${fileKey}`);
+  }
+
+  const writeStream = createWriteStream(tmpPath);
+  await pipeline(response.Body as AsyncIterable<Uint8Array>, writeStream);
+
+  appLogger.info('[s3] Object streamed to temp file', { bucket, key: fileKey, tmpPath });
+  return tmpPath;
+};
+
+/**
+ * Delete a temporary file created by `downloadToTempFile`.
+ * Errors are swallowed so cleanup failures never mask the real error.
+ */
+export const cleanupTempFile = (tmpPath: string): void => {
+  unlink(tmpPath, (err) => {
+    if (err && err.code !== 'ENOENT') {
+      appLogger.warn('[s3] Failed to clean up temp file', { tmpPath, error: err.message });
+    }
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const bucketCache = new Set<string>();
 

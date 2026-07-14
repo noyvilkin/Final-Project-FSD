@@ -18,10 +18,14 @@
     "poc:optimize": "tsx src/features/resume/POC/poc-ai-optimization-test.ts",
     "eval:resume": "tsx src/features/resume/eval/runEval.ts",
     "eval:assignment": "tsx src/features/assignment/eval/runEval.ts",
+    "db:ensure-indexes": "tsx src/scripts/ensureIndexes.ts",
+    "eval:interview": "tsx src/features/interview/eval/runEval.ts",
     "prod": "tsc -p tsconfig_prod.json && node ./dist/server.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.986.0",
+    "@aws-sdk/lib-storage": "^3.1068.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
@@ -39,18 +43,22 @@
     "docx": "^9.7.1",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
+    "fluent-ffmpeg": "^2.1.3",
     "google-auth-library": "^10.6.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.0",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
+    "openai": "^6.42.0",
     "pdf-parse": "^1.1.1",
     "uuid": "^13.0.0",
     "winston": "^3.19.0",
-    "yauzl": "^3.2.0"
+    "yauzl": "^3.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.28",
     "@types/jest": "^30.0.0",
     "@types/supertest": "^7.2.0",
     "jest": "^30.3.0",
