@@ -195,7 +195,12 @@ function BulletCard({ bullet, onAccept, onDiscard, onEdit }) {
           >
             Accept
           </Button>
-          <Button size="sm" variant="outline" onClick={() => onDiscard(bullet.id)}>
+          {!isEditing && (
+            <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+              Edit
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => onDiscard(bullet.id)}>
             Discard
           </Button>
         </div>

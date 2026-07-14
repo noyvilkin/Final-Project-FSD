@@ -107,6 +107,88 @@ Jenkins, Bash, Linux, Nginx, Prometheus, Grafana
 LANGUAGES
 Hebrew, English`,
   },
+  {
+    id: 'mobile-developer',
+    notes: 'Native + cross-platform mobile. Held-out domain — matches a mobile JD, weak match for web/data/devops.',
+    text: `Noa Shapira
+noa.shapira@example.com
+Phone: +972-52-987-6543
+
+EDUCATION
+B.Sc. in Software Engineering, Ben-Gurion University, 2015 - 2019
+
+EXPERIENCE
+Senior Mobile Developer, Appwise (Feb 2021 - Present)
+- Shipped native iOS features in Swift and SwiftUI for an app with 500k+ monthly users.
+- Built Android screens in Kotlin using Jetpack Compose and an MVVM architecture.
+- Integrated REST and GraphQL APIs and handled offline caching with Room and Core Data.
+- Reduced app crash rate by 30% using Firebase Crashlytics and unit tests with XCTest.
+
+Mobile Developer, PocketLabs (Jul 2019 - Jan 2021)
+- Developed cross-platform features in React Native and TypeScript.
+- Published releases to the App Store and Google Play and managed CI with Fastlane.
+
+SKILLS
+Swift, SwiftUI, Kotlin, Jetpack Compose, React Native, TypeScript, REST API,
+GraphQL, Firebase, XCTest, Git, Fastlane
+
+LANGUAGES
+Hebrew (native), English (fluent)`,
+  },
+  {
+    id: 'product-designer',
+    notes: 'Non-engineering domain (UX/UI). Strong overfitting guard — extractor must not invent technical skills.',
+    text: `Tamar Azoulay
+tamar.azoulay@example.com
+
+EDUCATION
+B.Des. in Visual Communication, Bezalel Academy of Arts and Design, 2014 - 2018
+
+EXPERIENCE
+Senior Product Designer, Flowly (Mar 2021 - Present)
+- Led end-to-end UX for a B2B SaaS dashboard used by 200+ enterprise clients.
+- Built and maintained a design system in Figma adopted across 4 product teams.
+- Ran usability testing and user interviews to validate design decisions.
+- Partnered with product managers and engineers to ship features in two-week cycles.
+
+Product Designer, BrandNest (Aug 2018 - Feb 2021)
+- Designed responsive web and mobile interfaces using Figma and Sketch.
+- Created wireframes, prototypes, and user flows for e-commerce clients.
+
+SKILLS
+Figma, Sketch, Adobe XD, Prototyping, Wireframing, User Research, Usability Testing,
+Design Systems, Interaction Design, HTML, CSS
+
+LANGUAGES
+Hebrew, English`,
+  },
+  {
+    id: 'marketing-manager',
+    notes: 'Fully non-technical domain. Held-out — tests that the AI never fabricates engineering skills from a marketing resume.',
+    text: `Yael Berger
+yael.berger@example.com
+
+EDUCATION
+B.A. in Business Administration, IDC Herzliya, 2013 - 2016
+
+EXPERIENCE
+Digital Marketing Manager, GrowthHive (Jan 2020 - Present)
+- Managed paid acquisition campaigns across Google Ads and Meta Ads with a $1.2M annual budget.
+- Grew organic traffic 65% through SEO and content marketing strategy.
+- Built marketing dashboards in Google Analytics and Looker Studio to track campaign ROI.
+- Led a team of 4 marketers and coordinated with sales on lead generation.
+
+Marketing Specialist, Brightline Media (Sep 2016 - Dec 2019)
+- Executed email marketing campaigns with Mailchimp and HubSpot.
+- Managed social media calendars and reported on engagement metrics.
+
+SKILLS
+SEO, SEM, Google Ads, Meta Ads, Google Analytics, Looker Studio, Content Marketing,
+Email Marketing, HubSpot, Mailchimp, Campaign Management
+
+LANGUAGES
+Hebrew, English`,
+  },
 ];
 
 // ── JD fixtures ─────────────────────────────────────────────────────
@@ -156,5 +238,45 @@ Nice to Have:
 - Airflow, dbt, or similar pipeline orchestration tools
 - Cloud data warehousing experience
 - Statistics background`,
+  },
+  {
+    id: 'mobile-engineer',
+    notes: 'Mobile role — expected to match mobile-developer best, weak match for the others.',
+    text: `Mobile Engineer (iOS/Android)
+
+We are hiring a Mobile Engineer to build and maintain our consumer mobile apps.
+
+Requirements:
+- 3+ years of mobile development experience
+- Strong proficiency in Swift for iOS development
+- Experience with Kotlin for Android
+- Familiarity with REST API integration
+- Experience with automated testing (XCTest, JUnit)
+- Comfortable with Git and CI/CD pipelines
+
+Nice to Have:
+- React Native or other cross-platform experience
+- GraphQL knowledge
+- Firebase and analytics tooling`,
+  },
+  {
+    id: 'senior-product-designer',
+    notes: 'Design role — expected to match product-designer best. Non-engineering; should be a weak match for all dev resumes.',
+    text: `Senior Product Designer
+
+We are looking for a Senior Product Designer to shape the experience of our SaaS platform.
+
+Requirements:
+- 4+ years of product design experience
+- Expert proficiency with Figma
+- Strong background in user research and usability testing
+- Experience building and maintaining design systems
+- Ability to create wireframes, prototypes, and user flows
+- Close collaboration with product managers and engineers
+
+Nice to Have:
+- Motion and interaction design skills
+- Familiarity with HTML and CSS
+- Experience in B2B SaaS`,
   },
 ];

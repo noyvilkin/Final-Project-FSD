@@ -29,13 +29,34 @@ app.use(
       "https://skillup.cs.colman.ac.il",
     ],
     credentials: true,
+    // Let the browser read the composed CV filename on downloads.
+    exposedHeaders: ["Content-Disposition"],
   })
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 const helmetMiddleware = helmet as unknown as (...args: unknown[]) => RequestHandler;
-app.use(helmetMiddleware());
+app.use(
+  helmetMiddleware({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        scriptSrc: ["'self'", "https://accounts.google.com/gsi/client"],
+        connectSrc: ["'self'", "https://accounts.google.com/gsi/"],
+        frameSrc: ["'self'", "https://accounts.google.com/gsi/"],
+        imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
+      },
+    },
+    // Helmet's defaults break Google Sign-In (GSI):
+    // - "no-referrer" hides the page origin from the GSI iframe, so Google
+    //   rejects it with "the given origin is not allowed for the given client ID".
+    // - COOP "same-origin" blocks the sign-in popup from posting the credential
+    //   back to the page (white screen after picking an account).
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  })
+);
 app.use(requestId);
 app.use(logger);
 
