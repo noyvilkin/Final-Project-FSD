@@ -96,7 +96,7 @@ export default function Home() {
                 <path d="M4 13h16" />
               </svg>
             </span>
-            <span className="text-2xl font-extrabold tracking-tight">CareerPilot</span>
+            <span className="text-2xl font-extrabold tracking-tight">SkillUp</span>
           </Link>
 
           <div className="flex items-center gap-3">
