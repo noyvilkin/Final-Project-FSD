@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import { AuthPasswordService } from '../../common/auth/password.service.js';
 
 import { User } from '../../features/user/models/user.model.js';
 import { seedUsersConfig } from '../seed.config.js';
@@ -9,7 +9,8 @@ import type {
 } from '../seed.types.js';
 
 async function createSeedUser(config: SeedUserConfig) {
-  const passwordHash = await bcrypt.hash(config.password, 10);
+  const passwordHash =
+  await AuthPasswordService.hashPassword(config.password);
 
   return User.create({
     email: config.email,
