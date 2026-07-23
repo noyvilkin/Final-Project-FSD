@@ -1,17 +1,36 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../../common/middlewares/asyncHandler.js';
+import { requireAuth } from '../../../common/middlewares/requireAuth.js';
 import { AssignmentService } from '../services/assignmentService.js';
 import { ResultsService } from '../services/resultsService.js';
 import { appLogger } from '../../../common/services/logger.js';
 import type { Request, Response } from 'express';
+import type { IAssignmentFeedback } from '../models/assignmentFeedback.model.js';
 
 const router = Router();
+
+/**
+ * True when the authenticated user owns the given assignment.
+ */
+const isOwner = (assignment: IAssignmentFeedback, req: Request): boolean =>
+  !!req.user?.id && assignment.userId?.toString() === req.user.id;
+
+const forbid = (req: Request, res: Response): void => {
+  res.status(403).json({
+    error: {
+      code: 'FORBIDDEN',
+      message: 'You do not have access to this assignment'
+    },
+    requestId: req.requestId ?? '-'
+  });
+};
 
 /**
  * Get assignment by ID
  */
 router.get(
   '/:assignmentId',
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const assignmentId = req.params.assignmentId as string;
     
@@ -39,6 +58,11 @@ router.get(
       return;
     }
 
+    if (!isOwner(assignment, req)) {
+      forbid(req, res);
+      return;
+    }
+
     res.json({
       assignment: {
         id: assignment._id,
@@ -61,6 +85,7 @@ router.get(
  */
 router.get(
   '/user/:userId',
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const userId = req.params.userId as string;
     const { limit = '10', offset = '0' } = req.query;
@@ -76,11 +101,25 @@ router.get(
       return;
     }
 
-    const assignments = await AssignmentService.getUserAssignments(
-      userId,
-      parseInt(limit as string, 10),
-      parseInt(offset as string, 10)
-    );
+    if (req.user?.id !== userId) {
+      res.status(403).json({
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only view your own assignments'
+        },
+        requestId: req.requestId ?? '-'
+      });
+      return;
+    }
+
+    const [assignments, total] = await Promise.all([
+      AssignmentService.getUserAssignments(
+        userId,
+        parseInt(limit as string, 10),
+        parseInt(offset as string, 10)
+      ),
+      AssignmentService.countUserAssignments(userId)
+    ]);
 
     res.json({
       assignments: assignments.map(assignment => ({
@@ -89,12 +128,85 @@ router.get(
         requirementsFileKey: assignment.requirementsFileKey,
         solutionFileKey: assignment.solutionFileKey,
         userNotes: assignment.userNotes,
-        metadata: assignment.metadata,
-        feedback: assignment.feedback,
+        metadata: assignment.metadata
+          ? {
+              detectedLanguage: assignment.metadata.detectedLanguage,
+              detectedFrameworks: assignment.metadata.detectedFrameworks,
+              projectScope: assignment.metadata.projectScope,
+              totalFiles: assignment.metadata.totalFiles,
+              totalLines: assignment.metadata.totalLines
+            }
+          : undefined,
+        aiFeedback: assignment.aiFeedback?.overall
+          ? {
+              score: assignment.aiFeedback.overall.score,
+              grade: assignment.aiFeedback.overall.grade,
+              summary: assignment.aiFeedback.overall.summary
+            }
+          : undefined,
         createdAt: assignment.createdAt,
         updatedAt: assignment.updatedAt
       })),
       count: assignments.length,
+      total,
+      requestId: req.requestId ?? '-'
+    });
+  })
+);
+
+/**
+ * Delete an assignment (and its stored files) for the owning user
+ */
+router.delete(
+  '/:assignmentId',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const assignmentId = req.params.assignmentId as string;
+    const userId = req.user?.id;
+
+    if (!assignmentId) {
+      res.status(400).json({
+        error: {
+          code: 'MISSING_ASSIGNMENT_ID',
+          message: 'Assignment ID is required'
+        },
+        requestId: req.requestId ?? '-'
+      });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({
+        error: {
+          code: 'UNAUTHENTICATED',
+          message: 'Authentication required'
+        },
+        requestId: req.requestId ?? '-'
+      });
+      return;
+    }
+
+    const deleted = await AssignmentService.deleteAssignment(assignmentId, userId);
+
+    if (!deleted) {
+      res.status(404).json({
+        error: {
+          code: 'ASSIGNMENT_NOT_FOUND',
+          message: 'Assignment not found'
+        },
+        requestId: req.requestId ?? '-'
+      });
+      return;
+    }
+
+    appLogger.info('Assignment deleted via API', {
+      assignmentId,
+      requestId: req.requestId
+    });
+
+    res.json({
+      success: true,
+      deleted: assignmentId,
       requestId: req.requestId ?? '-'
     });
   })
@@ -105,6 +217,7 @@ router.get(
  */
 router.patch(
   '/:assignmentId/status',
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const assignmentId = req.params.assignmentId as string;
     const { status, metadata } = req.body;
@@ -129,6 +242,22 @@ router.patch(
         },
         requestId: req.requestId ?? '-'
       });
+      return;
+    }
+
+    const existing = await AssignmentService.getAssignment(assignmentId);
+    if (!existing) {
+      res.status(404).json({
+        error: {
+          code: 'ASSIGNMENT_NOT_FOUND',
+          message: 'Assignment not found'
+        },
+        requestId: req.requestId ?? '-'
+      });
+      return;
+    }
+    if (!isOwner(existing, req)) {
+      forbid(req, res);
       return;
     }
 
@@ -169,6 +298,7 @@ router.patch(
  */
 router.get(
   '/:assignmentId/results',
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const assignmentId = req.params.assignmentId as string;
     const { format = 'summary' } = req.query as { format?: 'summary' | 'detailed' | 'raw' };
@@ -194,6 +324,11 @@ router.get(
         },
         requestId: req.requestId ?? '-'
       });
+      return;
+    }
+
+    if (!isOwner(assignment, req)) {
+      forbid(req, res);
       return;
     }
 
@@ -292,6 +427,7 @@ router.get(
  */
 router.get(
   '/:assignmentId/status',
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const assignmentId = req.params.assignmentId as string;
     
@@ -316,6 +452,11 @@ router.get(
         },
         requestId: req.requestId ?? '-'
       });
+      return;
+    }
+
+    if (!isOwner(assignment, req)) {
+      forbid(req, res);
       return;
     }
 

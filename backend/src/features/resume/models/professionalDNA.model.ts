@@ -13,6 +13,10 @@ export interface IProfessionalDNA extends Document {
   resumeId?: Types.ObjectId;
   candidateName?: string;
   candidateEmail?: string;
+  candidatePhone?: string;
+  candidateLocation?: string;
+  candidateLinks?: string[];
+  aboutMe?: string;
   skills: ISkill[];
   experience: IExperience[];
   education: IEducation[];
@@ -37,6 +41,7 @@ const SkillSchema = new Schema<ISkill>({
     required: true,
   },
   yearsOfExperience: { type: Number },
+  inSkillsSection: { type: Boolean },
 }, { _id: false });
 
 const ExperienceSchema = new Schema<IExperience>({
@@ -91,6 +96,10 @@ const ProfessionalDNASchema = new Schema<IProfessionalDNA>(
     resumeId: { type: Schema.Types.ObjectId, ref: 'Resume' },
     candidateName:  { type: String },
     candidateEmail: { type: String },
+    candidatePhone: { type: String },
+    candidateLocation: { type: String },
+    candidateLinks: { type: [String], default: [] },
+    aboutMe:        { type: String },
     skills:        { type: [SkillSchema],      default: [] },
     experience:    { type: [ExperienceSchema], default: [] },
     education:     { type: [EducationSchema],  default: [] },

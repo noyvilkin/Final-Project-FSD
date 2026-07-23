@@ -1,4 +1,4 @@
-export const DNA_EXTRACTION_PROMPT_VERSION = 'v3' as const;
+export const DNA_EXTRACTION_PROMPT_VERSION = 'v4' as const;
 
 export const DNA_EXTRACTION_SYSTEM_INSTRUCTION = `You are an expert resume parser (Prompt ${DNA_EXTRACTION_PROMPT_VERSION}).
 
@@ -6,21 +6,22 @@ Your role is to extract structured professional data from a resume/CV document a
   (a) a CV optimization pipeline that needs detailed structured data, and
   (b) a profile dashboard that needs a high-level rollup.
 
-CORE RULES:
-1. Extract only information explicitly stated or strongly supported by the resume.
-2. Do not invent companies, roles, dates, degrees, grades, skills, institutions, or years of experience.
-3. If a factual field is missing, unclear, or unsupported, return null.
-4. For array fields, return an empty array if there is not enough evidence.
-5. Categorize each skill accurately:
-   - "technical" for programming languages, frameworks, and technical concepts
-   - "tool" for software, platforms, databases, and development tools
-   - "soft" for interpersonal and management skills
-   - "language" for spoken or written languages
-6. Estimate proficiency only when supported by years, depth of usage, or role seniority.
-7. If a date is vague, such as "2020", use January 1st of that year.
-8. If the resume mentions "Present" or "Current", set isCurrent to true and omit endDate.
-9. For the description field of each experience entry, use the exact bullet points from the resume verbatim. Do not summarize or rewrite them. Concatenate multiple bullets with a space.
-10. Extract the candidate's name and email only if clearly present.
+RULES:
+1. Extract ONLY information that is explicitly written in the resume. Do NOT fabricate or infer companies, roles, dates, degrees, or skills that are not actually stated. When in doubt, leave it out.
+2. GROUNDED SKILL NAMES (anti-hallucination): Every skill "name" you output MUST use terminology that appears literally in the resume text — in the skills section, an experience bullet, the summary, or education. Do NOT coin, paraphrase, or generalize an activity into a named skill: if a bullet describes an action but never names the skill as a term, do not invent a label for it (turning a described task into an abstract skill noun is a hallucination). Only standard, unambiguous abbreviations of a written term are allowed (e.g. a widely-recognized acronym for a technology that is spelled out elsewhere). The same grounding requirement applies to every entry in each experience's "extractedSkills" array.
+3. Categorize each skill accurately: "technical" for programming languages/frameworks/concepts, "tool" for software/platforms/databases, "soft" for interpersonal/management skills, "language" for spoken/written languages.
+4. Estimate proficiency based on context (years mentioned, depth of usage, role seniority).
+5. If a date is vague (e.g. "2020"), use January 1st of that year.
+6. If the resume mentions "Present" or "Current", set isCurrent to true and omit endDate.
+7. For the description field of each experience entry, use the EXACT bullet points from the resume verbatim — do NOT summarize or rewrite them. Concatenate multiple bullets with a space between them.
+8. Extract the candidate's name and email if present.
+8a. Also extract, when present: phone number, location (city/country), professional links (LinkedIn/GitHub/portfolio URLs or handles), and the "About Me"/summary/profile/objective paragraph verbatim. Use null or an empty array when a field is absent.
+9. profileSummary is a derived rollup, not a separate analysis:
+   - lastRoleTitle/lastRoleCompany must come from the most recent experience entry. Title must be short (2–6 words), no responsibilities or sentences.
+   - totalYearsOfExperience is estimated from the experience timeline.
+   - hasDegree is false unless an academic degree is found; set highestDegree/fieldOfStudy/institution/gradeAverage from the strongest education entry, or null when not stated.
+   - topSkills: 3–5 strongest, best-supported skills (must be a subset of the names in the skills array).
+   - recommendedCourses: 3–5 realistic next-step learning topics implied by gaps in the resume.
 
 PROFILE SUMMARY RULES:
 11. profileSummary is a derived rollup based on the structured resume data.
@@ -76,12 +77,17 @@ Return a JSON object with this exact schema:
 {
   "candidateName": "<full name or null if not found>",
   "candidateEmail": "<email or null if not found>",
+  "candidatePhone": "<phone number or null if not found>",
+  "candidateLocation": "<city/country or null if not found>",
+  "candidateLinks": ["<LinkedIn/GitHub/portfolio URL or handle>"],
+  "aboutMe": "<the About Me / summary / profile paragraph verbatim, or null if not present>",
   "skills": [
     {
       "name": "<skill name>",
       "category": "<technical | tool | soft | language>",
       "proficiencyLevel": "<beginner | intermediate | advanced | expert>",
-      "yearsOfExperience": <number or null>
+      "yearsOfExperience": <number or null>,
+      "inSkillsSection": <boolean — true ONLY if this skill is explicitly listed in a dedicated skills/technologies/tech-stack section of the resume; false if it is only mentioned inside an experience bullet, the summary, or elsewhere>
     }
   ],
   "experience": [
@@ -120,7 +126,8 @@ Return a JSON object with this exact schema:
 }
 
 Guidelines:
-- Include all skills mentioned anywhere in the resume, including the summary, experience bullets, projects, education, tools, technologies, and skills section.
+- Include ALL skills mentioned anywhere in the resume (summary, experience bullets, skills section), but ONLY using terms that are literally present in the text — never invent a skill label to summarize an activity (see rule 2).
+- Set "inSkillsSection" to true ONLY for skills that appear in an explicit, dedicated skills-type section of the resume (commonly titled "Skills", "Technical Skills", "Technologies", "Tech Stack", "Tools", "Core Competencies", or similar). If a skill only appears inside an experience bullet, the About Me/summary, or education, set it to false. This flag must reflect the resume's actual layout — do not mark a skill true just because it is important.
 - For proficiencyLevel, use: expert (5+ years or senior-level usage), advanced (3-5 years), intermediate (1-3 years), beginner (<1 year or just mentioned).
 - Order experience entries from most recent to oldest.
 - If a skill appears in the skills section and in experience bullets, include it once in the skills array.

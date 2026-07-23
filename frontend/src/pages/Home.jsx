@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const steps = [
   {
@@ -63,6 +64,14 @@ const preparationItems = [
 ];
 
 export default function Home() {
+  const { isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-100 via-blue-50 to-slate-200 text-slate-950">
       <div className="pointer-events-none absolute -left-24 top-24 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl" />
@@ -87,19 +96,36 @@ export default function Home() {
                 <path d="M4 13h16" />
               </svg>
             </span>
-            <span className="text-2xl font-extrabold tracking-tight">CareerPilot</span>
+            <span className="text-2xl font-extrabold tracking-tight">SkillUp</span>
           </Link>
 
           <div className="flex items-center gap-3">
-            <Link to="/login" className="px-4 py-2 text-sm font-semibold text-slate-800">
-              Log In
-            </Link>
-            <Link
-              to="/signup"
-              className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              Sign Up
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <Link to="/profile" className="px-4 py-2 text-sm font-semibold text-slate-800">
+                  Dashboard
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Log Out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="px-4 py-2 text-sm font-semibold text-slate-800">
+                  Log In
+                </Link>
+                <Link
+                  to="/signup"
+                  className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Sign Up
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -116,10 +142,10 @@ export default function Home() {
 
           <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
             <Link
-              to="/signup"
+              to={isAuthenticated ? "/profile" : "/signup"}
               className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-950 px-8 text-lg font-bold text-white transition hover:bg-slate-800"
             >
-              Get Started Free
+              {isAuthenticated ? "Go to Dashboard" : "Get Started Free"}
             </Link>
           </div>
         </section>

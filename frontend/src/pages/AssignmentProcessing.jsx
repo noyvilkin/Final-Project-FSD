@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
@@ -42,6 +42,10 @@ export default function AssignmentProcessing() {
   const [attempt, setAttempt] = useState(0);
   const [currentStatus, setCurrentStatus] = useState(id ? "pending" : "uploading");
   const [errorMessage, setErrorMessage] = useState("");
+  // Guards against duplicate uploads from React StrictMode's double effect
+  // invocation (dev) or fast remounts, which would otherwise create two
+  // submissions for a single homework upload.
+  const uploadStartedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +59,13 @@ export default function AssignmentProcessing() {
           setErrorMessage("Missing submission data. Please submit again.");
           return;
         }
+
+        // Only ever issue one upload. A concurrent effect run (StrictMode) bails
+        // here; once the id is committed to state the effect re-runs and polls.
+        if (uploadStartedRef.current) {
+          return;
+        }
+        uploadStartedRef.current = true;
 
         try {
           setCurrentStatus("uploading");
@@ -87,6 +98,7 @@ export default function AssignmentProcessing() {
             navigate(`/assignment/${activeAssignmentId}/processing`, { replace: true });
           }
         } catch (error) {
+          uploadStartedRef.current = false;
           if (cancelled) return;
           setErrorMessage(error?.message || "Upload failed. Please submit again.");
           return;
@@ -160,7 +172,7 @@ export default function AssignmentProcessing() {
   }, [attempt, currentStatus]);
 
   return (
-    <PageLayout title="Technical Assignment" subtitle="Analyzing your submission" showBack>
+    <PageLayout title="Technical Assignment" subtitle="Analyzing your submission" showBack backTo="/assignment">
       <Card className="p-6">
         <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
 
