@@ -1,8 +1,61 @@
+import JSZip from 'jszip';
+
+import { uploadBlob } from '../../common/services/s3Upload.js';
 import { AssignmentFeedback } from '../../features/assignment/models/assignmentFeedback.model.js';
 
 import type { SeedUsersMap } from '../seed.types.js';
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+type SeedAssignmentFilesInput = {
+  userId: string;
+  assignmentSlug: string;
+  requirements: string;
+  sourceFiles: Record<string, string>;
+};
+
+async function uploadSeedAssignmentFiles({
+  userId,
+  assignmentSlug,
+  requirements,
+  sourceFiles,
+}: SeedAssignmentFilesInput): Promise<{
+  requirementsFileKey: string;
+  solutionFileKey: string;
+}> {
+  const baseKey = `assignments/${userId}/seed/${assignmentSlug}`;
+
+  const requirementsFileKey = `${baseKey}/requirements.md`;
+  const solutionFileKey = `${baseKey}/solution.zip`;
+
+  const zip = new JSZip();
+
+  for (const [fileName, content] of Object.entries(sourceFiles)) {
+    zip.file(fileName, content);
+  }
+
+  const solutionZip = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+  });
+
+  await uploadBlob(
+    requirementsFileKey,
+    requirements,
+    'text/markdown'
+  );
+
+  await uploadBlob(
+    solutionFileKey,
+    solutionZip,
+    'application/zip'
+  );
+
+  return {
+    requirementsFileKey,
+    solutionFileKey,
+  };
+}
 
 function completedDates(
   now: number,
@@ -26,16 +79,192 @@ export async function seedAssignments(
 ): Promise<void> {
   const now = Date.now();
 
+  const veredTaskApiFiles = await uploadSeedAssignmentFiles({
+  userId: users.vered._id.toString(),
+  assignmentSlug: 'task-api',
+  requirements: `
+# Task Management API
+
+Create a REST API using TypeScript, Express and MongoDB.
+
+Requirements:
+- Create, read, update and delete tasks.
+- Add JWT authentication.
+- Validate request data.
+- Add automated tests.
+`.trim(),
+  sourceFiles: {
+    'src/server.ts': `
+import express from 'express';
+
+const app = express();
+app.use(express.json());
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.listen(3000);
+`.trim(),
+
+    'src/routes/task.routes.ts': `
+import { Router } from 'express';
+
+const router = Router();
+
+router.get('/', async (_req, res) => {
+  res.json({ tasks: [] });
+});
+
+export default router;
+`.trim(),
+
+    'README.md': `
+# Task API
+
+TypeScript REST API built with Express and MongoDB.
+`.trim(),
+  },
+});
+
+const veredAndroidFiles = await uploadSeedAssignmentFiles({
+  userId: users.vered._id.toString(),
+  assignmentSlug: 'android-app',
+  requirements: `
+# Android Application
+
+Build an Android application using Kotlin.
+
+Requirements:
+- Use MVVM architecture.
+- Store local data with Room.
+- Synchronize data with Firebase.
+- Support user authentication.
+`.trim(),
+  sourceFiles: {
+    'app/src/main/java/com/example/app/MainActivity.kt': `
+package com.example.app
+
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+    }
+}
+`.trim(),
+
+    'app/src/main/java/com/example/app/ProfileViewModel.kt': `
+package com.example.app
+
+import androidx.lifecycle.ViewModel
+
+class ProfileViewModel : ViewModel()
+`.trim(),
+
+    'README.md': `
+# Android MVVM Application
+
+Kotlin application using Room, Firebase and MVVM.
+`.trim(),
+  },
+});
+
+const yuvalReactFiles = await uploadSeedAssignmentFiles({
+  userId: users.yuval._id.toString(),
+  assignmentSlug: 'react-dashboard',
+  requirements: `
+# React Dashboard
+
+Create a responsive dashboard.
+
+Requirements:
+- Load information from an API.
+- Display loading and error states.
+- Support filtering.
+- Use reusable React components.
+`.trim(),
+  sourceFiles: {
+    'src/App.jsx': `
+import Dashboard from './pages/Dashboard';
+
+export default function App() {
+  return <Dashboard />;
+}
+`.trim(),
+
+    'src/pages/Dashboard.jsx': `
+export default function Dashboard() {
+  return (
+    <main>
+      <h1>Dashboard</h1>
+    </main>
+  );
+}
+`.trim(),
+
+    'README.md': `
+# React Dashboard
+
+Responsive dashboard built with React and Vite.
+`.trim(),
+  },
+});
+
+const yuvalJavaFiles = await uploadSeedAssignmentFiles({
+  userId: users.yuval._id.toString(),
+  assignmentSlug: 'java-library',
+  requirements: `
+# Library Management System
+
+Create a Java library-management application.
+
+Requirements:
+- Manage books and members.
+- Support borrowing and returning books.
+- Apply object-oriented design.
+- Add JUnit tests.
+`.trim(),
+  sourceFiles: {
+    'src/main/java/library/LibraryService.java': `
+package library;
+
+public class LibraryService {
+    public boolean borrowBook(String bookId, String memberId) {
+        return bookId != null && memberId != null;
+    }
+}
+`.trim(),
+
+    'src/test/java/library/LibraryServiceTest.java': `
+package library;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+
+class LibraryServiceTest {
+    @Test
+    void allowsValidBorrowing() {
+        LibraryService service = new LibraryService();
+        assertTrue(service.borrowBook("book-1", "member-1"));
+    }
+}
+`.trim(),
+
+    'README.md': `
+# Java Library System
+
+Object-oriented library-management application.
+`.trim(),
+  },
+});
   const assignments = [
     {
       userId: users.vered._id,
 
-      requirementsFileKey:
-        `assignments/${users.vered._id}/task-api/requirement-task-api.pdf`,
-
-      solutionFileKey:
-        `assignments/${users.vered._id}/task-api/solution-task-api.zip`,
-
+      requirementsFileKey: veredTaskApiFiles.requirementsFileKey,
+solutionFileKey: veredTaskApiFiles.solutionFileKey,
       userNotes:
         'REST API assignment using TypeScript, Express and MongoDB.',
 
@@ -135,12 +364,8 @@ export async function seedAssignments(
     {
       userId: users.vered._id,
 
-      requirementsFileKey:
-        `assignments/${users.vered._id}/android-app/requirement-android-app.pdf`,
-
-      solutionFileKey:
-        `assignments/${users.vered._id}/android-app/solution-android-app.zip`,
-
+      requirementsFileKey: veredAndroidFiles.requirementsFileKey,
+solutionFileKey: veredAndroidFiles.solutionFileKey,
       userNotes:
         'Android application using Kotlin, Room, Firebase and MVVM.',
 
@@ -240,12 +465,8 @@ export async function seedAssignments(
     {
       userId: users.yuval._id,
 
-      requirementsFileKey:
-        `assignments/${users.yuval._id}/react-dashboard/requirement-dashboard.pdf`,
-
-      solutionFileKey:
-        `assignments/${users.yuval._id}/react-dashboard/solution-dashboard.zip`,
-
+      requirementsFileKey: yuvalReactFiles.requirementsFileKey,
+solutionFileKey: yuvalReactFiles.solutionFileKey,
       userNotes:
         'Responsive React dashboard with filtering and API integration.',
 
@@ -342,12 +563,8 @@ export async function seedAssignments(
     {
       userId: users.yuval._id,
 
-      requirementsFileKey:
-        `assignments/${users.yuval._id}/java-library/requirement-library.pdf`,
-
-      solutionFileKey:
-        `assignments/${users.yuval._id}/java-library/solution-library.zip`,
-
+      requirementsFileKey: yuvalJavaFiles.requirementsFileKey,
+solutionFileKey: yuvalJavaFiles.solutionFileKey,
       userNotes:
         'Java library-management assignment using object-oriented design.',
 
