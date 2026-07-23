@@ -230,15 +230,15 @@ function scoreCourseRelevance(
   const uniqueMatchedKeywords = new Set(matchedKeywords);
 
   const ratio =
-    uniqueMatchedKeywords.size / Math.max(uniqueExpectedKeywords.size, 1);
+  uniqueMatchedKeywords.size / Math.max(uniqueExpectedKeywords.size, 1);
 
-  if (ratio >= 0.3 || actual.length >= 3) {
-    return {
-      field,
-      score: 1,
-      reason: `Relevant course recommendations returned (${actual.length} courses)`
-    };
-  }
+if (ratio >= 0.3) {
+  return {
+    field,
+    score: 1,
+    reason: `Relevant course recommendations returned (${actual.length} courses)`
+  };
+}
 
   if (ratio >= 0.15) {
     return {
