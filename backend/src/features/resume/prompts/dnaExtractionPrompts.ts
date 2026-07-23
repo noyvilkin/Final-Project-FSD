@@ -23,9 +23,47 @@ RULES:
    - topSkills: 3–5 strongest, best-supported skills (must be a subset of the names in the skills array).
    - recommendedCourses: 3–5 realistic next-step learning topics implied by gaps in the resume.
 
-Output contract:
-- Return ONLY valid JSON — no markdown, no prose, no code fences.
-- Follow the exact schema specified in the user message.`;
+PROFILE SUMMARY RULES:
+11. profileSummary is a derived rollup based on the structured resume data.
+12. If no degree is found, set hasDegree to false.
+13. Set highestDegree, fieldOfStudy, institution, and gradeAverage from the strongest supported education entry.
+14. If no grade average or GPA is explicitly found, set gradeAverage to null.
+15. Preserve the numeric grade value as it appears in the resume.
+16. totalYearsOfExperience should be estimated only when the resume contains enough timeline information.
+17. If the timeline is missing or too unclear, set totalYearsOfExperience to null.
+
+ROLE EXTRACTION RULES:
+18. lastRoleTitle must come from the most recent work experience, project role, or clearly stated current occupation.
+19. lastRoleTitle must be a short professional title, usually 2 to 6 words.
+20. Do not put responsibilities, descriptions, summaries, achievements, or long sentences in lastRoleTitle.
+21. If the exact title is not stated, infer a concise professional title only when the resume strongly supports it.
+22. lastRoleCompany should contain only the most recent company or organization name, if available.
+
+SKILL EXTRACTION RULES:
+23. topSkills must contain 3 to 5 of the strongest and best-supported skills in the resume.
+24. topSkills must be a subset of the names in the skills array.
+25. Prioritize skills supported by work experience, projects, education, tools, technologies, or repeated resume sections.
+26. Avoid generic skills such as "communication", "teamwork", or "problem solving" unless clearly central and supported.
+27. Do not include skills that are not mentioned or strongly implied.
+
+COURSE RECOMMENDATION RULES:
+28. recommendedCourses must contain 3 to 5 realistic and specific learning topics.
+29. Recommended courses should be based on:
+   - the candidate's current or most recent role
+   - field of study
+   - strongest skills
+   - missing depth or likely next-step growth areas
+   - gaps implied by the resume
+30. Do not recommend random, generic, or unrelated courses.
+31. Do not recommend courses based on requirements not stated or implied in the resume.
+32. Course recommendations should help the candidate grow naturally from their current background.
+
+OUTPUT CONTRACT:
+33. Return only valid JSON.
+34. Do not include markdown.
+35. Do not include explanations.
+36. Do not include code fences.
+37. Follow the exact schema specified in the user message.`;
 
 export function buildDnaExtractionUserMessage(resumeText: string): string {
   return `## Resume Text
@@ -92,10 +130,26 @@ Guidelines:
 - Set "inSkillsSection" to true ONLY for skills that appear in an explicit, dedicated skills-type section of the resume (commonly titled "Skills", "Technical Skills", "Technologies", "Tech Stack", "Tools", "Core Competencies", or similar). If a skill only appears inside an experience bullet, the About Me/summary, or education, set it to false. This flag must reflect the resume's actual layout — do not mark a skill true just because it is important.
 - For proficiencyLevel, use: expert (5+ years or senior-level usage), advanced (3-5 years), intermediate (1-3 years), beginner (<1 year or just mentioned).
 - Order experience entries from most recent to oldest.
-- If a skill appears in the skills section AND in experience bullets, include it once in the skills array.
-- profileSummary.lastRoleTitle good examples: "Training Program Coordinator", "Frontend Developer", "Data Analyst".
-- profileSummary.lastRoleTitle bad examples: "responsible for managing training schedules and implementation of learning systems".
-- profileSummary.topSkills: 3-5 items, drawn from the skills array names.
-- profileSummary.recommendedCourses: 3-5 items, realistic next-step topics implied by gaps.
+- If a skill appears in the skills section and in experience bullets, include it once in the skills array.
+- candidateName should contain the full candidate name only if clearly available.
+- candidateEmail should be extracted only if an email address appears in the resume.
+- hasDegree should be true only when an academic degree is clearly mentioned.
+- highestDegree should contain the degree type only, such as "B.Sc.", "B.A.", "M.Sc.", or null.
+- fieldOfStudy should contain only the academic field, such as "Computer Science", "Economics", or null.
+- institution should contain only the academic institution name, if available.
+- gradeAverage should preserve the numeric value as it appears in the resume.
+- totalYearsOfExperience should be a number only if the resume timeline supports a reasonable estimate.
+- profileSummary.lastRoleTitle must contain only the most recent professional title.
+- profileSummary.lastRoleTitle must be short, usually 2 to 6 words.
+- profileSummary.lastRoleTitle must not include a full sentence, responsibility description, achievement, or paragraph.
+- Good examples for profileSummary.lastRoleTitle: "Training Program Coordinator", "Frontend Developer", "Data Analyst", "Learning Systems Manager".
+- Bad example for profileSummary.lastRoleTitle: "responsible for managing training schedules and implementation of learning systems".
+- If the exact latest title is not clearly written, infer a concise title only if the resume strongly supports it.
+- profileSummary.lastRoleCompany should contain only the most recent company or organization name, if available.
+- profileSummary.topSkills should contain 3 to 5 items and must be drawn from the skills array names.
+- profileSummary.topSkills must be supported by the resume content.
+- profileSummary.recommendedCourses should contain 3 to 5 specific learning topics.
+- profileSummary.recommendedCourses should relate to the candidate's current role, field of study, strongest skills, and likely growth areas.
+- Do not recommend generic, random, or unrelated courses.
 - If a profileSummary field has no evidence in the resume, return null or an empty array as appropriate.`;
 }

@@ -18,6 +18,7 @@
     "poc:optimize": "tsx src/features/resume/POC/poc-ai-optimization-test.ts",
     "eval:resume": "tsx src/features/resume/eval/runEval.ts",
     "eval:assignment": "tsx src/features/assignment/eval/runEval.ts",
+    "eval:profile": "tsx src/features/profile-analysis/eval/profile-analysis.eval.ts",
     "prod": "tsc -p tsconfig_prod.json && node ./dist/server.js"
   },
   "dependencies": {
