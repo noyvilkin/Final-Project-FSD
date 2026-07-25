@@ -149,7 +149,10 @@ export default function AssignmentProcessing() {
           }
         } catch (error) {
           uploadStartedRef.current = false;
-          if (cancelled) return;
+          // Surface the failure even if THIS effect run was superseded by
+          // StrictMode's cleanup (cancelled === true) — the component is still
+          // mounted, and no other run will retry, so guarding on `cancelled`
+          // here would swallow the error and leave the spinner stuck forever.
           setErrorMessage(error?.message || "Upload failed. Please submit again.");
           return;
         }
