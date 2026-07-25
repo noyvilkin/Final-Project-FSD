@@ -62,6 +62,20 @@ router.post(
     // Check if this is an assignment upload
     const hasAssignmentFiles = files['assignments'] && files['assignments'].length > 0;
     if (hasAssignmentFiles) {
+      // Enforce the per-user daily cap BEFORE uploading anything to S3, so a
+      // capped user never consumes storage or the shared Gemini quota.
+      const withinLimit = await AssignmentService.isWithinDailyLimit(userId);
+      if (!withinLimit) {
+        res.status(429).json({
+          error: {
+            code: "ASSIGNMENT_DAILY_LIMIT",
+            message: `You've reached the daily limit of ${AssignmentService.MAX_ASSIGNMENTS_PER_DAY} assignment submissions. Please try again later.`
+          },
+          requestId: req.requestId ?? "-"
+        });
+        return;
+      }
+
       // Pre-generate assignment ID using MongoDB ObjectId format
       const { Types } = await import('mongoose');
       assignmentId = new Types.ObjectId().toString();

@@ -129,7 +129,10 @@ export default function AssignmentProcessing() {
           }
 
           if (status === "failed") {
-            setErrorMessage("Analysis failed. Please submit again with updated files.");
+            const serverReason = response?.assignment?.processingErrors?.[0];
+            setErrorMessage(
+              serverReason || "Analysis failed. Please submit again with updated files."
+            );
             return;
           }
         } catch (error) {

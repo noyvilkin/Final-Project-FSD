@@ -72,6 +72,9 @@ router.get(
         userNotes: assignment.userNotes,
         metadata: assignment.metadata,
         feedback: assignment.feedback,
+        ...(assignment.processingErrors?.length && {
+          processingErrors: assignment.processingErrors
+        }),
         createdAt: assignment.createdAt,
         updatedAt: assignment.updatedAt
       },
