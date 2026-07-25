@@ -98,7 +98,7 @@ export const PACKAGE_FIXTURES: PackageFixture[] = [
     ],
     functionalCorrectnessRange: { min: 55, max: 90 },
     codeQualityRange: { min: 75, max: 90 },
-    expectedGrades: ['C', 'B'],
+    expectedGrades: ['C', 'C+', 'B-', 'B'],
     description: 'AI must detect missing test files',
   },
   {
@@ -113,7 +113,7 @@ export const PACKAGE_FIXTURES: PackageFixture[] = [
     secondaryKeywords: ['/status', 'wrong name', 'endpoint name', 'not /health'],
     functionalCorrectnessRange: { min: 45, max: 80 },
     codeQualityRange: { min: 75, max: 90 },
-    expectedGrades: ['C', 'D'],
+    expectedGrades: ['D', 'C-', 'C', 'C+'],
     description: 'AI must detect missing /health endpoint',
   },
   {
@@ -126,7 +126,7 @@ export const PACKAGE_FIXTURES: PackageFixture[] = [
     primaryKeywords: ['express', 'postgresql', 'jwt', 'health', 'test'],
     functionalCorrectnessRange: { min: 75, max: 100 },
     codeQualityRange: { min: 80, max: 100 },
-    expectedGrades: ['A', 'B'],
+    expectedGrades: ['A', 'A-', 'B+', 'B'],
     description: 'AI must NOT raise false positives on a clean solution',
   },
 ];

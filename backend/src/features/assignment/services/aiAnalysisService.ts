@@ -30,7 +30,7 @@ export interface AIAnalysisResult {
     };
     overall: {
       score: number;      // 0-100
-      grade: string;      // A, B, C, D, F
+      grade: string;      // A, A-, B+, B, B-, C+, C, C-, D+, D, F
       summary: string;
     };
   };
@@ -80,11 +80,11 @@ const ANALYSIS_RESPONSE_SCHEMA = {
       properties: {
         score: { type: 'integer' },
         grade: {
-          // Coarse A–F scale that matches the prompt's score→grade table
-          // (90+ A, 80s B, 70s C, 60s D, <60 F) so the letter can't drift
+          // Granular +/- scale. The prompt defines an explicit score→grade
+          // band for every one of these letters so the letter can never drift
           // from overall.score.
           type: 'string',
-          enum: ['A', 'B', 'C', 'D', 'F'],
+          enum: ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'F'],
         },
         summary: { type: 'string' },
       },
@@ -400,19 +400,20 @@ not as missingFeatures.
 - overall.score ≈ 0.45 * functionalCorrectness + 0.35 * codeQuality + 0.20 * bestPractices.
 - bestPractices is the LIGHTEST factor — unrequested improvements should not sink the grade.
 
-**GRADE MUST MATCH THE OVERALL SCORE:**
-- 90–100 → A    80–89 → B    70–79 → C    60–69 → D    below 60 → F
-- The letter grade MUST be consistent with overall.score (do not output grade "F" with a score of 70).
+**GRADE MUST MATCH THE OVERALL SCORE (use this exact band table):**
+- 93–100 → A    90–92 → A-   87–89 → B+   83–86 → B    80–82 → B-
+- 77–79 → C+    73–76 → C    70–72 → C-   65–69 → D+   60–64 → D    below 60 → F
+- The letter grade MUST fall in the band that contains overall.score (never output grade "F" with a score of 70, or "A" with a score of 85).
 
 **CALIBRATION EXAMPLES:**
 - A working REST API that omits unit tests → codeQuality ~80, functionalCorrectness ~70,
-  bestPractices ~55, overall ~71, grade C.
+  bestPractices ~55, overall ~71, grade C-.
 - A working API missing only the /health endpoint → codeQuality ~85, functionalCorrectness ~60,
-  bestPractices ~70, overall ~71, grade C.
+  bestPractices ~70, overall ~71, grade C-.
 - An app that uses the wrong framework/database entirely → codeQuality ~50,
   functionalCorrectness ~10, bestPractices ~40, overall ~30, grade F.
 - A clean app that meets ALL explicit requirements (even with minor unrequested security/validation
-  nits) → codeQuality ~85, functionalCorrectness ~90, bestPractices ~70, overall ~83, grade A/B.
+  nits) → codeQuality ~85, functionalCorrectness ~90, bestPractices ~70, overall ~83, grade B.
 
 **Assignment Requirements:**
 ${payload.requirements}
