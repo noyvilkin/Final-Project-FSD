@@ -169,7 +169,6 @@ export default function AssignmentSubmission() {
           submission: {
             descriptionFile,
             solutionFile,
-            userId: userId || undefined,
           },
         },
       });

@@ -134,7 +134,6 @@ export default function AssignmentProcessing() {
 
           const uploadResult = await uploadAssignment({
             assignmentFiles: [normalizedDescription, normalizedSolution],
-            userId: initialSubmission.userId,
             notes: initialSubmission.notes,
           });
 

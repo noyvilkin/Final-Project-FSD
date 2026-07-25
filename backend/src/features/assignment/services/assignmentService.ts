@@ -33,6 +33,14 @@ export class AssignmentService {
   static readonly MAX_ASSIGNMENTS_PER_DAY = Number(process.env.ASSIGNMENT_DAILY_LIMIT || '20');
 
   /**
+   * Non-terminal records older than this are considered orphaned (e.g. the
+   * process restarted mid-analysis) and are swept to `failed` on the next read.
+   * A normal run finishes in ~15s, so 10 min is comfortably safe.
+   */
+  private static readonly STALE_ANALYSIS_MS = 10 * 60 * 1000;
+  private static readonly TERMINAL_STATUSES = ['completed', 'failed'];
+
+  /**
    * Create a new assignment and trigger analysis if both files are provided
    */
   static async createAssignment(
@@ -240,7 +248,55 @@ export class AssignmentService {
    * Get a single assignment by ID
    */
   static async getAssignment(assignmentId: string): Promise<IAssignmentFeedback | null> {
-    return AssignmentFeedback.findById(assignmentId);
+    const assignment = await AssignmentFeedback.findById(assignmentId);
+    if (!assignment) {
+      return null;
+    }
+    return (await AssignmentService.sweepIfStale(assignment)) ?? assignment;
+  }
+
+  /**
+   * Lazy watchdog: if a record is stuck in a non-terminal state past
+   * {@link STALE_ANALYSIS_MS} (typically because the process died mid-analysis
+   * with no one to mark it failed), flip it to `failed` so it stops polling
+   * forever and stops counting against the user's daily cap. The update is
+   * conditional/atomic so we never clobber a run that's still legitimately
+   * progressing. Returns the updated doc if swept, otherwise null.
+   */
+  private static async sweepIfStale(
+    assignment: IAssignmentFeedback
+  ): Promise<IAssignmentFeedback | null> {
+    if (AssignmentService.TERMINAL_STATUSES.includes(assignment.status)) {
+      return null;
+    }
+
+    const updatedAt = assignment.updatedAt?.getTime() ?? 0;
+    if (Date.now() - updatedAt < AssignmentService.STALE_ANALYSIS_MS) {
+      return null;
+    }
+
+    const cutoff = new Date(Date.now() - AssignmentService.STALE_ANALYSIS_MS);
+    const swept = await AssignmentFeedback.findOneAndUpdate(
+      {
+        _id: assignment._id,
+        status: { $nin: AssignmentService.TERMINAL_STATUSES },
+        updatedAt: { $lt: cutoff }
+      },
+      {
+        status: 'failed',
+        processingErrors: ['Analysis timed out and did not finish. Please submit again.']
+      },
+      { new: true }
+    );
+
+    if (swept) {
+      appLogger.warn('Swept orphaned assignment to failed', {
+        assignmentId: assignment._id?.toString(),
+        previousStatus: assignment.status
+      });
+    }
+
+    return swept;
   }
 
   /**
@@ -295,7 +351,9 @@ export class AssignmentService {
 
   /**
    * Whether the user is under the per-day submission cap. Counts records created
-   * in the last 24h (in-progress ones included) so bursts can't slip through.
+   * in the last 24h, including still-in-progress ones so bursts can't slip
+   * through, but excluding `failed` ones — a user shouldn't lose quota because
+   * storage/Gemini was down and their attempt never produced a result.
    */
   static async isWithinDailyLimit(userId: string): Promise<boolean> {
     if (!Types.ObjectId.isValid(userId)) {
@@ -305,6 +363,7 @@ export class AssignmentService {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const count = await AssignmentFeedback.countDocuments({
       userId,
+      status: { $ne: 'failed' },
       createdAt: { $gte: since }
     });
 

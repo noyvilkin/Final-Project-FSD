@@ -504,9 +504,9 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
       .map((r) => {
         const status = String((r as any).status ?? '').toLowerCase() as RequirementStatus;
         return {
-          requirement: String((r as any).requirement ?? '').trim().slice(0, 300),
+          requirement: String((r as any).requirement ?? '').trim().slice(0, 120),
           status: allowed.includes(status) ? status : 'partial',
-          justification: String((r as any).justification ?? '').trim().slice(0, 300),
+          justification: String((r as any).justification ?? '').trim().slice(0, 200),
         };
       })
       .filter((r) => r.requirement.length > 0)
