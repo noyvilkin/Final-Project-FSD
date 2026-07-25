@@ -223,7 +223,10 @@ export default function AssignmentProcessing() {
     setProgress((prev) => (target > prev ? target : prev));
   }, [currentStatus]);
 
-  const failed = currentStatus === "failed";
+  // Any error (upload failure, poll failure, timeout, or a backend "failed"
+  // status) puts the UI into a terminal error state so the spinner stops and
+  // the step that was in progress is marked as errored.
+  const failed = currentStatus === "failed" || Boolean(errorMessage);
   const isComplete = currentStatus === "completed";
   const activeIndex = stageIndexForStatus(currentStatus);
 
@@ -234,8 +237,9 @@ export default function AssignmentProcessing() {
           {failed ? "We hit a problem" : isComplete ? "All done!" : "Working on your feedback"}
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          {statusLabel(currentStatus)}
-          {failed || isComplete ? "" : ". This usually takes 20-90 seconds."}
+          {failed
+            ? "Something went wrong — see details below."
+            : `${statusLabel(currentStatus)}${isComplete ? "" : ". This usually takes 20-90 seconds."}`}
         </p>
 
         <div className="mt-5 h-2 w-full rounded-full bg-gray-200">
