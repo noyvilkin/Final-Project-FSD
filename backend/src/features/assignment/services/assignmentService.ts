@@ -359,27 +359,6 @@ export class AssignmentService {
   }
 
   /**
-   * Update assignment status
-   */
-  static async updateAssignmentStatus(
-    assignmentId: string,
-    status: string,
-    metadata?: Record<string, unknown>
-  ): Promise<boolean> {
-    try {
-      const result = await AssignmentFeedback.findByIdAndUpdate(
-        assignmentId,
-        { status, ...(metadata && { metadata }) },
-        { new: true }
-      );
-      return !!result;
-    } catch (error) {
-      appLogger.error('Failed to update assignment status', { error });
-      return false;
-    }
-  }
-
-  /**
    * Categorize uploaded files by type
    */
   static categorizeUploadedFiles(
