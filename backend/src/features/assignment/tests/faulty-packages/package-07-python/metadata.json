@@ -1,0 +1,8 @@
+{
+  "id": "pkg-07",
+  "language": "python",
+  "violation_key": "missing_auth",
+  "violation_description": "Assignment requires JWT authentication on all /tasks endpoints; the Flask solution has no authentication at all.",
+  "secondary_violation": "none",
+  "secondary_violation_description": ""
+}

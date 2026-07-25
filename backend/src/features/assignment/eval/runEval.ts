@@ -30,7 +30,7 @@ const PACKAGE_COOLDOWN_MS = Number(process.env.SEMANTIC_AUDIT_PACKAGE_COOLDOWN_M
 const FINAL_PACKAGE_COOLDOWN_MS = Number(process.env.SEMANTIC_AUDIT_FINAL_PACKAGE_COOLDOWN_MS || '45000');
 
 // Easy → hard, good package last (calmer rate-limit window for the final score).
-const RUN_ORDER = ['pkg-01', 'pkg-04', 'pkg-05', 'pkg-02', 'pkg-03', 'pkg-06'];
+const RUN_ORDER = ['pkg-01', 'pkg-04', 'pkg-05', 'pkg-02', 'pkg-03', 'pkg-07', 'pkg-08', 'pkg-06'];
 
 // Optional subset filter, e.g. EVAL_ONLY=pkg-03,pkg-06 runs just those two packages.
 // Useful for re-checking specific packages without spending quota on the whole suite.
