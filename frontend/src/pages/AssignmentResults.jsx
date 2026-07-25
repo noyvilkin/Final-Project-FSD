@@ -43,10 +43,15 @@ function safeArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
+// Recover the original upload name from an S3 key. Stored keys look like
+// `assignments/{userId}/{assignmentId}/{uuid}-{requirement|solution}-{original}`,
+// so we drop the path, the leading UUID, and the role prefix we add on upload.
 function fileNameFromKey(key) {
   if (!key || typeof key !== "string") return "Not provided";
-  const parts = key.split("/");
-  return parts[parts.length - 1] || key;
+  const base = key.split("/").pop() || key;
+  return base
+    .replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "")
+    .replace(/^(requirement|solution)-/i, "");
 }
 
 function ListSection({ title, subtitle, toneClass, icon, items }) {

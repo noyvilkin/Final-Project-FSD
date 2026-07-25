@@ -56,7 +56,9 @@ function MetaBadge({ children }) {
 function fileNameFromKey(key) {
   if (!key) return "solution";
   const base = key.split("/").pop() || key;
-  return base.replace(/^[0-9a-f-]{36}-/i, "");
+  return base
+    .replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "")
+    .replace(/^(requirement|solution)-/i, "");
 }
 
 function notesPreview(text) {
