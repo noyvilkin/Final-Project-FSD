@@ -53,6 +53,86 @@ function MetaBadge({ children }) {
   );
 }
 
+// Small +/- delta chip comparing a score to the chronologically previous one.
+function DeltaBadge({ delta }) {
+  if (delta == null) return null;
+  if (delta === 0) {
+    return <span className="text-[10px] font-semibold text-gray-400">no change</span>;
+  }
+  const up = delta > 0;
+  return (
+    <span
+      className={`text-[10px] font-semibold ${up ? "text-emerald-600" : "text-rose-600"}`}
+      title="Change vs your previous completed submission"
+    >
+      {up ? "▲" : "▼"} {up ? "+" : ""}{delta}
+    </span>
+  );
+}
+
+// Dependency-free sparkline of scores over time (oldest → newest).
+function Sparkline({ scores, width = 160, height = 36 }) {
+  if (!scores || scores.length < 2) return null;
+  const pad = 3;
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const span = max - min || 1;
+  const stepX = (width - pad * 2) / (scores.length - 1);
+  const points = scores.map((s, i) => {
+    const x = pad + i * stepX;
+    const y = pad + (height - pad * 2) * (1 - (s - min) / span);
+    return [x, y];
+  });
+  const path = points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const [lastX, lastY] = points[points.length - 1];
+  return (
+    <svg width={width} height={height} className="overflow-visible">
+      <polyline
+        points={path}
+        fill="none"
+        stroke="#2563eb"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx={lastX} cy={lastY} r="3" fill="#2563eb" />
+    </svg>
+  );
+}
+
+function ProgressTrend({ chrono }) {
+  const scores = chrono.map((c) => c.score);
+  const latest = scores[scores.length - 1];
+  const previous = scores[scores.length - 2];
+  const best = Math.max(...scores);
+  const delta = latest - previous;
+  const up = delta > 0;
+
+  return (
+    <Card className="mb-4 p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Score Progress
+          </p>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-blue-700">{latest}%</span>
+            <span
+              className={`text-sm font-semibold ${up ? "text-emerald-600" : delta === 0 ? "text-gray-400" : "text-rose-600"}`}
+            >
+              {delta === 0 ? "no change" : `${up ? "▲ +" : "▼ "}${delta} vs previous`}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] text-gray-500">
+            Best {best}% · {chrono.length} completed submissions
+          </p>
+        </div>
+        <Sparkline scores={scores} />
+      </div>
+    </Card>
+  );
+}
+
 function fileNameFromKey(key) {
   if (!key) return "solution";
   const base = key.split("/").pop() || key;
@@ -196,6 +276,22 @@ export default function AssignmentHistory() {
     return sorted;
   }, [assignments, statusFilter, sortBy]);
 
+  // Chronological trend of completed submissions (oldest → newest) from the
+  // loaded page, plus a per-assignment delta vs the previous completed score.
+  const { chrono, deltaById } = useMemo(() => {
+    const completed = assignments
+      .filter((a) => a.status === "completed" && typeof a.aiFeedback?.score === "number")
+      .map((a) => ({ id: a.id, score: a.aiFeedback.score, createdAt: a.createdAt }))
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    const deltas = {};
+    completed.forEach((c, i) => {
+      deltas[c.id] = i === 0 ? null : c.score - completed[i - 1].score;
+    });
+
+    return { chrono: completed, deltaById: deltas };
+  }, [assignments]);
+
   const handleView = (assignment) => {
     if (assignment.status === "completed") {
       navigate(`/assignment/${assignment.id}/results`);
@@ -287,6 +383,8 @@ export default function AssignmentHistory() {
         </Card>
       )}
 
+      {!loading && chrono.length >= 2 && <ProgressTrend chrono={chrono} />}
+
       {loading && <HistorySkeleton />}
 
       {!loading && assignments.length === 0 && effectiveUserId && (
@@ -327,6 +425,9 @@ export default function AssignmentHistory() {
                           <span className="text-[10px] font-semibold text-gray-500">
                             {assignment.aiFeedback.grade}
                           </span>
+                        )}
+                        {assignment.status === "completed" && (
+                          <DeltaBadge delta={deltaById[assignment.id]} />
                         )}
                       </div>
                       <p className="text-sm font-medium text-gray-800 truncate">
