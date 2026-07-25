@@ -313,14 +313,12 @@ function writeJsonReport(report: FullEvalReport): string {
 async function main() {
   header('Assignment AI Evaluation Harness');
 
-  const useMock = process.env.SEMANTIC_AUDIT_USE_MOCK_AI === 'true';
-  if (!useMock && !process.env.GEMINI_API_KEY) {
-    console.error('\n  ERROR: GEMINI_API_KEY is not set in .env (and SEMANTIC_AUDIT_USE_MOCK_AI is not true).\n');
+  if (!process.env.GEMINI_API_KEY) {
+    console.error('\n  ERROR: GEMINI_API_KEY is not set in .env.\n');
     process.exit(1);
   }
 
   console.log(`  Packages          : ${PACKAGE_FIXTURES.length}`);
-  console.log(`  Mode              : ${useMock ? 'mock AI' : 'real Gemini'}`);
   console.log(`  Cooldown / package: ${PACKAGE_COOLDOWN_MS}ms (final: ${FINAL_PACKAGE_COOLDOWN_MS}ms)`);
 
   const orderedFixtures = RUN_ORDER
@@ -377,7 +375,7 @@ async function main() {
     }
 
     const isLast = i === orderedFixtures.length - 1;
-    if (!isLast && !useMock) {
+    if (!isLast) {
       const nextIsGood = orderedFixtures[i + 1]?.isGood;
       const cooldown = nextIsGood ? FINAL_PACKAGE_COOLDOWN_MS : PACKAGE_COOLDOWN_MS;
       if (cooldown > 0) {
