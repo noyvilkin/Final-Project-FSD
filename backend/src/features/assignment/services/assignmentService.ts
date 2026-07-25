@@ -21,6 +21,9 @@ export interface UploadedFile {
   size: number;
 }
 
+/** The two roles an uploaded assignment file can play. */
+export type AssignmentFileRole = 'requirements' | 'solution';
+
 export class AssignmentService {
   /**
    * Max assignments a single user may submit per rolling 24h. Each submission
@@ -359,25 +362,16 @@ export class AssignmentService {
   }
 
   /**
-   * Categorize uploaded files by type
+   * Resolve an uploaded assignment file's role from the explicit prefix the
+   * client attaches on upload. The frontend uploads exactly two files named
+   * `requirement-<original>` and `solution-<original>` (AssignmentProcessing.jsx),
+   * so the role is passed in-band rather than guessed from arbitrary filenames.
+   * Returns null for anything that doesn't carry a known role prefix.
    */
-  static categorizeUploadedFiles(
-    files: UploadedFile[]
-  ): { requirements?: UploadedFile; solution?: UploadedFile } {
-    const categorized: { requirements?: UploadedFile; solution?: UploadedFile } = {};
-
-    for (const file of files) {
-      const filename = file.key.toLowerCase();
-      if (filename.includes('requirement') || filename.includes('spec')) {
-        categorized.requirements = file;
-      } else if (filename.includes('solution') || filename.includes('code') || filename.includes('main')) {
-        categorized.solution = file;
-      } else if (!categorized.solution) {
-        // If no explicit solution file, use the first file as solution
-        categorized.solution = file;
-      }
-    }
-
-    return categorized;
+  static roleFromUploadName(originalName: string): AssignmentFileRole | null {
+    const name = originalName.toLowerCase();
+    if (name.startsWith('requirement-')) return 'requirements';
+    if (name.startsWith('solution-')) return 'solution';
+    return null;
   }
 }

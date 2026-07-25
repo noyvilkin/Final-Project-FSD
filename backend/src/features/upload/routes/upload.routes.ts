@@ -5,7 +5,7 @@ import { requireAuth } from "../../../common/middlewares/requireAuth.js";
 import { validateUploads } from "../../../common/middlewares/validateUploads.js";
 import { uploadFileToS3 } from "../../../common/services/s3Upload.js";
 import { ZipProcessor, type ZipScanResult } from "../../../common/utils/zipProcessor.js";
-import { AssignmentService, type UploadedFile } from "../../assignment/services/assignmentService.js";
+import { AssignmentService, type UploadedFile, type AssignmentFileRole } from "../../assignment/services/assignmentService.js";
 import type { StoragePath } from "../../../common/services/s3Upload.js";
 import { appLogger } from "../../../common/services/logger.js";
 
@@ -50,7 +50,9 @@ router.post(
       return;
     }
 
-    const uploadTasks: Promise<any>[] = [];
+    // Each task resolves to the S3 result plus the assignment role (if any) that
+    // the client declared via the file's `requirement-`/`solution-` name prefix.
+    const uploadTasks: Promise<{ role: AssignmentFileRole | null; uploaded: UploadedFile }>[] = [];
     const zipScanResults: Record<string, ZipScanResult> = {};
     
     // Pre-generate assignment ID and get user ID for assignment uploads.
@@ -88,6 +90,11 @@ router.post(
       if (!path) continue;
 
       for (const file of list) {
+        // Role is taken from the client-declared name prefix, not sniffed later.
+        const role = field === 'assignments'
+          ? AssignmentService.roleFromUploadName(file.originalname)
+          : null;
+
         // Check if this is a ZIP file for assignments (still scan for validation)
         const isZipFile = (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed');
         
@@ -114,7 +121,8 @@ router.post(
               appLogger.error(`ZIP processing failed for ${file.originalname}:`, error);
               // Continue with normal file upload even if ZIP processing fails
               return uploadFileToS3({ file, path, userId, assignmentId });
-            });
+            })
+            .then((uploaded) => ({ role, uploaded }));
             
           uploadTasks.push(scanTask);
         } else {
@@ -122,13 +130,16 @@ router.post(
           const uploadParams = field === 'assignments' 
             ? { file, path, userId, assignmentId }
             : { file, path };
-          uploadTasks.push(uploadFileToS3(uploadParams));
+          uploadTasks.push(
+            uploadFileToS3(uploadParams).then((uploaded) => ({ role, uploaded }))
+          );
         }
       }
     }
 
     try {
-      const uploadResults = await Promise.all(uploadTasks);
+      const taskResults = await Promise.all(uploadTasks);
+      const uploadResults = taskResults.map((r) => r.uploaded);
       
       // Prepare base response
       const response: any = {
@@ -141,16 +152,21 @@ router.post(
       }
 
       // Check if this is an assignment upload (contains assignment files)
-      const assignmentFiles = uploadResults.filter((file: UploadedFile) => 
-        file.key.startsWith('assignments/')
+      const assignmentResults = taskResults.filter((r) =>
+        r.uploaded.key.startsWith('assignments/')
       );
 
-      if (assignmentFiles.length > 0 && assignmentId) {
+      if (assignmentResults.length > 0 && assignmentId) {
         // This is an assignment upload - create assignment with the pre-generated ID
         try {
           const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
-          
-          const categorizedFiles = AssignmentService.categorizeUploadedFiles(assignmentFiles);
+
+          // Roles were declared by the client per file; map them directly.
+          const categorizedFiles: { requirements?: UploadedFile; solution?: UploadedFile } = {};
+          for (const { role, uploaded } of assignmentResults) {
+            if (role === 'requirements') categorizedFiles.requirements = uploaded;
+            else if (role === 'solution') categorizedFiles.solution = uploaded;
+          }
           
           if (categorizedFiles.solution) {
             const assignmentResult = await AssignmentService.createAssignment(userId, {
@@ -167,7 +183,7 @@ router.post(
             appLogger.info('Assignment created from upload', {
               assignmentId: assignmentResult.assignmentId,
               userId,
-              filesCount: assignmentFiles.length
+              filesCount: assignmentResults.length
             });
           }
         } catch (error) {
