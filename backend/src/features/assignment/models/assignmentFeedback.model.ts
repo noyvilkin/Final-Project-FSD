@@ -1,26 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
-interface IRequirementAnalysis {
-  requirement: string;
-  isCovered: boolean;
-  comment?: string;
-}
-
-interface ICodeQuality {
-  score: number;
-  comments: string[];
-}
-
-interface IFeedback {
-  overallScore: number;
-  requirementsCoverage: number;
-  strengths: string[];
-  improvements: string[];
-  codeQuality: ICodeQuality;
-  requirementsAnalysis: IRequirementAnalysis[];
-}
-
-// New AI-generated feedback interfaces
 interface IAICodeQuality {
   score: number;
   strengths: string[];
@@ -86,34 +65,12 @@ export interface IAssignmentFeedback extends Document {
   userNotes?: string;
   metadata: IMetadata;
   status: 'pending' | 'scanning' | 'processing' | 'completed' | 'failed';
-  feedback?: IFeedback;
   aiFeedback?: IAIFeedback;
-  jobId?: string;
   processingErrors?: string[];
   aiAnalysisCompletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
-
-const RequirementAnalysisSchema = new Schema<IRequirementAnalysis>({
-  requirement: { type: String, required: true },
-  isCovered:   { type: Boolean, required: true },
-  comment:     { type: String },
-}, { _id: false });
-
-const CodeQualitySchema = new Schema<ICodeQuality>({
-  score:    { type: Number, min: 0, max: 100 },
-  comments: { type: [String], default: [] },
-}, { _id: false });
-
-const FeedbackSchema = new Schema<IFeedback>({
-  overallScore:        { type: Number, min: 0, max: 100 },
-  requirementsCoverage: { type: Number, min: 0, max: 100 },
-  strengths:           { type: [String], default: [] },
-  improvements:        { type: [String], default: [] },
-  codeQuality:         { type: CodeQualitySchema },
-  requirementsAnalysis: { type: [RequirementAnalysisSchema], default: [] }
-}, { _id: false });
 
 const AICodeQualitySchema = new Schema<IAICodeQuality>({
   score:       { type: Number, min: 0, max: 100 },
@@ -175,9 +132,7 @@ const AssignmentFeedbackSchema = new Schema<IAssignmentFeedback>(
       enum: ['pending', 'scanning', 'processing', 'completed', 'failed'],
       default: 'pending'
     },
-    feedback:            { type: FeedbackSchema },
     aiFeedback:          { type: AIFeedbackSchema },
-    jobId:               { type: String },
     processingErrors:    { type: [String], default: [] },
     aiAnalysisCompletedAt: { type: Date }
   },

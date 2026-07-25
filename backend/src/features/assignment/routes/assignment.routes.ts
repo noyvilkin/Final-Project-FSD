@@ -71,7 +71,6 @@ router.get(
         solutionFileKey: assignment.solutionFileKey,
         userNotes: assignment.userNotes,
         metadata: assignment.metadata,
-        feedback: assignment.feedback,
         ...(assignment.processingErrors?.length && {
           processingErrors: assignment.processingErrors
         }),
