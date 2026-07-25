@@ -1,5 +1,11 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
+interface IAIRequirementCoverage {
+  requirement: string;
+  status: 'met' | 'partial' | 'missing';
+  justification: string;
+}
+
 interface IAICodeQuality {
   score: number;
   strengths: string[];
@@ -25,6 +31,7 @@ interface IAIOverall {
 }
 
 interface IAIFeedback {
+  requirementsCoverage?: IAIRequirementCoverage[];
   codeQuality: IAICodeQuality;
   functionalCorrectness: IAIFunctionalCorrectness;
   bestPractices: IAIBestPractices;
@@ -72,6 +79,12 @@ export interface IAssignmentFeedback extends Document {
   updatedAt: Date;
 }
 
+const AIRequirementCoverageSchema = new Schema<IAIRequirementCoverage>({
+  requirement:   { type: String },
+  status:        { type: String, enum: ['met', 'partial', 'missing'], default: 'partial' },
+  justification: { type: String }
+}, { _id: false });
+
 const AICodeQualitySchema = new Schema<IAICodeQuality>({
   score:       { type: Number, min: 0, max: 100 },
   strengths:   { type: [String], default: [] },
@@ -97,6 +110,7 @@ const AIOverallSchema = new Schema<IAIOverall>({
 }, { _id: false });
 
 const AIFeedbackSchema = new Schema<IAIFeedback>({
+  requirementsCoverage:     { type: [AIRequirementCoverageSchema], default: [] },
   codeQuality:              { type: AICodeQualitySchema },
   functionalCorrectness:    { type: AIFunctionalCorrectnessSchema },
   bestPractices:            { type: AIBestPracticesSchema },

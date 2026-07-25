@@ -43,6 +43,52 @@ function safeArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
+const COVERAGE_STYLES = {
+  met: { icon: "✓", label: "Met", chip: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
+  partial: { icon: "~", label: "Partial", chip: "bg-amber-100 text-amber-700", dot: "bg-amber-500" },
+  missing: { icon: "✗", label: "Missing", chip: "bg-rose-100 text-rose-700", dot: "bg-rose-500" },
+};
+
+function RequirementCoverageSection({ items }) {
+  if (!items.length) return null;
+
+  const met = items.filter((i) => i.status === "met").length;
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-gray-900">Requirement Coverage</h3>
+        <span className="text-xs font-medium text-gray-500">
+          {met}/{items.length} met
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-gray-600">
+        How your submission maps to each requirement stated in the assignment.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {items.map((item, idx) => {
+          const style = COVERAGE_STYLES[item.status] || COVERAGE_STYLES.partial;
+          return (
+            <li key={`req-${idx}`} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium text-gray-900">{item.requirement}</p>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${style.chip}`}
+                >
+                  {style.icon} {style.label}
+                </span>
+              </div>
+              {item.justification ? (
+                <p className="mt-1 text-xs text-gray-600">{item.justification}</p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
 // Recover the original upload name from an S3 key. Stored keys look like
 // `assignments/{userId}/{assignmentId}/{uuid}-{requirement|solution}-{original}`,
 // so we drop the path, the leading UUID, and the role prefix we add on upload.
@@ -143,6 +189,10 @@ export default function AssignmentResults() {
 
     const recommendations = safeArray(results.feedback?.bestPractices?.recommendations);
 
+    const requirementsCoverage = safeArray(results.feedback?.requirementsCoverage).filter(
+      (r) => r && r.requirement
+    );
+
     return {
       score,
       grade: results.overallGrade || "-",
@@ -151,6 +201,7 @@ export default function AssignmentResults() {
       strengths,
       improvements,
       recommendations,
+      requirementsCoverage,
       metadata: {
         language: results.metadata?.language || "Unknown",
         frameworks: safeArray(results.metadata?.frameworks),
@@ -229,6 +280,8 @@ export default function AssignmentResults() {
           </div>
           <p className="mt-3 text-xs text-gray-600">{viewModel.summary}</p>
         </Card>
+
+        <RequirementCoverageSection items={viewModel.requirementsCoverage} />
 
         <ListSection
           title="What You Did Well"

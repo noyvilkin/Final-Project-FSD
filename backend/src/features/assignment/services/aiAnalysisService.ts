@@ -10,9 +10,20 @@ export interface UnifiedAnalysisPayload {
   analysisPrompt: string;
 }
 
+export type RequirementStatus = 'met' | 'partial' | 'missing';
+
+export interface RequirementCoverageItem {
+  requirement: string;
+  status: RequirementStatus;
+  justification: string;
+}
+
 export interface AIAnalysisResult {
   success: boolean;
   feedback?: {
+    // Per-requirement verdict (the model's Step-1 enumeration, surfaced for
+    // explainability). May be empty for older records analyzed before F2.
+    requirementsCoverage: RequirementCoverageItem[];
     codeQuality: {
       score: number;      // 0-100
       strengths: string[];
@@ -45,6 +56,19 @@ export interface AIAnalysisResult {
 const ANALYSIS_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
+    requirementsCoverage: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          requirement: { type: 'string' },
+          status: { type: 'string', enum: ['met', 'partial', 'missing'] },
+          justification: { type: 'string' },
+        },
+        required: ['requirement', 'status', 'justification'],
+        propertyOrdering: ['requirement', 'status', 'justification'],
+      },
+    },
     codeQuality: {
       type: 'object',
       properties: {
@@ -92,8 +116,8 @@ const ANALYSIS_RESPONSE_SCHEMA = {
       propertyOrdering: ['score', 'grade', 'summary'],
     },
   },
-  required: ['codeQuality', 'functionalCorrectness', 'bestPractices', 'overall'],
-  propertyOrdering: ['codeQuality', 'functionalCorrectness', 'bestPractices', 'overall'],
+  required: ['requirementsCoverage', 'codeQuality', 'functionalCorrectness', 'bestPractices', 'overall'],
+  propertyOrdering: ['requirementsCoverage', 'codeQuality', 'functionalCorrectness', 'bestPractices', 'overall'],
 } as const;
 
 export class AIAnalysisService {
@@ -354,6 +378,13 @@ Grade the following programming assignment honestly and PROPORTIONALLY.
 **STEP 1 — Enumerate the requirements.**
 From the assignment text, list every EXPLICIT requirement. For each, decide whether the
 submission MET it, PARTIALLY met it, or did NOT meet it. Base this only on the code provided.
+Output this enumeration as the "requirementsCoverage" array — one entry per EXPLICIT
+requirement, with:
+- requirement: a short label for the requirement (≤ 120 chars),
+- status: "met", "partial", or "missing",
+- justification: one sentence citing the concrete evidence in the code (≤ 200 chars).
+List them in the order they appear in the assignment. Do NOT invent requirements the
+assignment never stated (see the CRITICAL rule below).
 
 **STEP 2 — Score functionalCorrectness from requirement coverage.**
 functionalCorrectness.score ≈ 100 * (met + 0.5 * partial) / total, then adjust by the
@@ -431,8 +462,32 @@ ${payload.sourceCode}
 - Respond with a single JSON object matching the required schema. No markdown, no commentary.
 - Each array (strengths, weaknesses, missingFeatures, suggestions) must contain AT MOST 4 items,
   each a short sentence (≤ 200 characters). Do not use double quotes inside string values.
+- requirementsCoverage must contain AT MOST 10 entries and cover only EXPLICIT requirements.
 - summary: 1–3 sentences naming the most important issue(s) and the resulting grade.
     `.trim();
+  }
+
+  /**
+   * Normalizes the model's requirementsCoverage array: keeps only well-formed
+   * entries, clamps the status to the allowed enum (defaulting to "partial"),
+   * trims long strings, and caps the list length.
+   */
+  private static coerceRequirementsCoverage(raw: unknown): RequirementCoverageItem[] {
+    if (!Array.isArray(raw)) return [];
+    const allowed: RequirementStatus[] = ['met', 'partial', 'missing'];
+
+    return raw
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
+      .map((r) => {
+        const status = String((r as any).status ?? '').toLowerCase() as RequirementStatus;
+        return {
+          requirement: String((r as any).requirement ?? '').trim().slice(0, 300),
+          status: allowed.includes(status) ? status : 'partial',
+          justification: String((r as any).justification ?? '').trim().slice(0, 300),
+        };
+      })
+      .filter((r) => r.requirement.length > 0)
+      .slice(0, 10);
   }
 
   /**
@@ -485,6 +540,7 @@ ${payload.sourceCode}
     }
 
     return {
+      requirementsCoverage: this.coerceRequirementsCoverage(parsed.requirementsCoverage),
       codeQuality: {
         score: Number(parsed.codeQuality?.score) || 0,
         strengths: Array.isArray(parsed.codeQuality?.strengths) ? parsed.codeQuality.strengths : [],
@@ -517,6 +573,7 @@ ${payload.sourceCode}
     if (feedback) return feedback;
 
     return {
+      requirementsCoverage: [],
       codeQuality: {
         score: 0,
         strengths: [],
