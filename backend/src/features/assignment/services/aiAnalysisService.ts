@@ -80,8 +80,11 @@ const ANALYSIS_RESPONSE_SCHEMA = {
       properties: {
         score: { type: 'integer' },
         grade: {
+          // Coarse A–F scale that matches the prompt's score→grade table
+          // (90+ A, 80s B, 70s C, 60s D, <60 F) so the letter can't drift
+          // from overall.score.
           type: 'string',
-          enum: ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'F'],
+          enum: ['A', 'B', 'C', 'D', 'F'],
         },
         summary: { type: 'string' },
       },
