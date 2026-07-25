@@ -76,35 +76,14 @@ export class AssignmentService {
         solutionFileType: files.solution.mimeType
       });
 
-      // Trigger analysis if we have a solution file
-      let analysisTriggered = false;
-      if (files.solution) {
-        try {
-          await this.runAnalysisPipeline(assignmentId, resolvedUserId.toString(), files);
-          analysisTriggered = true;
-
-          appLogger.info('Assignment analysis completed', { assignmentId, userId });
-        } catch (error) {
-          appLogger.error('Assignment analysis pipeline failed', {
-            assignmentId,
-            userId,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          });
-          
-          // Update assignment status to failed
-          await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
-            status: 'failed',
-            metadata: {
-              processingErrors: ['Analysis pipeline failed']
-            }
-          });
-        }
-      }
+      // Run analysis in the background so the upload response isn't blocked by
+      // the S3 download + ZIP scan + Gemini call. The client polls the status.
+      this.runAnalysisInBackground(assignmentId, resolvedUserId.toString(), files);
 
       return {
         assignmentId,
-        status: analysisTriggered ? 'processing' : 'uploaded',
-        analysisTriggered
+        status: 'processing',
+        analysisTriggered: true
       };
 
     } catch (error) {
@@ -117,8 +96,43 @@ export class AssignmentService {
   }
 
   /**
+   * Fire-and-forget wrapper around {@link runAnalysisPipeline}: never rejects, and
+   * marks the assignment `failed` on error so it always reaches a terminal state.
+   */
+  private static runAnalysisInBackground(
+    assignmentId: string,
+    userId: string,
+    files: { requirements?: UploadedFile; solution?: UploadedFile }
+  ): void {
+    void this.runAnalysisPipeline(assignmentId, userId, files)
+      .then(() => {
+        appLogger.info('Assignment analysis completed', { assignmentId, userId });
+      })
+      .catch(async (error) => {
+        appLogger.error('Assignment analysis pipeline failed', {
+          assignmentId,
+          userId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+
+        try {
+          await AssignmentFeedback.findByIdAndUpdate(assignmentId, {
+            status: 'failed',
+            processingErrors: [
+              error instanceof Error ? error.message : 'Analysis pipeline failed'
+            ]
+          });
+        } catch (updateError) {
+          appLogger.error('Failed to mark assignment as failed after pipeline error', {
+            assignmentId,
+            error: updateError instanceof Error ? updateError.message : 'Unknown error'
+          });
+        }
+      });
+  }
+
+  /**
    * Full analysis pipeline: download → scan → analyse → AI feedback.
-   * Runs as a direct awaited call – no message queue involved.
    */
   private static async runAnalysisPipeline(
     assignmentId: string,
