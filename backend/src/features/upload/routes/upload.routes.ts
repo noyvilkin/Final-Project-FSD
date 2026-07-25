@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { asyncHandler } from "../../../common/middlewares/asyncHandler.js";
+import { requireAuth } from "../../../common/middlewares/requireAuth.js";
 import { validateUploads } from "../../../common/middlewares/validateUploads.js";
 import { uploadFileToS3 } from "../../../common/services/s3Upload.js";
 import { ZipProcessor, type ZipScanResult } from "../../../common/utils/zipProcessor.js";
@@ -26,6 +27,9 @@ const router = Router();
 
 router.post(
   "/",
+  // Authenticate BEFORE multer so unauthenticated requests are rejected
+  // without buffering up to 50MB of upload into memory.
+  requireAuth,
   upload.fields([
     { name: "resumes", maxCount: 5 },
     { name: "assignments", maxCount: 5 },
@@ -49,8 +53,10 @@ router.post(
     const uploadTasks: Promise<any>[] = [];
     const zipScanResults: Record<string, ZipScanResult> = {};
     
-    // Pre-generate assignment ID and get user ID for assignment uploads
-    const userId = req.headers['x-user-id'] as string || 'anonymous';
+    // Pre-generate assignment ID and get user ID for assignment uploads.
+    // requireAuth guarantees req.user is populated with a verified JWT identity,
+    // so we never trust a client-supplied x-user-id header here.
+    const userId = req.user!.id;
     let assignmentId: string | undefined = undefined;
     
     // Check if this is an assignment upload

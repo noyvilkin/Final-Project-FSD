@@ -39,15 +39,13 @@ export class AssignmentService {
         throw new Error('Solution file is required');
       }
 
-      const resolvedUserId = Types.ObjectId.isValid(userId)
-        ? new Types.ObjectId(userId)
-        : new Types.ObjectId();
-
+      // The caller must be an authenticated user. Never fabricate an owner —
+      // that would attach the assignment (and its stored files) to a random id.
       if (!Types.ObjectId.isValid(userId)) {
-        appLogger.warn('Invalid or missing userId for assignment creation, using generated fallback ObjectId', {
-          userId
-        });
+        throw new Error('A valid authenticated userId is required to create an assignment');
       }
+
+      const resolvedUserId = new Types.ObjectId(userId);
 
       // Use pre-generated ID if provided, otherwise MongoDB will auto-generate
       const assignmentData: any = {
