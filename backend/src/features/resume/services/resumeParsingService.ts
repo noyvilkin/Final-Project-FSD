@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { createLLMClient } from '../../../common/services/llmClientFactory.js';
 import type { LLMClient } from '../../../common/services/llmClient.js';
-import type { GeminiPayload } from '../../../common/types/geminiTypes.js';
+import type { LLMPayload } from '../../../common/types/llmTypes.js';
 import { PdfProcessor } from '../../../common/utils/pdfProcessor.js';
 import { sanitizeText } from '../../../common/utils/textSanitizer.js';
 import { appLogger } from '../../../common/services/logger.js';
@@ -62,17 +62,17 @@ export interface ParsedDNA {
 }
 
 export class ResumeParsingService {
-  private static geminiClient: LLMClient | null = null;
+  private static llmClient: LLMClient | null = null;
 
   private static getClient(): LLMClient {
-    if (!this.geminiClient) {
-      this.geminiClient = createLLMClient({ model: MODEL_NAME, temperature: 0.1, maxOutputTokens: 16384 });
+    if (!this.llmClient) {
+      this.llmClient = createLLMClient({ model: MODEL_NAME, temperature: 0.1, maxOutputTokens: 16384 });
     }
-    return this.geminiClient;
+    return this.llmClient;
   }
 
   /**
-   * Full pipeline: PDF buffer → text extraction → Gemini parsing →
+   * Full pipeline: PDF buffer → text extraction → LLM parsing →
    * User upsert → ProfessionalDNA creation → returns userId + dnaId.
    */
   static async parseAndStore(
@@ -102,9 +102,9 @@ export class ResumeParsingService {
       cleanChars: cleanText.length,
     });
 
-    const parsed = await this.callGeminiForDNA(cleanText);
+    const parsed = await this.callLLMForDNA(cleanText);
 
-    appLogger.info('[ResumeParser] Gemini DNA extraction complete', {
+    appLogger.info('[ResumeParser] LLM DNA extraction complete', {
       skills: parsed.skills.length,
       experience: parsed.experience.length,
       education: parsed.education.length,
@@ -157,15 +157,15 @@ export class ResumeParsingService {
    * against a corpus of resume texts without persisting anything.
    */
   static async extractDNAFromText(cleanText: string): Promise<ParsedDNA> {
-    return this.callGeminiForDNA(cleanText);
+    return this.callLLMForDNA(cleanText);
   }
 
-  // ── Gemini call ─────────────────────────────────────────────────
+  // ── LLM call ─────────────────────────────────────────────────
 
-  private static async callGeminiForDNA(resumeText: string): Promise<ParsedDNA> {
+  private static async callLLMForDNA(resumeText: string): Promise<ParsedDNA> {
     const userMessage = buildDnaExtractionUserMessage(resumeText);
 
-    const payload: GeminiPayload = {
+    const payload: LLMPayload = {
       system_instruction: { parts: [{ text: DNA_EXTRACTION_SYSTEM_INSTRUCTION }] },
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
     };
@@ -235,7 +235,7 @@ export class ResumeParsingService {
         profileSummary: this.normalizeProfileSummary(parsed.profileSummary),
       };
     } catch (err) {
-      appLogger.error('[ResumeParser] Failed to parse Gemini response', {
+      appLogger.error('[ResumeParser] Failed to parse LLM response', {
         error: err instanceof Error ? err.message : 'Unknown',
         rawPreview: raw.substring(0, 500),
       });

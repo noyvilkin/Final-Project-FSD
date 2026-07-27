@@ -11,7 +11,7 @@ import 'dotenv/config';
 import { JdIngestionService } from '../services/jdIngestionService.js';
 import { KeywordExtractor } from '../services/keywordExtractor.js';
 import { EntityAlignmentService } from '../services/entityAlignmentService.js';
-import { GeminiOptimizationService } from '../services/geminiOptimizationService.js';
+import { LLMOptimizationService } from '../services/llmOptimizationService.js';
 import type { ISkill, IExperience, IEducation } from '../types/professionalDNA.types.js';
 import type { ResumeOptimizationPayload, ProfessionalDNASummary } from '../types/resumeOptimization.types.js';
 
@@ -140,10 +140,10 @@ async function main() {
   console.log(`  Matching Skills : ${payload.alignment.matchingSkills.join(', ')}`);
   console.log(`  Missing Skills  : ${payload.alignment.missingSkills.join(', ')}`);
 
-  printSection('Calling Gemini for optimization + scoring...');
+  printSection('Calling Colman LLM for optimization + scoring...');
   console.log('  (This may take 15-30 seconds)\n');
 
-  const result = await GeminiOptimizationService.optimizeResume(payload);
+  const result = await LLMOptimizationService.optimizeResume(payload);
 
   printSection('Hybrid Score');
   console.log(`  Final Score     : ${result.hybridScore.finalScore}/100`);

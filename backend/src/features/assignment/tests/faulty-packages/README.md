@@ -19,7 +19,7 @@ npm test
 ```
 
 Environment toggles:
-- `SEMANTIC_AUDIT_USE_MOCK_AI=true` — use the deterministic local mock instead of calling Gemini.
+- `SEMANTIC_AUDIT_USE_MOCK_AI=true` — use the deterministic local mock instead of calling the Colman LLM service.
 - `SEMANTIC_AUDIT_PACKAGE_COOLDOWN_MS` — cooldown between packages (ms).
 - `SEMANTIC_AUDIT_FINAL_PACKAGE_COOLDOWN_MS` — cooldown before final package (ms).
 

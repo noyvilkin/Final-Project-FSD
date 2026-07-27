@@ -1,6 +1,6 @@
 import { createLLMClient } from '../../../common/services/llmClientFactory.js';
 import type { LLMClient } from '../../../common/services/llmClient.js';
-import type { GeminiPayload } from '../../../common/types/geminiTypes.js';
+import type { LLMPayload } from '../../../common/types/llmTypes.js';
 import { appLogger } from '../../../common/services/logger.js';
 
 import {
@@ -11,8 +11,8 @@ import {
 
 import type { ResumeOptimizationPayload } from '../types/resumeOptimization.types.js';
 import type {
-  GeminiOptimizationResponse,
-  GeminiOptimizedBullet,
+  LLMOptimizationResponse,
+  LLMOptimizedBullet,
   OptimizedBulletUI,
   OptimizationDashboardData,
   ConfidenceLevel,
@@ -22,12 +22,12 @@ import { HybridScoringService } from './hybridScoringService.js';
 
 const MODEL_NAME = process.env.COLMAN_LLM_MODEL ?? 'llama3.1:8b';
 
-export class GeminiOptimizationService {
-  private static geminiClient: LLMClient | null = null;
+export class LLMOptimizationService {
+  private static llmClient: LLMClient | null = null;
 
   private static getClient(): LLMClient {
-    if (!this.geminiClient) {
-      this.geminiClient = createLLMClient({
+    if (!this.llmClient) {
+      this.llmClient = createLLMClient({
         model: MODEL_NAME,
         // Lower temperature keeps rewrites faithful to the source bullet and
         // reduces the model's tendency to invent unearned keywords/skills.
@@ -35,7 +35,7 @@ export class GeminiOptimizationService {
         maxOutputTokens: 8192,
       });
     }
-    return this.geminiClient;
+    return this.llmClient;
   }
 
   // ── Main orchestrator ───────────────────────────────────────────
@@ -43,21 +43,21 @@ export class GeminiOptimizationService {
   static async optimizeResume(
     payload: ResumeOptimizationPayload
   ): Promise<OptimizationDashboardData> {
-    appLogger.info('[GeminiOptimizationService] Starting resume optimization', {
+    appLogger.info('[LLMOptimizationService] Starting resume optimization', {
       userId: payload.professionalDNA.userId,
       bulletCount: payload.professionalDNA.experience.length,
     });
 
-    const [geminiResponse, hybridScore] = await Promise.all([
-      this.callGeminiForOptimization(payload),
+    const [llmResponse, hybridScore] = await Promise.all([
+      this.callLLMForOptimization(payload),
       HybridScoringService.calculateHybridScore(payload),
     ]);
 
-    const adapted = this.adaptToUI(geminiResponse, payload);
+    const adapted = this.adaptToUI(llmResponse, payload);
 
     return {
       bullets: adapted,
-      generalAdvice: geminiResponse.generalAdvice,
+      generalAdvice: llmResponse.generalAdvice,
       hybridScore,
       gapsRemaining: payload.alignment.missingSkills,
       meta: {
@@ -68,22 +68,22 @@ export class GeminiOptimizationService {
     };
   }
 
-  // ── Gemini call ─────────────────────────────────────────────────
+  // ── LLM call ─────────────────────────────────────────────────
 
-  private static async callGeminiForOptimization(
+  private static async callLLMForOptimization(
     payload: ResumeOptimizationPayload
-  ): Promise<GeminiOptimizationResponse> {
+  ): Promise<LLMOptimizationResponse> {
     const userMessage = buildOptimizationUserMessage(payload);
 
-    const geminiPayload: GeminiPayload = {
+    const llmPayload: LLMPayload = {
       system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
     };
 
     const client = this.getClient();
-    const rawResponse = await client.generate(geminiPayload);
+    const rawResponse = await client.generate(llmPayload);
 
-    appLogger.info('[GeminiOptimizationService] Gemini response received', {
+    appLogger.info('[LLMOptimizationService] LLM response received', {
       responseLength: rawResponse.length,
     });
 
@@ -92,7 +92,7 @@ export class GeminiOptimizationService {
 
   // ── Response parsing ────────────────────────────────────────────
 
-  private static parseOptimizationResponse(raw: string): GeminiOptimizationResponse {
+  private static parseOptimizationResponse(raw: string): LLMOptimizationResponse {
     try {
       const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -110,7 +110,7 @@ export class GeminiOptimizationService {
         // bullet didn't already have. This drops the cosmetic / "stiff"
         // rephrasings that add no keyword coverage and just feel spammy.
         .filter(
-          (b: GeminiOptimizedBullet) =>
+          (b: LLMOptimizedBullet) =>
             this.isMeaningfulRewrite(b) && this.addsNewKeyword(b)
         );
 
@@ -119,7 +119,7 @@ export class GeminiOptimizationService {
         generalAdvice: String(parsed.generalAdvice ?? ''),
       };
     } catch (err) {
-      appLogger.error('[GeminiOptimizationService] Failed to parse Gemini response', {
+      appLogger.error('[LLMOptimizationService] Failed to parse LLM response', {
         error: err instanceof Error ? err.message : 'Unknown',
         rawPreview: raw.substring(0, 500),
       });
@@ -135,14 +135,14 @@ export class GeminiOptimizationService {
       .replace(/_(.+?)_/g, '$1');
   }
 
-  private static validateBullet(b: Record<string, unknown>): GeminiOptimizedBullet {
+  private static validateBullet(b: Record<string, unknown>): LLMOptimizedBullet {
     // `experienceIndex` is the new field name; fall back to the legacy
     // `index` so responses/runs from the previous prompt still parse.
     const experienceIndex = Number(b.experienceIndex ?? b.index) || 0;
     return {
       experienceIndex,
       originalBullet: String(b.originalBullet ?? ''),
-      optimizedBullet: GeminiOptimizationService.stripMarkdown(String(b.optimizedBullet ?? '')),
+      optimizedBullet: LLMOptimizationService.stripMarkdown(String(b.optimizedBullet ?? '')),
       explanation: String(b.explanation ?? ''),
       confidenceScore: Math.max(0, Math.min(1, Number(b.confidenceScore) || 0)),
       keywordsUsed: Array.isArray(b.keywordsUsed) ? b.keywordsUsed.map(String) : [],
@@ -155,7 +155,7 @@ export class GeminiOptimizationService {
    * and whitespace). This backstops the prompt's "omit unchanged bullets"
    * instruction so no no-op suggestions reach the UI.
    */
-  private static isMeaningfulRewrite(b: GeminiOptimizedBullet): boolean {
+  private static isMeaningfulRewrite(b: LLMOptimizedBullet): boolean {
     const optimized = b.optimizedBullet.trim();
     if (!optimized) return false;
 
@@ -169,7 +169,7 @@ export class GeminiOptimizationService {
    * worth surfacing — this is what keeps the suggestions from feeling
    * spammy when every bullet is optimized individually.
    */
-  private static addsNewKeyword(b: GeminiOptimizedBullet): boolean {
+  private static addsNewKeyword(b: LLMOptimizedBullet): boolean {
     if (b.keywordsUsed.length === 0) return false;
 
     const original = ` ${this.normalizeText(b.originalBullet)} `;
@@ -183,10 +183,10 @@ export class GeminiOptimizationService {
     return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
-  // ── Adapter Pattern: Gemini response → UI state ─────────────────
+  // ── Adapter Pattern: LLM response → UI state ─────────────────
 
   private static adaptToUI(
-    response: GeminiOptimizationResponse,
+    response: LLMOptimizationResponse,
     payload: ResumeOptimizationPayload
   ): OptimizedBulletUI[] {
     return response.optimizedBullets.map((bullet, i) => {
@@ -203,7 +203,7 @@ export class GeminiOptimizationService {
         optimizedBullet: bullet.optimizedBullet,
         explanation: bullet.explanation,
         confidenceScore: bullet.confidenceScore,
-        confidenceLevel: GeminiOptimizationService.toConfidenceLevel(bullet.confidenceScore),
+        confidenceLevel: LLMOptimizationService.toConfidenceLevel(bullet.confidenceScore),
         keywordsUsed: bullet.keywordsUsed,
         status: 'pending',
       };

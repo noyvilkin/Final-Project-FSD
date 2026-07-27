@@ -28,7 +28,7 @@ import { ResumeParsingService, type ParsedDNA } from '../services/resumeParsingS
 import { JdIngestionService } from '../services/jdIngestionService.js';
 import { KeywordExtractor } from '../services/keywordExtractor.js';
 import { EntityAlignmentService } from '../services/entityAlignmentService.js';
-import { GeminiOptimizationService } from '../services/geminiOptimizationService.js';
+import { LLMOptimizationService } from '../services/llmOptimizationService.js';
 import { HybridScoringService } from '../services/hybridScoringService.js';
 
 import type { ResumeOptimizationPayload, ProfessionalDNASummary } from '../types/resumeOptimization.types.js';
@@ -62,7 +62,7 @@ function pad(value: string | number, width: number, align: 'left' | 'right' = 'l
 // ── DNA → Payload helpers ───────────────────────────────────────────
 
 /**
- * Converts the JSON-shaped ParsedDNA returned by Gemini into the
+ * Converts the JSON-shaped ParsedDNA returned by the LLM into the
  * ProfessionalDNASummary the optimizer pipeline expects (Date objects,
  * IExperience/IEducation shapes).
  */
@@ -161,7 +161,7 @@ async function evalResume(fixture: ResumeFixture): Promise<{
   row: ResumeEvalRow;
   dna: ProfessionalDNASummary;
 }> {
-  console.log(`\n[${fixture.id}] Extracting DNA via Gemini...`);
+  console.log(`\n[${fixture.id}] Extracting DNA via Colman LLM...`);
   const parsed = await ResumeParsingService.extractDNAFromText(fixture.text);
 
   const result = checkHallucinations(parsed, fixture.text);
@@ -199,7 +199,7 @@ async function evalPair(
     payload.extractedKeywords.hardSkills
   );
 
-  const optimization = await GeminiOptimizationService.optimizeResume(payload);
+  const optimization = await LLMOptimizationService.optimizeResume(payload);
   const scoreBefore = optimization.hybridScore.finalScore;
 
   const payloadAfter = applyOptimizedBulletsToPayload(payload, optimization);
@@ -447,7 +447,7 @@ async function main() {
   console.log(`  JD fixtures     : ${jdFixtures.length}${process.env.EVAL_JDS ? ` (filtered: ${jdFixtures.map((f) => f.id).join(', ')})` : ''}`);
   console.log(`  Pairs to score  : ${resumeFixtures.length * jdFixtures.length}`);
   console.log(
-    `  Approx Gemini calls: ${resumeFixtures.length + resumeFixtures.length * jdFixtures.length * 3}` +
+    `  Approx Colman LLM calls: ${resumeFixtures.length + resumeFixtures.length * jdFixtures.length * 3}` +
       ` (1 extract + 3 per pair)`
   );
 

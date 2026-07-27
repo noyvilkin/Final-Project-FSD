@@ -127,7 +127,7 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
 
   const solutionFileKey = `${fixture.zipBaseName}.zip`;
 
-  console.log(`  calling Gemini...`);
+  console.log(`  calling Colman LLM...`);
   const aiResult = await AIAnalysisService.analyzeFromMetadata({
     metadata: {
       ...analysis.metadata,
@@ -320,7 +320,7 @@ async function main() {
   }
 
   console.log(`  Packages          : ${PACKAGE_FIXTURES.length}`);
-  console.log(`  Mode              : ${useMock ? 'mock AI' : 'real Gemini'}`);
+  console.log(`  Mode              : ${useMock ? 'mock AI' : 'real Colman LLM'}`);
   console.log(`  Cooldown / package: ${PACKAGE_COOLDOWN_MS}ms (final: ${FINAL_PACKAGE_COOLDOWN_MS}ms)`);
 
   const orderedFixtures = RUN_ORDER

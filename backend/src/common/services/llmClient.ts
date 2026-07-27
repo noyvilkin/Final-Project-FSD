@@ -1,4 +1,4 @@
-import type { GeminiPayload } from "../types/geminiTypes.js"
+import type { LLMPayload } from "../types/llmTypes.js"
 
 /**
  * Provider-agnostic contract for anything that can turn a prompt payload
@@ -8,8 +8,8 @@ import type { GeminiPayload } from "../types/geminiTypes.js"
  * this interface and updating llmClientFactory.ts — no call sites change.
  */
 export interface LLMClient {
-  generate(payload: GeminiPayload): Promise<string>;
+  generate(payload: LLMPayload): Promise<string>;
 }
 
 // Re-export the shared payload type for convenience
-export type { GeminiPayload } from "../types/geminiTypes.js"
+export type { LLMPayload } from "../types/llmTypes.js"

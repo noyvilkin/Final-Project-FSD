@@ -11,7 +11,7 @@ jest.mock("../../common/services/s3Upload.js", () => ({
   fetchBlobAsBuffer: jest.fn(),
 }));
 
-// The analysis pipeline pulls in heavy modules (pdf/zip processors, Gemini) that
+// The analysis pipeline pulls in heavy modules (pdf/zip processors, the LLM client) that
 // are irrelevant to the history list/delete endpoints under test.
 jest.mock("../../features/assignment/services/assignmentAnalysisService.js", () => ({
   AssignmentAnalysisService: {},

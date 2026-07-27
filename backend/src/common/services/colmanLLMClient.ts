@@ -1,4 +1,4 @@
-import { GeminiPayload } from "../types/geminiTypes.js"
+import { LLMPayload } from "../types/llmTypes.js"
 import type { LLMClient } from "./llmClient.js"
 
 export class ColmanRateLimitError extends Error {
@@ -132,7 +132,7 @@ export interface ColmanLLMClientConfig {
  * Auth through the nginx proxy. Requires VPN access to the Colman internal
  * network to reach the server.
  *
- * Accepts the same GeminiPayload wire-shape (system_instruction + contents)
+ * Accepts the same LLMPayload wire-shape (system_instruction + contents)
  * used across this codebase's prompt builders, and translates it into
  * OpenAI chat messages internally — this keeps prompt-construction code
  * unchanged when swapping the underlying LLM provider.
@@ -165,11 +165,11 @@ export class ColmanLLMClient implements LLMClient {
    * Send a payload to the Colman LLM service and return the raw text response.
    * Handles rate limiting, queuing, and retries internally.
    */
-  async generate(payload: GeminiPayload): Promise<string> {
+  async generate(payload: LLMPayload): Promise<string> {
     return enqueue(() => this.generateWithRetry(payload));
   }
 
-  private async generateWithRetry(payload: GeminiPayload, attempt = 0): Promise<string> {
+  private async generateWithRetry(payload: LLMPayload, attempt = 0): Promise<string> {
     try {
       sharedRateLimiter.acquire();
       return await this.callAPI(payload);
@@ -189,7 +189,7 @@ export class ColmanLLMClient implements LLMClient {
     }
   }
 
-  private toMessages(payload: GeminiPayload): OpenAIChatMessage[] {
+  private toMessages(payload: LLMPayload): OpenAIChatMessage[] {
     const messages: OpenAIChatMessage[] = [];
 
     if (payload.system_instruction) {
@@ -209,18 +209,27 @@ export class ColmanLLMClient implements LLMClient {
     return messages;
   }
 
-  private async callAPI(payload: GeminiPayload): Promise<string> {
+  private async callAPI(payload: LLMPayload): Promise<string> {
     const url = `${this.baseUrl}/v1/chat/completions`;
     const credentials = Buffer.from(`${this.username}:${this.password}`).toString('base64');
 
-    // Per-call generationConfig overrides (e.g. Gemini's responseSchema) are
-    // accepted for interface compatibility; only temperature/maxOutputTokens
-    // have an equivalent on this endpoint, so unsupported fields are ignored.
+    // Gemini always forced responseMimeType: 'application/json' by default, and
+    // every current caller expects a JSON body back — so mirror that here via
+    // the OpenAI-compatible response_format field (supported by this endpoint's
+    // Ollama-backed proxy). A per-call responseSchema (Gemini's constrained
+    // decoding) maps to the stricter json_schema mode; otherwise plain
+    // json_object mode reproduces the old always-on JSON behavior.
+    const responseSchema = payload.generationConfig?.responseSchema;
+    const responseFormat = responseSchema
+      ? { type: 'json_schema' as const, json_schema: { name: 'response', schema: responseSchema } }
+      : { type: 'json_object' as const };
+
     const body = {
-      model:       this.model,
-      messages:    this.toMessages(payload),
-      temperature: payload.generationConfig?.temperature     ?? this.temperature,
-      max_tokens:  payload.generationConfig?.maxOutputTokens ?? this.maxOutputTokens,
+      model:           this.model,
+      messages:        this.toMessages(payload),
+      temperature:     payload.generationConfig?.temperature     ?? this.temperature,
+      max_tokens:      payload.generationConfig?.maxOutputTokens ?? this.maxOutputTokens,
+      response_format: responseFormat,
     };
 
     const res = await fetch(url, {
@@ -254,4 +263,4 @@ export class ColmanLLMClient implements LLMClient {
 }
 
 // Re-export the shared payload type for convenience
-export type { GeminiPayload } from "../types/geminiTypes.js"
+export type { LLMPayload } from "../types/llmTypes.js"

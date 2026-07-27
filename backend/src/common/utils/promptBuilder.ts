@@ -1,5 +1,5 @@
 
-import { GeminiContent, GeminiPayload } from '../types/geminiTypes.js'
+import { LLMContent, LLMPayload } from '../types/llmTypes.js'
 import { PromptMetadata, PromptVersion } from '../types/promptTypes.js'
 
 
@@ -24,7 +24,7 @@ export class PromptBuilder {
   get releaseDate():    string           { return PROMPT_VERSIONS[this.version]; }
 
  
-  buildPayload(transcript: string, metadata: PromptMetadata): GeminiPayload {
+  buildPayload(transcript: string, metadata: PromptMetadata): LLMPayload {
     const systemInstruction = this.buildSystemInstruction();
     const userMessage       = this.buildUserMessage(transcript, metadata);
 
@@ -52,7 +52,7 @@ Output contract:
   }
 
 
-  private buildUserMessage(transcript: string, metadata: PromptMetadata): GeminiContent {
+  private buildUserMessage(transcript: string, metadata: PromptMetadata): LLMContent {
     const text = this.version === 'v1'
       ? PromptBuilder.buildV1(transcript, metadata)
       : PromptBuilder.buildV2(transcript, metadata);

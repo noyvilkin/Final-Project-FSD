@@ -70,8 +70,11 @@ S3_ACCESS_KEY_ID=minioadmin
 S3_SECRET_ACCESS_KEY=minioadmin
 S3_BUCKET_NAME=careerpilot-uploads
 
-# Gemini AI
-GEMINI_API_KEY=your-gemini-api-key
+# Colman LLM service (requires VPN access to the Colman internal network)
+COLMAN_LLM_BASE_URL=http://10.10.248.41
+COLMAN_LLM_USERNAME=your-student-username
+COLMAN_LLM_PASSWORD=your-student-password
+COLMAN_LLM_MODEL=llama3.1:8b
 
 # Auth (JWT + bcrypt)
 AUTH_BCRYPT_SALT_ROUNDS=10
@@ -116,7 +119,7 @@ When an assignment is uploaded, the backend runs the full pipeline as a direct a
 1. **Upload** — files are stored in MinIO under `assignments/{userId}/{assignmentId}/`
 2. **Scan** — ZIP is extracted and source files are parsed
 3. **Analyse** — project structure, language, and frameworks are detected
-4. **AI feedback** — source code + requirements are sent to Gemini for grading
+4. **AI feedback** — source code + requirements are sent to the Colman LLM service for grading
 5. **Results** — structured feedback is saved to the assignment record
 
 Internal endpoints are available for triggering individual steps:
