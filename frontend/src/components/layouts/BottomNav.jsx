@@ -46,7 +46,7 @@ export default function BottomNav() {
         </div>
 
         <h2 className="text-2xl font-black tracking-tight text-[#050816]">
-          CareerPilot
+          SkillUp
         </h2>
       </div>
 

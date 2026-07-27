@@ -23,7 +23,7 @@ export function createLLMClient(overrides: LLMClientOverrides = {}): LLMClient {
     username,
     password,
     baseUrl: process.env.COLMAN_LLM_BASE_URL,
-    model:   process.env.COLMAN_LLM_MODEL ?? 'gpt-oss-120b',
+    model:   process.env.COLMAN_LLM_MODEL ?? 'llama3.1:8b',
     ...overrides,
   });
 }

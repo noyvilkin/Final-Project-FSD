@@ -400,6 +400,33 @@ function writeJsonReport(report: FullEvalReport) {
   console.log(`\n  Report saved to: ${path}`);
 }
 
+// ── Fixture filtering ───────────────────────────────────────────────
+
+/**
+ * Restricts a fixture list to a comma-separated set of ids supplied via
+ * an env var. Returns the full list when the var is unset. Throws on an
+ * unknown id so typos fail loudly instead of silently running everything.
+ */
+function filterFixtures<T extends { id: string }>(
+  fixtures: T[],
+  raw: string | undefined,
+  varName: string
+): T[] {
+  if (!raw) return fixtures;
+
+  const wanted = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  const known = new Set(fixtures.map((f) => f.id));
+  const unknown = wanted.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new Error(
+      `${varName} contains unknown id(s): ${unknown.join(', ')}. ` +
+        `Valid ids: ${[...known].join(', ')}`
+    );
+  }
+
+  return fixtures.filter((f) => wanted.includes(f.id));
+}
+
 // ── Main ────────────────────────────────────────────────────────────
 
 async function main() {
@@ -410,11 +437,17 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`  Resume fixtures : ${RESUME_FIXTURES.length}`);
-  console.log(`  JD fixtures     : ${JD_FIXTURES.length}`);
-  console.log(`  Pairs to score  : ${RESUME_FIXTURES.length * JD_FIXTURES.length}`);
+  // Optional subset filtering via env vars, e.g.
+  //   EVAL_RESUMES=mobile-developer,product-designer EVAL_JDS=mobile-engineer npm run eval:resume
+  // Keeps free-tier runs affordable — the full cross-product is large.
+  const resumeFixtures = filterFixtures(RESUME_FIXTURES, process.env.EVAL_RESUMES, 'EVAL_RESUMES');
+  const jdFixtures = filterFixtures(JD_FIXTURES, process.env.EVAL_JDS, 'EVAL_JDS');
+
+  console.log(`  Resume fixtures : ${resumeFixtures.length}${process.env.EVAL_RESUMES ? ` (filtered: ${resumeFixtures.map((f) => f.id).join(', ')})` : ''}`);
+  console.log(`  JD fixtures     : ${jdFixtures.length}${process.env.EVAL_JDS ? ` (filtered: ${jdFixtures.map((f) => f.id).join(', ')})` : ''}`);
+  console.log(`  Pairs to score  : ${resumeFixtures.length * jdFixtures.length}`);
   console.log(
-    `  Approx Gemini calls: ${RESUME_FIXTURES.length + RESUME_FIXTURES.length * JD_FIXTURES.length * 3}` +
+    `  Approx Gemini calls: ${resumeFixtures.length + resumeFixtures.length * jdFixtures.length * 3}` +
       ` (1 extract + 3 per pair)`
   );
 
@@ -423,7 +456,7 @@ async function main() {
   const resumeRows: ResumeEvalRow[] = [];
   const dnaByFixture = new Map<string, ProfessionalDNASummary>();
 
-  for (const fixture of RESUME_FIXTURES) {
+  for (const fixture of resumeFixtures) {
     const { row, dna } = await evalResume(fixture);
     resumeRows.push(row);
     dnaByFixture.set(fixture.id, dna);
@@ -432,10 +465,10 @@ async function main() {
   // Phase 2: relevance boost on every (resume, JD) pair
   section('Phase 2 — Relevance boost (optimize + score before/after)');
   const pairRows: PairEvalRow[] = [];
-  for (const resume of RESUME_FIXTURES) {
+  for (const resume of resumeFixtures) {
     const dna = dnaByFixture.get(resume.id);
     if (!dna) continue;
-    for (const jd of JD_FIXTURES) {
+    for (const jd of jdFixtures) {
       try {
         const row = await evalPair(resume, dna, jd);
         pairRows.push(row);

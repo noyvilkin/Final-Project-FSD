@@ -22,7 +22,12 @@ export class HybridScoringService {
 
   private static getClient(): LLMClient {
     if (!this.geminiClient) {
-      this.geminiClient = createLLMClient({ temperature: 0.2, maxOutputTokens: 4096 });
+      this.geminiClient = createLLMClient({
+        // Deterministic scoring: the same candidate/JD pair must yield the
+        // same score so that a truthful bullet rewrite never regresses it.
+        temperature: 0,
+        maxOutputTokens: 4096,
+      });
     }
     return this.geminiClient;
   }

@@ -114,7 +114,7 @@ export interface ColmanLLMClientConfig {
   password:           string;
   /** Base URL of the Colman LLM service, e.g. http://10.10.248.41. Defaults to COLMAN_LLM_BASE_URL / http://10.10.248.41 */
   baseUrl?:           string;
-  /** Model to use on the OpenAI-compatible endpoint. Defaults to gpt-oss-120b */
+  /** Model to use on the OpenAI-compatible endpoint. Defaults to llama3.1:8b */
   model?:             string;
   /** Max retries on transient errors. Default: 3 */
   maxRetries?:        number;
@@ -128,7 +128,7 @@ export interface ColmanLLMClientConfig {
 
 /**
  * Client for the Colman College LLM service's OpenAI-compatible endpoint
- * (gpt-oss-120b via /v1/chat/completions), authenticated with HTTP Basic
+ * (llama3.1:8b via /v1/chat/completions), authenticated with HTTP Basic
  * Auth through the nginx proxy. Requires VPN access to the Colman internal
  * network to reach the server.
  *
@@ -154,7 +154,7 @@ export class ColmanLLMClient implements LLMClient {
     this.username         = config.username;
     this.password         = config.password;
     this.baseUrl          = (config.baseUrl ?? 'http://10.10.248.41').replace(/\/$/, '');
-    this.model            = config.model            ?? 'gpt-oss-120b';
+    this.model            = config.model            ?? 'llama3.1:8b';
     this.maxRetries       = config.maxRetries        ?? 3;
     this.baseRetryDelayMs = config.baseRetryDelayMs  ?? 1_000;
     this.temperature      = config.temperature       ?? 0.2;

@@ -197,6 +197,62 @@ export async function getOptimizationArtifact(
   }
 }
 
+function parseContentDispositionFilename(header) {
+  if (!header) return null;
+  // Prefer RFC 5987 (filename*=UTF-8''...) then fall back to plain filename="...".
+  const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8[1]);
+    } catch {
+      /* fall through */
+    }
+  }
+  const plain = header.match(/filename="?([^"]+)"?/i);
+  return plain ? plain[1] : null;
+}
+
+export async function getOptimizationArtifactDocx(
+  runId,
+  userId,
+  acceptedBullets = []
+) {
+  try {
+    const response = await apiClient.post(
+      `/api/resume/history/${runId}/artifact`,
+      { userId, acceptedBullets, format: "docx" },
+      {
+        responseType: "blob",
+      }
+    );
+
+    return {
+      blob: response.data,
+      fileName: parseContentDispositionFilename(
+        response.headers?.["content-disposition"]
+      ),
+    };
+  } catch (error) {
+    // With responseType "blob", error bodies arrive as a Blob — read it so we
+    // can surface the backend's message (e.g. the re-upload prompt).
+    if (error?.payload instanceof Blob) {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(await error.payload.text());
+      } catch {
+        parsed = null;
+      }
+      if (parsed) {
+        const apiError = new Error(parsed.error || error.message);
+        apiError.status = error.status;
+        apiError.code = parsed.code;
+        throw apiError;
+      }
+    }
+    throw error;
+  }
+}
+
 export function deleteOptimizationRun(runId, userId) {
   return request(
     `/api/resume/history/${runId}?userId=${encodeURIComponent(userId)}`,
