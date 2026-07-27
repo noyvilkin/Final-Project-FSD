@@ -12,8 +12,6 @@ import {
   buildDnaExtractionUserMessage,
 } from '../prompts/dnaExtractionPrompts.js';
 
-const MODEL_NAME = process.env.COLMAN_LLM_MODEL ?? 'llama3.1:8b';
-
 interface ParsedProfileSummary {
   hasDegree: boolean;
   highestDegree?: string;
@@ -66,7 +64,7 @@ export class ResumeParsingService {
 
   private static getClient(): LLMClient {
     if (!this.llmClient) {
-      this.llmClient = createLLMClient({ model: MODEL_NAME, temperature: 0.1, maxOutputTokens: 16384 });
+      this.llmClient = createLLMClient({ temperature: 0.1, maxOutputTokens: 16384 });
     }
     return this.llmClient;
   }

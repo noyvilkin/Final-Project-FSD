@@ -141,7 +141,7 @@ export class ColmanLLMClient implements LLMClient {
   private readonly username:         string;
   private readonly password:         string;
   private readonly baseUrl:          string;
-  private readonly model:            string;
+  readonly model:                    string;
   private readonly maxRetries:       number;
   private readonly baseRetryDelayMs: number;
   private readonly temperature:      number;

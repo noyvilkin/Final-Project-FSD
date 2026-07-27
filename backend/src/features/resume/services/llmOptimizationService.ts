@@ -20,15 +20,12 @@ import type {
 
 import { HybridScoringService } from './hybridScoringService.js';
 
-const MODEL_NAME = process.env.COLMAN_LLM_MODEL ?? 'llama3.1:8b';
-
 export class LLMOptimizationService {
   private static llmClient: LLMClient | null = null;
 
   private static getClient(): LLMClient {
     if (!this.llmClient) {
       this.llmClient = createLLMClient({
-        model: MODEL_NAME,
         // Lower temperature keeps rewrites faithful to the source bullet and
         // reduces the model's tendency to invent unearned keywords/skills.
         temperature: 0.2,
@@ -63,7 +60,7 @@ export class LLMOptimizationService {
       meta: {
         generatedAt: new Date().toISOString(),
         promptVersion: PROMPT_VERSION,
-        modelUsed: MODEL_NAME,
+        modelUsed: this.getClient().model,
       },
     };
   }

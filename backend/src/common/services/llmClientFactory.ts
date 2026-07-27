@@ -23,7 +23,10 @@ export function createLLMClient(overrides: LLMClientOverrides = {}): LLMClient {
     username,
     password,
     baseUrl: process.env.COLMAN_LLM_BASE_URL,
-    model:   process.env.COLMAN_LLM_MODEL ?? 'llama3.1:8b',
+    // Falls through to ColmanLLMClient's own default when unset — that class
+    // is the single place that knows the fallback model, so it never drifts
+    // out of sync with a copy hardcoded here.
+    model:   process.env.COLMAN_LLM_MODEL,
     ...overrides,
   });
 }

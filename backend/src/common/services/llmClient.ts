@@ -8,6 +8,12 @@ import type { LLMPayload } from "../types/llmTypes.js"
  * this interface and updating llmClientFactory.ts — no call sites change.
  */
 export interface LLMClient {
+  /** The exact model identifier this client is configured to call — callers
+   *  that need to report/log which model produced a response (e.g. for a
+   *  "Model: X" UI label) should read this instead of re-deriving it from
+   *  env vars, so there is exactly one place that resolves the model name. */
+  readonly model: string;
+
   generate(payload: LLMPayload): Promise<string>;
 }
 
