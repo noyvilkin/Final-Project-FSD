@@ -1,0 +1,8 @@
+{
+  "id": "pkg-08",
+  "language": "java",
+  "violation_key": "missing_persistence",
+  "violation_description": "Assignment requires PostgreSQL persistence via Spring Data JPA; the solution stores tasks only in an in-memory HashMap with no database at all (data is lost on restart).",
+  "secondary_violation": "none",
+  "secondary_violation_description": ""
+}

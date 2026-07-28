@@ -100,7 +100,7 @@ export function logout() {
   });
 }
 
-export function uploadAssignment({ assignmentFiles, userId, notes }) {
+export function uploadAssignment({ assignmentFiles, notes }) {
   const formData = new FormData();
 
   assignmentFiles.forEach((file) => {
@@ -111,9 +111,9 @@ export function uploadAssignment({ assignmentFiles, userId, notes }) {
     formData.append("notes", notes.trim());
   }
 
+  // Owner is derived from the auth cookie/JWT on the server; no x-user-id needed.
   return request("/api/uploads", {
     method: "POST",
-    headers: userId ? { "x-user-id": userId } : undefined,
     data: formData,
   });
 }

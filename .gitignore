@@ -22,3 +22,6 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Local working notes (not for the repo)
+Assignment-Review-Checklist.md
