@@ -82,7 +82,7 @@ class RateLimiter {
 
 export interface GeminiClientConfig {
   apiKey:             string;
-  /** Gemini model to use. Defaults to gemini-2.5-flash (free tier) */
+  /** Gemini model to use. Defaults to gemini-3.6-flash */
   model?:             string;
   /** Max retries on transient errors. Default: 3 */
   maxRetries?:        number;
@@ -114,7 +114,7 @@ export class GeminiClient {
     if (!config.apiKey) throw new Error('Gemini API key is required');
 
     this.apiKey           = config.apiKey;
-    this.model            = config.model            ?? 'gemini-2.5-flash';
+    this.model            = config.model            ?? 'gemini-3.6-flash';
     this.maxRetries       = config.maxRetries        ?? 3;
     this.baseRetryDelayMs = config.baseRetryDelayMs  ?? 1_000;
     this.temperature      = config.temperature       ?? 0.2;

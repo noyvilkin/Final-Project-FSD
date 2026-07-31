@@ -54,7 +54,7 @@ export class GeminiInsightsService {
       }
       GeminiInsightsService.geminiClient = new GeminiClient({
         apiKey,
-        model:           process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+        model:           process.env.GEMINI_MODEL ?? 'gemini-3.6-flash',
         temperature:     0.2,
         maxOutputTokens: 8_192,
         rateLimiter: {
@@ -81,7 +81,7 @@ export class GeminiInsightsService {
     wordsPerMinute: number
   ): Promise<GeminiInsightsResult> {
     const client = GeminiInsightsService.getClient();
-    const model  = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+    const model  = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
 
     const userMessage = buildInterviewInsightsPrompt(
       transcript,
