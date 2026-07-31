@@ -5,6 +5,7 @@ import { ResumeOptimizationService } from '../services/resumeOptimizationService
 import { GeminiOptimizationService } from '../services/geminiOptimizationService.js';
 import { HybridScoringService } from '../services/hybridScoringService.js';
 import { CvReconstructionService } from '../services/cvReconstructionService.js';
+import { CvDocumentService } from '../services/cvDocumentService.js';
 import { ResumeParsingService } from '../services/resumeParsingService.js';
 import { OptimizationRun } from '../models/optimizationRun.model.js';
 import { appLogger } from '../../../common/services/logger.js';
@@ -77,11 +78,17 @@ router.post('/optimize', async (req: Request, res: Response): Promise<void> => {
     const versionTag = Date.now().toString(36);
     const originalResumeText = payload.professionalDNA.rawResumeText || '';
 
+    // Freeze the structured DNA onto the run so the downloadable CV is
+    // composed from the exact profile that was optimized — not whatever
+    // the user's latest DNA happens to be at download time.
+    const dnaSnapshot = await CvDocumentService.snapshotForUser(userId);
+
     const run = await OptimizationRun.create({
       userId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId,
       jobDescriptionText,
       dashboardData: dashboardData as unknown as Record<string, unknown>,
       originalResumeText,
+      dnaSnapshot: dnaSnapshot ?? undefined,
       versionTag,
     });
 
@@ -184,7 +191,10 @@ router.get('/history/:runId', async (req: Request, res: Response): Promise<void>
     const run = await OptimizationRun.findOne({
       _id: runId,
       userId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId,
-    }).lean();
+    })
+      // dnaSnapshot is only needed server-side when composing the docx.
+      .select('-dnaSnapshot')
+      .lean();
 
     if (!run) {
       res.status(404).json({ success: false, error: 'Run not found' });
@@ -201,14 +211,23 @@ router.get('/history/:runId', async (req: Request, res: Response): Promise<void>
 });
 
 // ── POST /api/resume/history/:runId/artifact ────────────────────
-// Generate the optimized CV on-demand: take the user's original resume
-// and replace ONLY the accepted/edited bullets.
+// Generate the optimized CV on-demand. Returns plain text by default
+// (used for preview), or a freshly composed Word document when
+// `format: 'docx'` is requested (used for download). The .docx is
+// built from the user's structured Professional DNA with the
+// accepted/edited bullets integrated into Work Experience.
 router.post('/history/:runId/artifact', async (req: Request, res: Response): Promise<void> => {
   try {
     const { runId } = req.params;
-    const { userId, acceptedBullets } = req.body as {
+    const { userId, acceptedBullets, format } = req.body as {
       userId: string;
-      acceptedBullets: Array<{ originalBullet: string; optimizedBullet: string; userEdit?: string }>;
+      acceptedBullets: Array<{
+        originalBullet: string;
+        optimizedBullet: string;
+        userEdit?: string;
+        index?: number;
+      }>;
+      format?: 'docx' | 'text';
     };
 
     if (!userId) {
@@ -223,6 +242,38 @@ router.post('/history/:runId/artifact', async (req: Request, res: Response): Pro
 
     if (!run) {
       res.status(404).json({ success: false, error: 'Run not found' });
+      return;
+    }
+
+    if (format === 'docx') {
+      // Compose from the run's frozen snapshot. Legacy runs created before
+      // snapshots existed fall back to the user's current DNA.
+      const snapshot = run.dnaSnapshot ?? (await CvDocumentService.snapshotForUser(userId));
+
+      if (!snapshot) {
+        res.status(409).json({
+          success: false,
+          code: 'NO_PROFILE',
+          error:
+            'No structured resume data was found for your account. Please re-upload your resume so we can compose your CV.',
+        });
+        return;
+      }
+
+      const result = await CvDocumentService.buildDocxFromSnapshot(snapshot, acceptedBullets || []);
+
+      appLogger.info('[ResumeOptimization] Composed Word CV generated', {
+        runId,
+        bytes: result.buffer.length,
+        acceptedBullets: (acceptedBullets || []).length,
+      });
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+      res.status(200).send(result.buffer);
       return;
     }
 

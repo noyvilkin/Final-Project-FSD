@@ -55,9 +55,9 @@ export const PACKAGE_FIXTURES: PackageFixture[] = [
     secondaryViolation: 'missing_input_validation',
     primaryKeywords: ['sqlite', 'not postgresql', 'wrong database', 'sqlite instead'],
     secondaryKeywords: ['validation', 'input validation', 'sanitization'],
-    functionalCorrectnessRange: { min: 25, max: 55 },
-    codeQualityRange: { min: 50, max: 75 },
-    expectedGrades: ['D', 'C-'],
+    functionalCorrectnessRange: { min: 0, max: 45 },
+    codeQualityRange: { min: 40, max: 85 },
+    expectedGrades: ['F', 'D'],
     description: 'AI must detect SQLite used instead of PostgreSQL',
   },
   {
@@ -68,7 +68,11 @@ export const PACKAGE_FIXTURES: PackageFixture[] = [
     violationKey: 'missing_auth',
     violationDescription: 'No JWT authentication on protected endpoints',
     secondaryViolation: 'unused_jwt_imports',
-    primaryKeywords: ['no auth', 'not authenticated', 'unprotected', 'missing jwt', 'no jwt'],
+    primaryKeywords: [
+      'no auth', 'not authenticated', 'unprotected', 'missing jwt', 'no jwt',
+      'jwt authentication', 'jwt auth', 'authentication is missing', 'authentication implementation',
+      'lacks authentication', 'no authentication', 'without authentication', 'authentication is absent',
+    ],
     secondaryKeywords: ['jwt', 'imported but', 'middleware', 'unused', 'not applied'],
     functionalCorrectnessRange: { min: 15, max: 45 },
     codeQualityRange: { min: 50, max: 75 },
@@ -94,7 +98,7 @@ export const PACKAGE_FIXTURES: PackageFixture[] = [
     ],
     functionalCorrectnessRange: { min: 55, max: 90 },
     codeQualityRange: { min: 75, max: 90 },
-    expectedGrades: ['C', 'C+'],
+    expectedGrades: ['C', 'C+', 'B-', 'B'],
     description: 'AI must detect missing test files',
   },
   {
@@ -109,8 +113,49 @@ export const PACKAGE_FIXTURES: PackageFixture[] = [
     secondaryKeywords: ['/status', 'wrong name', 'endpoint name', 'not /health'],
     functionalCorrectnessRange: { min: 45, max: 80 },
     codeQualityRange: { min: 75, max: 90 },
-    expectedGrades: ['C', 'C-'],
+    expectedGrades: ['D', 'C-', 'C', 'C+'],
     description: 'AI must detect missing /health endpoint',
+  },
+  {
+    id: 'pkg-07',
+    folderName: 'package-07-python',
+    zipBaseName: 'package-07-python',
+    isGood: false,
+    violationKey: 'missing_auth',
+    violationDescription: 'No JWT authentication on protected endpoints (Python/Flask)',
+    secondaryViolation: undefined,
+    primaryKeywords: [
+      'no auth', 'not authenticated', 'unprotected', 'missing jwt', 'no jwt',
+      'jwt authentication', 'jwt auth', 'authentication is missing', 'authentication implementation',
+      'lacks authentication', 'no authentication', 'without authentication', 'authentication is absent',
+    ],
+    functionalCorrectnessRange: { min: 15, max: 55 },
+    codeQualityRange: { min: 50, max: 90 },
+    expectedGrades: ['F', 'D', 'D+', 'C-'],
+    description: 'AI must detect missing JWT auth in a Python/Flask solution',
+  },
+  {
+    id: 'pkg-08',
+    folderName: 'package-08-java',
+    zipBaseName: 'package-08-java',
+    isGood: false,
+    violationKey: 'missing_persistence',
+    violationDescription: 'In-memory HashMap, no database/JPA (Java/Spring Boot)',
+    secondaryViolation: undefined,
+    // Detection must name the actual deviation (in-memory / no database), not
+    // merely echo the required "PostgreSQL" — so bare postgres keywords are omitted.
+    primaryKeywords: [
+      'in-memory', 'in memory', 'no database', 'no persistence', 'not persisted',
+      'hashmap', 'concurrenthashmap', 'no jpa', 'lost on restart', 'without a database',
+      'not postgresql', 'no actual database', 'volatile',
+    ],
+    // No database at all (data lost on restart) is a CRITICAL functional gap the
+    // model grades consistently low — unlike "wrong DB engine", which sat on the
+    // moderate/critical boundary and varied run-to-run.
+    functionalCorrectnessRange: { min: 10, max: 45 },
+    codeQualityRange: { min: 40, max: 90 },
+    expectedGrades: ['F', 'D', 'D+'],
+    description: 'AI must detect no real persistence (in-memory only) in a Java/Spring Boot solution',
   },
   {
     id: 'pkg-06',

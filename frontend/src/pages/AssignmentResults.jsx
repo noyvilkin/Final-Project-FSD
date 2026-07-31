@@ -43,10 +43,61 @@ function safeArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
+const COVERAGE_STYLES = {
+  met: { icon: "✓", label: "Met", chip: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
+  partial: { icon: "~", label: "Partial", chip: "bg-amber-100 text-amber-700", dot: "bg-amber-500" },
+  missing: { icon: "✗", label: "Missing", chip: "bg-rose-100 text-rose-700", dot: "bg-rose-500" },
+};
+
+function RequirementCoverageSection({ items }) {
+  if (!items.length) return null;
+
+  const met = items.filter((i) => i.status === "met").length;
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-gray-900">Requirement Coverage</h3>
+        <span className="text-xs font-medium text-gray-500">
+          {met}/{items.length} met
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-gray-600">
+        How your submission maps to each requirement stated in the assignment.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {items.map((item, idx) => {
+          const style = COVERAGE_STYLES[item.status] || COVERAGE_STYLES.partial;
+          return (
+            <li key={`req-${idx}`} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium text-gray-900">{item.requirement}</p>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${style.chip}`}
+                >
+                  {style.icon} {style.label}
+                </span>
+              </div>
+              {item.justification ? (
+                <p className="mt-1 text-xs text-gray-600">{item.justification}</p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+// Recover the original upload name from an S3 key. Stored keys look like
+// `assignments/{userId}/{assignmentId}/{uuid}-{requirement|solution}-{original}`,
+// so we drop the path, the leading UUID, and the role prefix we add on upload.
 function fileNameFromKey(key) {
   if (!key || typeof key !== "string") return "Not provided";
-  const parts = key.split("/");
-  return parts[parts.length - 1] || key;
+  const base = key.split("/").pop() || key;
+  return base
+    .replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "")
+    .replace(/^(requirement|solution)-/i, "");
 }
 
 function ListSection({ title, subtitle, toneClass, icon, items }) {
@@ -138,6 +189,10 @@ export default function AssignmentResults() {
 
     const recommendations = safeArray(results.feedback?.bestPractices?.recommendations);
 
+    const requirementsCoverage = safeArray(results.feedback?.requirementsCoverage).filter(
+      (r) => r && r.requirement
+    );
+
     return {
       score,
       grade: results.overallGrade || "-",
@@ -146,6 +201,7 @@ export default function AssignmentResults() {
       strengths,
       improvements,
       recommendations,
+      requirementsCoverage,
       metadata: {
         language: results.metadata?.language || "Unknown",
         frameworks: safeArray(results.metadata?.frameworks),
@@ -156,7 +212,7 @@ export default function AssignmentResults() {
 
   if (loading) {
     return (
-      <PageLayout title="Technical Assignment" subtitle="Loading your analysis" showBack>
+      <PageLayout title="Technical Assignment" subtitle="Loading your analysis" showBack backTo="/assignment/history">
         <Card className="p-6">
           <p className="text-sm text-gray-600">Fetching your results...</p>
         </Card>
@@ -166,7 +222,7 @@ export default function AssignmentResults() {
 
   if (error || !viewModel) {
     return (
-      <PageLayout title="Technical Assignment" subtitle="Results unavailable" showBack>
+      <PageLayout title="Technical Assignment" subtitle="Results unavailable" showBack backTo="/assignment/history">
         <Card className="p-6">
           <p className="text-sm text-red-600">{error || "Could not load results."}</p>
           <div className="mt-4 flex gap-2">
@@ -183,7 +239,18 @@ export default function AssignmentResults() {
       title="Technical Assignment"
       subtitle="Upload your completed homework for review"
       showBack
+      backTo="/assignment/history"
     >
+      <div className="mb-4 flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate("/assignment/history")}
+        >
+          View History
+        </Button>
+      </div>
+
       <div className="space-y-4">
         <Card className={["p-5 ring-1", viewModel.tone.ringClass].join(" ")}>
           <div className="text-center">
@@ -213,6 +280,8 @@ export default function AssignmentResults() {
           </div>
           <p className="mt-3 text-xs text-gray-600">{viewModel.summary}</p>
         </Card>
+
+        <RequirementCoverageSection items={viewModel.requirementsCoverage} />
 
         <ListSection
           title="What You Did Well"

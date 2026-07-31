@@ -30,6 +30,13 @@ const s3 = new S3Client({
   endpoint: S3_ENDPOINT,
   region: "us-east-1",
   forcePathStyle: true,
+  // Fail fast when storage is down/unreachable instead of hanging the request
+  // (and the user's upload/analysis) on long SDK retry backoff.
+  maxAttempts: 2,
+  requestHandler: {
+    connectionTimeout: 3000, // give up establishing a socket after 3s
+    requestTimeout: 30000,   // cap a stalled request at 30s (covers 50MB puts)
+  },
   credentials: {
     accessKeyId: S3_ACCESS_KEY,
     secretAccessKey: S3_SECRET_KEY,
@@ -54,7 +61,13 @@ let bucketReady: Promise<void> | null = null;
 
 const getBucketReady = (): Promise<void> => {
   if (!bucketReady) {
-    bucketReady = ensureBucket(S3_BUCKET);
+    // Never cache a failure: if the bucket check/creation fails (e.g. storage
+    // is momentarily down), clear the memo so the next upload retries instead
+    // of being permanently poisoned by a rejected promise until a restart.
+    bucketReady = ensureBucket(S3_BUCKET).catch((err) => {
+      bucketReady = null;
+      throw err;
+    });
   }
   return bucketReady;
 };

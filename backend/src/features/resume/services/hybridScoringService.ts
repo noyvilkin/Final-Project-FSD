@@ -27,7 +27,9 @@ export class HybridScoringService {
       this.geminiClient = new GeminiClient({
         apiKey,
         model: 'gemini-2.5-flash',
-        temperature: 0.2,
+        // Deterministic scoring: the same candidate/JD pair must yield the
+        // same score so that a truthful bullet rewrite never regresses it.
+        temperature: 0,
         maxOutputTokens: 4096,
         rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
       });

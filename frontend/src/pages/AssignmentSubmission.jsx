@@ -1,14 +1,12 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "../components/layouts/PageLayout";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/AuthContext";
 
 const MAX_DESCRIPTION_SIZE = 10 * 1024 * 1024;
 const MAX_SOLUTION_SIZE = 50 * 1024 * 1024;
-const MAX_NOTES_CHARS = 1000;
 
 const DESCRIPTION_ALLOWED_TYPES = [
   "application/pdf",
@@ -17,8 +15,9 @@ const DESCRIPTION_ALLOWED_TYPES = [
   "text/plain",
 ];
 
+// Solution must be a ZIP — the analysis pipeline scans source files from the
+// archive, so a PDF solution cannot be graded.
 const SOLUTION_ALLOWED_TYPES = [
-  "application/pdf",
   "application/zip",
   "application/x-zip-compressed",
 ];
@@ -106,23 +105,13 @@ export default function AssignmentSubmission() {
 
   const [descriptionFile, setDescriptionFile] = useState(null);
   const [solutionFile, setSolutionFile] = useState(null);
-  const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const notesCount = notes.length;
   const isSubmitting = status === "uploading" || status === "processing";
 
-  const readiness = useMemo(() => {
-    return {
-      assignment: Boolean(descriptionFile),
-      solution: Boolean(solutionFile),
-      notes: true,
-    };
-  }, [descriptionFile, solutionFile]);
-
-  const canSubmit = readiness.assignment && readiness.solution && !isSubmitting;
+  const canSubmit = Boolean(descriptionFile) && Boolean(solutionFile) && !isSubmitting;
 
   const validateDescription = (file) => {
     if (!file) {
@@ -151,7 +140,7 @@ export default function AssignmentSubmission() {
     }
 
     if (!matchesType(file, SOLUTION_ALLOWED_TYPES)) {
-      setErrorMessage("Solution must be a ZIP or PDF file.");
+      setErrorMessage("Solution must be a ZIP file.");
       return;
     }
 
@@ -180,8 +169,6 @@ export default function AssignmentSubmission() {
           submission: {
             descriptionFile,
             solutionFile,
-            notes,
-            userId: userId || undefined,
           },
         },
       });
@@ -196,7 +183,20 @@ export default function AssignmentSubmission() {
       title="Technical Assignment"
       subtitle="Upload your completed homework for review"
       showBack
+      backTo="/profile"
     >
+      {userId && (
+        <div className="mb-4 flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/assignment/history")}
+          >
+            View History
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-4">
         <UploadTile
           inputId="assignment-description-file"
@@ -219,38 +219,10 @@ export default function AssignmentSubmission() {
           subtitle="Upload your completed work"
           file={solutionFile}
           onFileChange={validateSolution}
-          accept=".zip,.pdf"
+          accept=".zip"
           disabled={isSubmitting}
-          hint="ZIP or PDF (Max 50MB)"
+          hint="ZIP (Max 50MB)"
         />
-
-        <Card className="p-4">
-          <div className="mb-3 flex items-start gap-2">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-xs font-semibold text-white">
-              3
-            </span>
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900">Add Notes & Context</h3>
-              <p className="text-xs text-gray-500">
-                Optional: Explain your approach, challenges, and technical decisions.
-              </p>
-            </div>
-          </div>
-
-          <Textarea
-            value={notes}
-            onChange={(event) => {
-              const next = event.target.value;
-              if (next.length <= MAX_NOTES_CHARS) {
-                setNotes(next);
-              }
-            }}
-            placeholder="Describe your approach, any challenges you faced, design decisions, technologies used, or anything else you'd like the reviewer to know..."
-            disabled={isSubmitting}
-            className="min-h-[110px]"
-          />
-          <p className="mt-2 text-xs text-gray-500">{notesCount}/{MAX_NOTES_CHARS} characters</p>
-        </Card>
 
         <Card className="border-blue-100 bg-blue-50 p-4">
           <h3 className="text-sm font-semibold text-gray-900">Ready to Submit?</h3>
@@ -258,32 +230,10 @@ export default function AssignmentSubmission() {
             The AI will analyze your submission and provide detailed feedback.
           </p>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div
-              className={[
-                "rounded-md border px-2 py-2 text-center text-xs",
-                readiness.assignment ? "border-blue-200 bg-white text-blue-700" : "border-gray-200 bg-white text-gray-500",
-              ].join(" ")}
-            >
-              Assignment
-            </div>
-            <div
-              className={[
-                "rounded-md border px-2 py-2 text-center text-xs",
-                readiness.solution ? "border-blue-200 bg-white text-blue-700" : "border-gray-200 bg-white text-gray-500",
-              ].join(" ")}
-            >
-              Solution
-            </div>
-            <div className="rounded-md border border-blue-200 bg-white px-2 py-2 text-center text-xs text-blue-700">
-              Notes
-            </div>
-          </div>
+          {statusMessage ? <p className="mb-3 text-xs text-blue-700">{statusMessage}</p> : null}
+          {errorMessage ? <p className="mb-3 text-xs text-red-600">{errorMessage}</p> : null}
 
-          {statusMessage ? <p className="mt-3 text-xs text-blue-700">{statusMessage}</p> : null}
-          {errorMessage ? <p className="mt-3 text-xs text-red-600">{errorMessage}</p> : null}
-
-          <div className="mt-4 flex gap-2">
+          <div className="flex gap-2">
             <Button
               variant="outline"
               className="flex-1"
@@ -296,10 +246,6 @@ export default function AssignmentSubmission() {
               {isSubmitting ? "Submitting..." : "Submit"}
             </Button>
           </div>
-
-          <p className="mt-2 text-[11px] text-gray-500">
-            Note: current backend validation accepts PDF and ZIP for assignment uploads.
-          </p>
         </Card>
       </div>
     </PageLayout>

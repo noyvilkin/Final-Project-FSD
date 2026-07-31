@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -100,7 +100,7 @@ export function logout() {
   });
 }
 
-export function uploadAssignment({ assignmentFiles, userId, notes }) {
+export function uploadAssignment({ assignmentFiles, notes }) {
   const formData = new FormData();
 
   assignmentFiles.forEach((file) => {
@@ -111,9 +111,9 @@ export function uploadAssignment({ assignmentFiles, userId, notes }) {
     formData.append("notes", notes.trim());
   }
 
+  // Owner is derived from the auth cookie/JWT on the server; no x-user-id needed.
   return request("/api/uploads", {
     method: "POST",
-    headers: userId ? { "x-user-id": userId } : undefined,
     data: formData,
   });
 }
@@ -124,6 +124,19 @@ export function getAssignment(assignmentId) {
 
 export function getAssignmentResults(assignmentId, format = "summary") {
   return request(`/api/assignments/${assignmentId}/results?format=${format}`);
+}
+
+export function getAssignmentHistory(userId, { limit = 20, offset = 0 } = {}) {
+  return request(
+    `/api/assignments/user/${encodeURIComponent(userId)}?limit=${limit}&offset=${offset}`
+  );
+}
+
+export function deleteAssignment(assignmentId, userId) {
+  return request(
+    `/api/assignments/${assignmentId}?userId=${encodeURIComponent(userId)}`,
+    { method: "DELETE" }
+  );
 }
 
 export function uploadResume(file, userId) {
@@ -181,6 +194,62 @@ export async function getOptimizationArtifact(
     return response.data;
   } catch (error) {
     throw toApiError(error);
+  }
+}
+
+function parseContentDispositionFilename(header) {
+  if (!header) return null;
+  // Prefer RFC 5987 (filename*=UTF-8''...) then fall back to plain filename="...".
+  const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8[1]);
+    } catch {
+      /* fall through */
+    }
+  }
+  const plain = header.match(/filename="?([^"]+)"?/i);
+  return plain ? plain[1] : null;
+}
+
+export async function getOptimizationArtifactDocx(
+  runId,
+  userId,
+  acceptedBullets = []
+) {
+  try {
+    const response = await apiClient.post(
+      `/api/resume/history/${runId}/artifact`,
+      { userId, acceptedBullets, format: "docx" },
+      {
+        responseType: "blob",
+      }
+    );
+
+    return {
+      blob: response.data,
+      fileName: parseContentDispositionFilename(
+        response.headers?.["content-disposition"]
+      ),
+    };
+  } catch (error) {
+    // With responseType "blob", error bodies arrive as a Blob — read it so we
+    // can surface the backend's message (e.g. the re-upload prompt).
+    if (error?.payload instanceof Blob) {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(await error.payload.text());
+      } catch {
+        parsed = null;
+      }
+      if (parsed) {
+        const apiError = new Error(parsed.error || error.message);
+        apiError.status = error.status;
+        apiError.code = parsed.code;
+        throw apiError;
+      }
+    }
+    throw error;
   }
 }
 
