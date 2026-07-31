@@ -15,8 +15,9 @@ const DESCRIPTION_ALLOWED_TYPES = [
   "text/plain",
 ];
 
+// Solution must be a ZIP — the analysis pipeline scans source files from the
+// archive, so a PDF solution cannot be graded.
 const SOLUTION_ALLOWED_TYPES = [
-  "application/pdf",
   "application/zip",
   "application/x-zip-compressed",
 ];
@@ -139,7 +140,7 @@ export default function AssignmentSubmission() {
     }
 
     if (!matchesType(file, SOLUTION_ALLOWED_TYPES)) {
-      setErrorMessage("Solution must be a ZIP or PDF file.");
+      setErrorMessage("Solution must be a ZIP file.");
       return;
     }
 
@@ -168,7 +169,6 @@ export default function AssignmentSubmission() {
           submission: {
             descriptionFile,
             solutionFile,
-            userId: userId || undefined,
           },
         },
       });
@@ -219,9 +219,9 @@ export default function AssignmentSubmission() {
           subtitle="Upload your completed work"
           file={solutionFile}
           onFileChange={validateSolution}
-          accept=".zip,.pdf"
+          accept=".zip"
           disabled={isSubmitting}
-          hint="ZIP or PDF (Max 50MB)"
+          hint="ZIP (Max 50MB)"
         />
 
         <Card className="border-blue-100 bg-blue-50 p-4">

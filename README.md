@@ -6,7 +6,7 @@
 - API gateway built with Express and TypeScript
 - Modular routing for Auth, Profile, Assignments, and Interviews
 - File uploads via MinIO (S3-compatible object storage)
-- Direct synchronous analysis pipeline (download → scan → AI feedback)
+- Background analysis pipeline (download → scan → AI feedback); the client polls for status
 
 ### Prerequisites
 - Node.js ≥ 18
@@ -75,6 +75,9 @@ COLMAN_LLM_BASE_URL=http://10.10.248.41
 COLMAN_LLM_USERNAME=your-student-username
 COLMAN_LLM_PASSWORD=your-student-password
 COLMAN_LLM_MODEL=llama3.1:8b
+
+# Assignment limits (optional)
+ASSIGNMENT_DAILY_LIMIT=20   # max non-failed submissions per user per rolling 24h
 
 # Auth (JWT + bcrypt)
 AUTH_BCRYPT_SALT_ROUNDS=10
@@ -190,7 +193,8 @@ curl -X POST http://localhost:4000/api/uploads -F "resumes=@./cv.pdf"
 
 ### Analysis pipeline
 
-When an assignment is uploaded, the backend runs the full pipeline as a direct awaited call:
+When an assignment is uploaded, the upload request returns immediately and the
+backend runs the full pipeline in the background (the client polls for status):
 
 1. **Upload** — files are stored in MinIO under `assignments/{userId}/{assignmentId}/`
 2. **Scan** — ZIP is extracted and source files are parsed
@@ -198,22 +202,9 @@ When an assignment is uploaded, the backend runs the full pipeline as a direct a
 4. **AI feedback** — source code + requirements are sent to the Colman LLM service for grading
 5. **Results** — structured feedback is saved to the assignment record
 
-Internal endpoints are available for triggering individual steps:
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /api/v1/internal/extract-text` | Text extraction (stub) |
-| `POST /api/v1/internal/analyze-assignment` | Full scan → AI → results pipeline |
-| `POST /api/v1/internal/analyze-ai` | AI analysis only |
-| `POST /api/v1/internal/generate-results` | Results compilation |
-
 ### API routes
 - `GET /health`
-- `POST /api/uploads`
+- `POST /api/uploads` (auth required; owner derived from JWT)
 - `GET /api/assignments/:assignmentId`
 - `GET /api/assignments/:assignmentId/status`
 - `GET /api/assignments/:assignmentId/results`
-- `POST /api/v1/internal/extract-text`
-- `POST /api/v1/internal/analyze-assignment`
-- `POST /api/v1/internal/analyze-ai`
-- `POST /api/v1/internal/generate-results`

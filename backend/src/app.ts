@@ -14,7 +14,6 @@ import authRoutes from "./features/auth/routes/auth.routes.js";
 import uploadRouter from "./features/upload/routes/upload.routes.js";
 import userRoutes from "./features/user/routes/user.routes.js";
 import assignmentRoutes from "./features/assignment/routes/assignment.routes.js";
-import internalRoutes from "./features/assignment/routes/internal.routes.js";
 import resumeOptimizationRoutes from "./features/resume/routes/resumeOptimization.routes.js";
 import profileAnalysisRoutes from "./features/profile-analysis/routes/profileAnalysis.routes.js";
 
@@ -69,7 +68,6 @@ app.use("/api/user", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/assignments", assignmentRoutes);
 
-app.use("/api/v1/internal", internalRoutes);
 app.use("/api/resume", resumeOptimizationRoutes);
 app.use("/api/profile-analysis", profileAnalysisRoutes);
 
