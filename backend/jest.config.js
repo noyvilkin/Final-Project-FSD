@@ -18,7 +18,6 @@ const config = {
     "src/common/middlewares/**/*.ts",
     "src/features/auth/**/*.ts",
     "src/features/assignment/**/*.ts",
-    "src/services/aiServices/**/*.ts",
     "src/common/utils/zipProcessor.ts",
     "!src/**/*.d.ts",
     "!src/tests/**",

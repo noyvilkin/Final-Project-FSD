@@ -39,8 +39,8 @@ export default function InterviewHistory() {
     setLoading(true);
     setError(null);
     try {
-      const res = await getInterviewHistory();
-      setInterviews(res.data || []);
+      const res = await getInterviewHistory(authUserId);
+      setInterviews(res.interviews || res.data || []);
     } catch (err) {
       setError(err.message || "Failed to load interview history");
     } finally {

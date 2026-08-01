@@ -65,6 +65,8 @@ export default function InterviewUpload() {
   const { userId } = useAuth();
 
   const [file, setFile] = useState(null);
+  const [jobTitle, setJobTitle] = useState("");
+  const [company, setCompany] = useState("");
   const [previewUrl, setPreviewUrl] = useState(null);
   const [validationError, setValidationError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -131,6 +133,8 @@ export default function InterviewUpload() {
       // helper does not expose onUploadProgress)
       const formData = new FormData();
       formData.append("interviews", file);
+      if (jobTitle.trim()) formData.append("jobTitle", jobTitle.trim());
+      if (company.trim())  formData.append("company",  company.trim());
 
       const uploadResult = await axios.post(
         `${apiConfig.baseUrl}/api/uploads`,
@@ -178,11 +182,48 @@ export default function InterviewUpload() {
       showBack
     >
       <div className="space-y-4">
+        {/* Job details */}
+        <Card className="p-4">
+          <div className="mb-3 flex items-start gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white">
+              1
+            </span>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Interview Details (Optional)</h3>
+              <p className="text-xs text-gray-500">Add context so you can find this interview later</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Job Title</label>
+              <input
+                type="text"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                placeholder="e.g. Software Engineer"
+                disabled={submitting}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none disabled:opacity-60"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Company</label>
+              <input
+                type="text"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder="e.g. Google"
+                disabled={submitting}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none disabled:opacity-60"
+              />
+            </div>
+          </div>
+        </Card>
+
         {/* File picker */}
         <Card className="p-4">
           <div className="mb-3 flex items-start gap-2">
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-              1
+              2
             </span>
             <div>
               <h3 className="text-sm font-semibold text-gray-900">Upload Your Interview Recording</h3>

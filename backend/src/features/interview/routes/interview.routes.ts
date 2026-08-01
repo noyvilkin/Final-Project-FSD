@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import { asyncHandler } from '../../../common/middlewares/asyncHandler.js';
 import { appLogger } from '../../../common/services/logger.js';
 import { InterviewInsights } from '../models/interviewInsights.model.js';
+import { fetchBlobAsBuffer } from '../../../common/services/s3Upload.js';
 import {
   TranscriptionOrchestrationService,
   InterviewNotFoundError,
@@ -552,6 +553,192 @@ router.get(
       insightsCompletedAt:       interview.insightsCompletedAt       ?? null,
       requestId: req.requestId ?? '-',
     });
+  })
+);
+
+// ─── GET /interviews/history ─────────────────────────────────────────────────
+
+/**
+ * Return the authenticated user's interview list (newest first).
+ * Uses x-user-id header, matching all other protected routes.
+ */
+router.get(
+  '/history',
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = resolveUserId(req);
+    if (!userId) {
+      res.status(401).json({
+        error:     { code: 'MISSING_USER_ID', message: 'x-user-id header is required' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    const limit  = Math.min(parseInt(asString((req.query.limit  as string | string[]) ?? '20'), 10), 100);
+    const offset = Math.max(parseInt(asString((req.query.offset as string | string[]) ?? '0'),  10), 0);
+
+    const interviews = await InterviewInsights.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(offset)
+      .select('-processingError -insightsError -transcript -transcriptSegments');
+
+    res.json({
+      interviews: interviews.map((i) => ({
+        id:               i._id,
+        mediaType:        i.mediaType,
+        processingStatus: i.processingStatus,
+        insightsStatus:   i.insightsStatus,
+        jobId:            i.jobId     ?? null,
+        jobTitle:         i.jobTitle  ?? null,
+        company:          i.company   ?? null,
+        confidenceScore:  i.confidenceScore ?? null,
+        starAnalysis:     i.starAnalysis    ?? null,
+        strengths:        i.strengths       ?? [],
+        weaknesses:       i.weaknesses      ?? [],
+        recommendations:  i.recommendations ?? [],
+        createdAt:        i.createdAt,
+        updatedAt:        i.updatedAt,
+      })),
+      count:     interviews.length,
+      requestId: req.requestId ?? '-',
+    });
+  })
+);
+
+// ─── GET /interviews/archive ──────────────────────────────────────────────────
+
+/**
+ * Return all completed interviews for the user with full insights embedded.
+ * Only returns interviews where insightsStatus === 'completed'.
+ */
+router.get(
+  '/archive',
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = resolveUserId(req);
+    if (!userId) {
+      res.status(401).json({
+        error:     { code: 'MISSING_USER_ID', message: 'x-user-id header is required' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    const limit  = Math.min(parseInt(asString((req.query.limit  as string | string[]) ?? '20'), 10), 100);
+    const offset = Math.max(parseInt(asString((req.query.offset as string | string[]) ?? '0'),  10), 0);
+
+    const interviews = await InterviewInsights.find({
+      userId,
+      insightsStatus: 'completed',
+    })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(offset)
+      .select('-processingError -insightsError -transcript -transcriptSegments');
+
+    res.json({
+      interviews: interviews.map((i) => ({
+        id:               i._id,
+        mediaType:        i.mediaType,
+        mediaFileKey:     i.mediaFileKey,
+        processingStatus: i.processingStatus,
+        insightsStatus:   i.insightsStatus,
+        jobId:            i.jobId     ?? null,
+        jobTitle:         i.jobTitle  ?? null,
+        company:          i.company   ?? null,
+        confidenceScore:  i.confidenceScore           ?? null,
+        fillerWordCount:  i.fillerWordCount            ?? null,
+        wordsPerMinute:   i.wordsPerMinute             ?? null,
+        starAnalysis:     i.starAnalysis               ?? null,
+        candidateActionAssessment: i.candidateActionAssessment ?? null,
+        strengths:        i.strengths                 ?? [],
+        weaknesses:       i.weaknesses                ?? [],
+        recommendations:  i.recommendations           ?? [],
+        insightsCompletedAt: i.insightsCompletedAt    ?? null,
+        createdAt:        i.createdAt,
+        updatedAt:        i.updatedAt,
+      })),
+      count:     interviews.length,
+      requestId: req.requestId ?? '-',
+    });
+  })
+);
+
+// ─── GET /interviews/:id/media ────────────────────────────────────────────────
+
+/**
+ * Stream the raw media file from S3 so the browser video/audio player can
+ * load it. Supports the Range header for seeking.
+ */
+router.get(
+  '/:id/media',
+  asyncHandler(async (req: Request, res: Response) => {
+    const interviewId = asString(req.params.id);
+    const userId      = resolveUserId(req);
+
+    if (!userId) {
+      res.status(401).json({
+        error:     { code: 'MISSING_USER_ID', message: 'x-user-id header is required' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    if (!isValidObjectId(interviewId)) {
+      res.status(400).json({
+        error:     { code: 'INVALID_INTERVIEW_ID', message: 'Invalid interview ID format' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    const interview = await InterviewInsights.findOne({ _id: interviewId, userId }).select('mediaFileKey mediaType');
+    if (!interview) {
+      res.status(404).json({
+        error:     { code: 'INTERVIEW_NOT_FOUND', message: 'Interview not found' },
+        requestId: req.requestId ?? '-',
+      });
+      return;
+    }
+
+    const contentType = interview.mediaType === 'video' ? 'video/mp4' : 'audio/mpeg';
+
+    try {
+      const buffer = await fetchBlobAsBuffer(interview.mediaFileKey);
+      const total  = buffer.byteLength;
+      const rangeHeader = req.headers.range;
+
+      if (rangeHeader) {
+        const [startStr, endStr] = rangeHeader.replace(/bytes=/, '').split('-');
+        const start = parseInt(startStr, 10);
+        const end   = endStr ? parseInt(endStr, 10) : total - 1;
+        const chunk = buffer.slice(start, end + 1);
+
+        res.status(206).set({
+          'Content-Range':  `bytes ${start}-${end}/${total}`,
+          'Accept-Ranges':  'bytes',
+          'Content-Length': chunk.byteLength.toString(),
+          'Content-Type':   contentType,
+        });
+        res.end(chunk);
+      } else {
+        res.set({
+          'Content-Length': total.toString(),
+          'Content-Type':   contentType,
+          'Accept-Ranges':  'bytes',
+        });
+        res.end(buffer);
+      }
+    } catch (err) {
+      appLogger.error('[interview-api] Media stream failed', {
+        interviewId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({
+        error:     { code: 'MEDIA_FETCH_FAILED', message: 'Failed to fetch media file' },
+        requestId: req.requestId ?? '-',
+      });
+    }
   })
 );
 

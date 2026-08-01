@@ -149,7 +149,9 @@ export interface IInterviewInsights extends Document {
 
   // Existing legacy insight sub-document (preserved for backward compat)
   insights?: IInsights;
-  jobId?:    string;
+  jobId?:     string;
+  jobTitle?:  string;
+  company?:   string;
 
   createdAt: Date;
   updatedAt: Date;
@@ -320,8 +322,10 @@ const InterviewInsightsSchema = new Schema<IInterviewInsights>(
     insightsError:              { type: ProcessingErrorSchema },
 
     // Existing fields preserved
-    insights: { type: InsightsSchema },
-    jobId:    { type: String },
+    insights:  { type: InsightsSchema },
+    jobId:     { type: String },
+    jobTitle:  { type: String },
+    company:   { type: String },
   },
   { timestamps: true }
 );
