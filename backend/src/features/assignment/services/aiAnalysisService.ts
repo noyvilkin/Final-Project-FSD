@@ -133,11 +133,11 @@ export class AIAnalysisService {
       
       this.geminiClient = new GeminiClient({
         apiKey,
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         temperature: 0,        // Grading must be reproducible — no sampling variance.
         maxOutputTokens: 4096, // Headroom so structured JSON is never truncated.
         rateLimiter: {
-          // Google free tier for gemini-2.5-flash (per GCP project, NOT per API key).
+          // Google free tier for gemini-3.6-flash (per GCP project, NOT per API key).
           // Official: 10 RPM / 250 RPD. NOTE: since Dec 2025 some accounts are silently
           // throttled to ~20 RPD — if you keep seeing 429s, check AI Studio → Rate Limits
           // and lower requestsPerDay to match. RPD resets at midnight US Pacific.

@@ -19,7 +19,7 @@ import type {
 
 import { HybridScoringService } from './hybridScoringService.js';
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'gemini-3.6-flash';
 
 export class GeminiOptimizationService {
   private static geminiClient: GeminiClient | null = null;

@@ -11,7 +11,7 @@ import {
   buildDnaExtractionUserMessage,
 } from '../prompts/dnaExtractionPrompts.js';
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'gemini-3.6-flash';
 
 interface ParsedProfileSummary {
   hasDegree: boolean;

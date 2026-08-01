@@ -260,6 +260,119 @@ export function deleteOptimizationRun(runId, userId) {
   );
 }
 
+export async function uploadInterview({ mediaFile, userId, jobId, onProgress }) {
+  const formData = new FormData();
+  formData.append("interviews", mediaFile);
+
+  if (typeof jobId === "string" && jobId.trim()) {
+    formData.append("jobId", jobId.trim());
+  }
+
+  try {
+    const response = await apiClient.request({
+      url: "/api/uploads",
+      method: "POST",
+      headers: userId ? { "x-user-id": userId } : {},
+      data: formData,
+      onUploadProgress: (event) => {
+        if (typeof onProgress === "function" && event.total) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
+export async function uploadInterviewMedia({ mediaFile, userId, jobId, onProgress }) {
+  const formData = new FormData();
+  formData.append("media", mediaFile);
+
+  if (typeof jobId === "string" && jobId.trim()) {
+    formData.append("jobId", jobId.trim());
+  }
+
+  try {
+    const response = await apiClient.request({
+      url: "/api/interviews/upload",
+      method: "POST",
+      headers: userId ? { "x-user-id": userId } : {},
+      data: formData,
+      timeout: 10 * 60 * 1000,
+      onUploadProgress: (event) => {
+        if (typeof onProgress === "function" && event.total) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
+export function getInterviewHistory(userId) {
+  return request("/api/interviews/history", {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+export function getInterviewArchive(userId) {
+  return request("/api/interviews/archive", {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+
+}
+
+export function getInterviewMediaUrl(interviewId) {
+  return `${API_BASE_URL}/api/interviews/${interviewId}/media`;
+}
+
 export const apiConfig = {
   baseUrl: API_BASE_URL,
 };
+
+// ─── Interview API ────────────────────────────────────────────────────────────
+
+/**
+ * Trigger the full processing pipeline (transcription + insights) for an interview.
+ * Returns 202 immediately; processing runs asynchronously.
+ */
+export function processInterview(interviewId, userId) {
+  return request(`/api/interviews/${interviewId}/process`, {
+    method: "POST",
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+/**
+ * Poll processing status for an interview.
+ * Returns { processingStatus, insightsStatus, hasTranscript, hasInsights, ... }
+ */
+export function getInterviewStatus(interviewId, userId) {
+  return request(`/api/interviews/${interviewId}/status`, {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+/**
+ * Fetch the completed transcript and segment metadata.
+ * Returns 400 if transcription has not completed yet.
+ */
+export function getInterviewTranscript(interviewId, userId) {
+  return request(`/api/interviews/${interviewId}/transcript`, {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
+
+/**
+ * Fetch the final Gemini insight results.
+ * Returns 400 if insights have not completed yet.
+ */
+export function getInterviewInsights(interviewId, userId) {
+  return request(`/api/interviews/${interviewId}/insights`, {
+    headers: userId ? { "x-user-id": userId } : undefined,
+  });
+}
