@@ -24,7 +24,7 @@ function resolveStage(processingStatus, insightsStatus) {
     case "downloading":      return "downloading";
     case "extracting_audio": return "extracting_audio";
     case "transcribing":     return "transcribing";
-    // Transcription done, Gemini is about to start (or already set to 'analyzing'
+    // Transcription done, LLM insight analysis is about to start (or already set to 'analyzing'
     // but the next poll hasn't fired yet). Show "Analyzing interview" rather than
     // "Preparing interview" to avoid confusing regression in the progress bar.
     case "completed":        return "analyzing";

@@ -2,7 +2,7 @@
  * Interview Insights Pipeline — integration tests
  *
  * Tests: insight endpoint ownership, no-transcript guard, full pipeline
- * status shape, and mocked Gemini end-to-end flow.
+ * status shape, and mocked LLM end-to-end flow.
  *
  * NOTE: MongoMemoryServer requires a Linux aarch64 MongoDB binary which is
  * not available in the current CI sandbox. These tests are verified to compile
@@ -17,7 +17,8 @@ process.env.S3_SECRET_ACCESS_KEY = 'test-secret';
 process.env.S3_BUCKET_NAME      = 'test-bucket';
 process.env.OPENAI_API_KEY      = 'test-openai-key';
 process.env.WHISPER_MODEL       = 'whisper-1';
-process.env.GEMINI_API_KEY      = 'test-gemini-key';
+process.env.COLMAN_LLM_USERNAME = 'test-user';
+process.env.COLMAN_LLM_PASSWORD = 'test-pass';
 
 // ─── S3 mock ──────────────────────────────────────────────────────────────────
 jest.mock('../../common/services/s3Upload.js', () => ({
@@ -74,8 +75,8 @@ jest.mock('fluent-ffmpeg', () => {
   return { __esModule: true, default: m };
 });
 
-// ─── Gemini mock ──────────────────────────────────────────────────────────────
-const MOCK_GEMINI_RESPONSE = JSON.stringify({
+// ─── LLM mock ─────────────────────────────────────────────────────────────────
+const MOCK_LLM_RESPONSE = JSON.stringify({
   starAnalysis: {
     situation: { text: 'Legacy system', start: 0,  end: 5,  score: 80, feedback: 'Good' },
     task:      { text: 'Migrate data',  start: 5,  end: 10, score: 75, feedback: 'Clear' },
@@ -97,13 +98,12 @@ const MOCK_GEMINI_RESPONSE = JSON.stringify({
   recommendations:  ['Quantify results further'],
 });
 
-jest.mock('../../common/services/geminiClient.js', () => ({
-  GeminiClient: jest.fn().mockImplementation(() => ({
-    generate: jest.fn().mockResolvedValue(MOCK_GEMINI_RESPONSE),
+const mockGenerate = jest.fn().mockResolvedValue(MOCK_LLM_RESPONSE);
+jest.mock('../../common/services/llmClientFactory.js', () => ({
+  createLLMClient: jest.fn().mockImplementation(() => ({
+    model: 'test-model',
+    generate: mockGenerate,
   })),
-  GeminiRateLimitError:    class extends Error {},
-  GeminiQuotaExceededError: class extends Error {},
-  GeminiAPIError:           class extends Error { constructor(msg: string, public statusCode: number) { super(msg); } },
 }));
 
 // ─── Real imports ─────────────────────────────────────────────────────────────
@@ -239,7 +239,7 @@ describe('POST /api/interviews/:id/analyze', () => {
 // ─── Insight pipeline outcome ─────────────────────────────────────────────────
 
 describe('Insight pipeline — happy path', () => {
-  it('saves all insight fields when Gemini returns valid JSON', async () => {
+  it('saves all insight fields when the LLM returns valid JSON', async () => {
     const interview = await createInterviewWithTranscript(USER_A);
 
     await request(testApp)
@@ -258,7 +258,7 @@ describe('Insight pipeline — happy path', () => {
     expect(updated?.fillerWordCount).toBeDefined();
     expect(updated?.wordsPerMinute).toBeGreaterThan(0);
     expect(updated?.insightsCompletedAt).toBeInstanceOf(Date);
-    expect(updated?.geminiProvider).toBe('google-gemini');
+    expect(updated?.llmProvider).toBe('colman-llm');
   });
 
   it('does NOT expose insightsError in the insights response', async () => {
@@ -284,20 +284,15 @@ describe('Insight pipeline — happy path', () => {
 });
 
 describe('Insight pipeline — failure handling', () => {
-  it('sets insightsStatus to failed when Gemini returns invalid JSON', async () => {
-    // Clear the cached GeminiClient so the next call creates a fresh instance
+  it('sets insightsStatus to failed when the LLM returns invalid JSON', async () => {
+    // Clear the cached LLMClient so the next call creates a fresh instance
     // using the overridden mock implementation
-    const geminiService = await import(
-      '../../features/interview/services/geminiInsightsService.js'
+    const llmService = await import(
+      '../../features/interview/services/llmInsightsService.js'
     );
-    (geminiService.GeminiInsightsService as any).geminiClient = null;
+    (llmService.LLMInsightsService as any).llmClient = null;
 
-    const { GeminiClient } = require('../../common/services/geminiClient.js') as {
-      GeminiClient: jest.Mock;
-    };
-    GeminiClient.mockImplementationOnce(() => ({
-      generate: jest.fn().mockResolvedValue('not valid json at all'),
-    }));
+    mockGenerate.mockResolvedValueOnce('not valid json at all');
 
     const interview = await createInterviewWithTranscript(USER_A);
 

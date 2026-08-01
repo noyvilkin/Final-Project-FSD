@@ -1,4 +1,5 @@
-import { GeminiClient } from '../../../common/services/geminiClient.js';
+import { createLLMClient } from '../../../common/services/llmClientFactory.js';
+import type { LLMClient } from '../../../common/services/llmClient.js';
 import { appLogger } from '../../../common/services/logger.js';
 import {
   INTERVIEW_INSIGHTS_SYSTEM_INSTRUCTION,
@@ -12,7 +13,7 @@ import type {
 
 // ─── Typed result ─────────────────────────────────────────────────────────────
 
-export interface GeminiInsightsResult {
+export interface LLMInsightsResult {
   starAnalysis:              IStarAnalysis;
   candidateActionAssessment: ICandidateActionAssessment;
   confidenceScore:           number;
@@ -22,48 +23,40 @@ export interface GeminiInsightsResult {
   /** Model identifier used, for provenance tracking. */
   model:                     string;
   /** Provider identifier. */
-  provider:                  'google-gemini';
+  provider:                  'colman-llm';
 }
 
 // ─── Validation error ─────────────────────────────────────────────────────────
 
-export class GeminiInsightsParseError extends Error {
+export class LLMInsightsParseError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'GeminiInsightsParseError';
+    this.name = 'LLMInsightsParseError';
   }
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 /**
- * Calls the Gemini API to generate STAR-based interview insights.
+ * Calls the LLM to generate STAR-based interview insights.
  *
- * Follows the same static-class, lazy-singleton pattern as AIAnalysisService
- * and ProfileAnalysisService — reads GEMINI_API_KEY from env, reuses
- * the shared GeminiClient with its built-in rate limiter and retry logic.
+ * Follows the same static-class, lazy-singleton pattern as the other AI
+ * features (HybridScoringService, LLMOptimizationService, AIAnalysisService) —
+ * resolves its client through the shared createLLMClient() factory rather than
+ * talking to a provider directly, so swapping the underlying LLM provider
+ * never requires touching this file.
  */
-export class GeminiInsightsService {
-  private static geminiClient: GeminiClient | null = null;
+export class LLMInsightsService {
+  private static llmClient: LLMClient | null = null;
 
-  private static getClient(): GeminiClient {
-    if (!GeminiInsightsService.geminiClient) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('GEMINI_API_KEY environment variable is required for interview insights');
-      }
-      GeminiInsightsService.geminiClient = new GeminiClient({
-        apiKey,
-        model:           process.env.GEMINI_MODEL ?? 'gemini-3.6-flash',
-        temperature:     0.2,
+  private static getClient(): LLMClient {
+    if (!LLMInsightsService.llmClient) {
+      LLMInsightsService.llmClient = createLLMClient({
+        temperature: 0.2,
         maxOutputTokens: 8_192,
-        rateLimiter: {
-          requestsPerMinute: 8,
-          requestsPerDay:    1_200,
-        },
       });
     }
-    return GeminiInsightsService.geminiClient;
+    return LLMInsightsService.llmClient;
   }
 
   /**
@@ -79,9 +72,8 @@ export class GeminiInsightsService {
     segments:      ITranscriptSegment[],
     fillerCount:   number,
     wordsPerMinute: number
-  ): Promise<GeminiInsightsResult> {
-    const client = GeminiInsightsService.getClient();
-    const model  = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
+  ): Promise<LLMInsightsResult> {
+    const client = LLMInsightsService.getClient();
 
     const userMessage = buildInterviewInsightsPrompt(
       transcript,
@@ -90,7 +82,7 @@ export class GeminiInsightsService {
       wordsPerMinute
     );
 
-    appLogger.info('[GeminiInsightsService] Sending transcript for analysis', {
+    appLogger.info('[LLMInsightsService] Sending transcript for analysis', {
       transcriptLength: transcript.length,
       segmentCount:     segments.length,
       fillerCount,
@@ -106,23 +98,23 @@ export class GeminiInsightsService {
       ],
     });
 
-    appLogger.info('[GeminiInsightsService] Raw response received', {
+    appLogger.info('[LLMInsightsService] Raw response received', {
       responseLength: rawResponse.length,
     });
 
-    const parsed = GeminiInsightsService.parseAndValidate(rawResponse);
+    const parsed = LLMInsightsService.parseAndValidate(rawResponse);
 
-    return { ...parsed, model, provider: 'google-gemini' };
+    return { ...parsed, model: client.model, provider: 'colman-llm' };
   }
 
   // ── Parsing & validation ──────────────────────────────────────────────────
 
   /**
-   * Parse and structurally validate the raw JSON string from Gemini.
-   * Throws GeminiInsightsParseError on any parse or validation failure.
+   * Parse and structurally validate the raw JSON string from the LLM.
+   * Throws LLMInsightsParseError on any parse or validation failure.
    */
-  static parseAndValidate(raw: string): Omit<GeminiInsightsResult, 'model' | 'provider'> {
-    // Strip markdown code fences if Gemini added them despite instructions
+  static parseAndValidate(raw: string): Omit<LLMInsightsResult, 'model' | 'provider'> {
+    // Strip markdown code fences if the model added them despite instructions
     let cleaned = raw.trim();
     cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
 
@@ -130,32 +122,32 @@ export class GeminiInsightsService {
     try {
       parsed = JSON.parse(cleaned) as Record<string, unknown>;
     } catch {
-      throw new GeminiInsightsParseError(
-        `Gemini returned invalid JSON. Preview: ${raw.slice(0, 200)}`
+      throw new LLMInsightsParseError(
+        `LLM returned invalid JSON. Preview: ${raw.slice(0, 200)}`
       );
     }
 
     return {
-      starAnalysis:              GeminiInsightsService.validateStarAnalysis(parsed),
-      candidateActionAssessment: GeminiInsightsService.validateCandidateAssessment(parsed),
-      confidenceScore:           GeminiInsightsService.clampScore(parsed['confidenceScore']),
-      strengths:                 GeminiInsightsService.toStringArray(parsed['strengths']),
-      weaknesses:                GeminiInsightsService.toStringArray(parsed['weaknesses']),
-      recommendations:           GeminiInsightsService.toStringArray(parsed['recommendations']),
+      starAnalysis:              LLMInsightsService.validateStarAnalysis(parsed),
+      candidateActionAssessment: LLMInsightsService.validateCandidateAssessment(parsed),
+      confidenceScore:           LLMInsightsService.clampScore(parsed['confidenceScore']),
+      strengths:                 LLMInsightsService.toStringArray(parsed['strengths']),
+      weaknesses:                LLMInsightsService.toStringArray(parsed['weaknesses']),
+      recommendations:           LLMInsightsService.toStringArray(parsed['recommendations']),
     };
   }
 
   private static validateStarAnalysis(parsed: Record<string, unknown>): IStarAnalysis {
     const star = parsed['starAnalysis'] as Record<string, unknown> | undefined;
     if (!star || typeof star !== 'object') {
-      throw new GeminiInsightsParseError('Missing or invalid "starAnalysis" in Gemini response');
+      throw new LLMInsightsParseError('Missing or invalid "starAnalysis" in LLM response');
     }
 
     return {
-      situation: GeminiInsightsService.validateStarSection(star, 'situation'),
-      task:      GeminiInsightsService.validateStarSection(star, 'task'),
-      action:    GeminiInsightsService.validateActionSection(star),
-      result:    GeminiInsightsService.validateStarSection(star, 'result'),
+      situation: LLMInsightsService.validateStarSection(star, 'situation'),
+      task:      LLMInsightsService.validateStarSection(star, 'task'),
+      action:    LLMInsightsService.validateActionSection(star),
+      result:    LLMInsightsService.validateStarSection(star, 'result'),
     };
   }
 
@@ -166,9 +158,9 @@ export class GeminiInsightsService {
     const s = star[key] as Record<string, unknown> | undefined ?? {};
     return {
       text:     String(s['text']     ?? ''),
-      start:    GeminiInsightsService.toNullableNumber(s['start']),
-      end:      GeminiInsightsService.toNullableNumber(s['end']),
-      score:    GeminiInsightsService.clampScore(s['score']),
+      start:    LLMInsightsService.toNullableNumber(s['start']),
+      end:      LLMInsightsService.toNullableNumber(s['end']),
+      score:    LLMInsightsService.clampScore(s['score']),
       feedback: String(s['feedback'] ?? ''),
     };
   }
@@ -177,9 +169,9 @@ export class GeminiInsightsService {
     const a = star['action'] as Record<string, unknown> | undefined ?? {};
     return {
       text:                     String(a['text']     ?? ''),
-      start:                    GeminiInsightsService.toNullableNumber(a['start']),
-      end:                      GeminiInsightsService.toNullableNumber(a['end']),
-      score:                    GeminiInsightsService.clampScore(a['score']),
+      start:                    LLMInsightsService.toNullableNumber(a['start']),
+      end:                      LLMInsightsService.toNullableNumber(a['end']),
+      score:                    LLMInsightsService.clampScore(a['score']),
       feedback:                 String(a['feedback'] ?? ''),
       candidateOwnedAction:     Boolean(a['candidateOwnedAction']    ?? false),
       teamOnlyLanguageDetected: Boolean(a['teamOnlyLanguageDetected'] ?? false),
@@ -191,7 +183,7 @@ export class GeminiInsightsService {
   ): ICandidateActionAssessment {
     const c = parsed['candidateActionAssessment'] as Record<string, unknown> | undefined ?? {};
     return {
-      candidateOwnedActionScore: GeminiInsightsService.clampScore(c['candidateOwnedActionScore']),
+      candidateOwnedActionScore: LLMInsightsService.clampScore(c['candidateOwnedActionScore']),
       usesPersonalAgency:        Boolean(c['usesPersonalAgency']   ?? false),
       teamLanguageDetected:      Boolean(c['teamLanguageDetected']  ?? false),
       feedback:                  String(c['feedback']               ?? ''),

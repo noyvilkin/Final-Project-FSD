@@ -1,12 +1,12 @@
 /**
  * STAR Evaluation Service
  *
- * Uses Gemini to evaluate interview responses against the STAR method
+ * Uses the shared LLM client to evaluate interview responses against the STAR method
  * (Situation, Task, Action, Result). Returns structured IStarAlignment data
  * compatible with the interviewInsights model.
  */
 
-import { GeminiClient, GeminiPayload } from '../../../common/services/geminiClient.js';
+import type { LLMClient, LLMPayload } from '../../../common/services/llmClient.js';
 
 /** Matches IStarComponent from interviewInsights.model */
 export interface StarComponent {
@@ -23,8 +23,8 @@ export interface StarAlignmentResult {
   result: StarComponent;
 }
 
-/** The JSON schema we expect Gemini to return */
-interface GeminiStarResponse {
+/** The JSON schema we expect the LLM to return */
+interface LLMStarResponse {
   score: number;
   situation: { detected: boolean; feedback: string };
   task: { detected: boolean; feedback: string };
@@ -62,13 +62,13 @@ Respond with ONLY valid JSON matching this exact structure:
 /**
  * Evaluate a single interview response against the STAR method.
  *
- * @param geminiClient  Shared Gemini client instance
+ * @param llmClient  Shared LLM client instance
  * @param transcript    The candidate's response text to evaluate
  * @param question      Optional: the interview question that prompted this response
  * @returns             Structured STAR alignment result
  */
 export async function evaluateStarAlignment(
-  geminiClient: GeminiClient,
+  llmClient: LLMClient,
   transcript: string,
   question?: string,
 ): Promise<StarAlignmentResult> {
@@ -86,7 +86,7 @@ export async function evaluateStarAlignment(
     ? `Interview Question: ${question}\n\nCandidate Response:\n${transcript}`
     : `Candidate Response:\n${transcript}`;
 
-  const payload: GeminiPayload = {
+  const payload: LLMPayload = {
     system_instruction: {
       parts: [{ text: STAR_SYSTEM_PROMPT }],
     },
@@ -98,19 +98,19 @@ export async function evaluateStarAlignment(
     ],
   };
 
-  const rawResponse = await geminiClient.generate(payload);
+  const rawResponse = await llmClient.generate(payload);
   return parseStarResponse(rawResponse);
 }
 
 /**
- * Parse and validate the Gemini JSON response into a StarAlignmentResult.
+ * Parse and validate the LLM JSON response into a StarAlignmentResult.
  * Applies defensive defaults for malformed responses.
  */
 export function parseStarResponse(rawJson: string): StarAlignmentResult {
   // Strip markdown code fences if present
   const cleaned = rawJson.replace(/```(?:json)?\s*/g, '').replace(/```\s*$/g, '').trim();
 
-  let parsed: GeminiStarResponse;
+  let parsed: LLMStarResponse;
   try {
     parsed = JSON.parse(cleaned);
   } catch {

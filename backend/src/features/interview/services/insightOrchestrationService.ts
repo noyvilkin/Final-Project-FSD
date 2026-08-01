@@ -6,7 +6,7 @@ import {
 } from '../models/interviewInsights.model.js';
 import { FillerWordService } from './fillerWordService.js';
 import { PacingService }     from './pacingService.js';
-import { GeminiInsightsService, GeminiInsightsParseError } from './geminiInsightsService.js';
+import { LLMInsightsService, LLMInsightsParseError } from './llmInsightsService.js';
 import { appLogger } from '../../../common/services/logger.js';
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ export interface AnalyseOptions {
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 /**
- * Orchestrates the Gemini insight pipeline for a single interview record.
+ * Orchestrates the LLM insight pipeline for a single interview record.
  *
  * Flow:
  *   not_started / failed → analyzing → completed
@@ -130,8 +130,8 @@ export class InsightOrchestrationService {
         wordsPerMinute: pacingResult.wordsPerMinute,
       });
 
-      // ── Stage 2: Gemini NLP analysis ────────────────────────────────────
-      const geminiResult = await GeminiInsightsService.analyse(
+      // ── Stage 2: LLM NLP analysis ────────────────────────────────────
+      const llmResult = await LLMInsightsService.analyse(
         transcript,
         segments,
         fillerResult.totalCount,
@@ -145,14 +145,14 @@ export class InsightOrchestrationService {
         fillerWordsBreakdown:             fillerResult.breakdown,
         wordsPerMinute:                   pacingResult.wordsPerMinute,
         estimatedSpeakingDurationSeconds: pacingResult.estimatedSpeakingDurationSeconds,
-        confidenceScore:                  geminiResult.confidenceScore,
-        starAnalysis:                     geminiResult.starAnalysis,
-        candidateActionAssessment:        geminiResult.candidateActionAssessment,
-        strengths:                        geminiResult.strengths,
-        weaknesses:                       geminiResult.weaknesses,
-        recommendations:                  geminiResult.recommendations,
-        geminiProvider:                   geminiResult.provider,
-        geminiModel:                      geminiResult.model,
+        confidenceScore:                  llmResult.confidenceScore,
+        starAnalysis:                     llmResult.starAnalysis,
+        candidateActionAssessment:        llmResult.candidateActionAssessment,
+        strengths:                        llmResult.strengths,
+        weaknesses:                       llmResult.weaknesses,
+        recommendations:                  llmResult.recommendations,
+        llmProvider:                      llmResult.provider,
+        llmModel:                         llmResult.model,
         insightsCompletedAt:              new Date(),
         // Clear any previous insights error
         $unset: { insightsError: '' },
@@ -162,7 +162,7 @@ export class InsightOrchestrationService {
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      const stage   = err instanceof GeminiInsightsParseError ? 'parsing' : 'analyzing';
+      const stage   = err instanceof LLMInsightsParseError ? 'parsing' : 'analyzing';
 
       appLogger.error('[InsightOrchestration] Pipeline failed', {
         interviewId,
