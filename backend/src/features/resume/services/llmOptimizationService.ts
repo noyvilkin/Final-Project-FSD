@@ -102,14 +102,14 @@ export class LLMOptimizationService {
 
       const validated = parsed.optimizedBullets
         .map(this.validateBullet)
-        // Only keep suggestions that (a) actually change the bullet and
-        // (b) add real ATS value — i.e. weave in a JD keyword the original
-        // bullet didn't already have. This drops the cosmetic / "stiff"
-        // rephrasings that add no keyword coverage and just feel spammy.
-        .filter(
-          (b: LLMOptimizedBullet) =>
-            this.isMeaningfulRewrite(b) && this.addsNewKeyword(b)
-        );
+        // Only keep suggestions that actually change the bullet — the system
+        // prompt already constrains keywordsUsed to terms the candidate's DNA
+        // genuinely supports, so a separate "is this keyword new" check isn't
+        // needed and was actively wrong for non-Latin-script resumes (it
+        // normalized text to [a-z0-9] only, stripping e.g. Hebrew/Arabic
+        // originals down to nothing and making every keyword look "already
+        // present").
+        .filter((b: LLMOptimizedBullet) => this.isMeaningfulRewrite(b));
 
       return {
         optimizedBullets: validated,
@@ -157,23 +157,6 @@ export class LLMOptimizationService {
     if (!optimized) return false;
 
     return this.normalizeText(optimized) !== this.normalizeText(b.originalBullet);
-  }
-
-  /**
-   * True only when the rewrite introduces at least one JD keyword that the
-   * original bullet did not already contain. A rewrite that adds no new
-   * keyword is cosmetic (reworded/reordered/synonym-swapped) and is not
-   * worth surfacing — this is what keeps the suggestions from feeling
-   * spammy when every bullet is optimized individually.
-   */
-  private static addsNewKeyword(b: LLMOptimizedBullet): boolean {
-    if (b.keywordsUsed.length === 0) return false;
-
-    const original = ` ${this.normalizeText(b.originalBullet)} `;
-    return b.keywordsUsed.some((kw) => {
-      const k = this.normalizeText(kw);
-      return k.length > 0 && !original.includes(` ${k} `);
-    });
   }
 
   private static normalizeText(s: string): string {
