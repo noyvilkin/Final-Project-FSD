@@ -147,21 +147,29 @@ router.post('/score', async (req: Request, res: Response): Promise<void> => {
 router.get('/history', async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.query.userId as string;
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+    const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+
     if (!userId) {
       res.status(400).json({ success: false, error: 'userId query param is required' });
       return;
     }
 
-    const runs = await OptimizationRun.find(
-      Types.ObjectId.isValid(userId)
-        ? { userId: new Types.ObjectId(userId) }
-        : { userId }
-    )
-      .sort({ createdAt: -1 })
-      .select('jobDescriptionText versionTag createdAt dashboardData.hybridScore.finalScore')
-      .lean();
+    const filter = Types.ObjectId.isValid(userId)
+      ? { userId: new Types.ObjectId(userId) }
+      : { userId };
 
-    res.status(200).json({ success: true, data: runs });
+    const [runs, total] = await Promise.all([
+      OptimizationRun.find(filter)
+        .sort({ createdAt: -1 })
+        .select('jobDescriptionText versionTag createdAt dashboardData.hybridScore.finalScore')
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      OptimizationRun.countDocuments(filter),
+    ]);
+
+    res.status(200).json({ success: true, data: runs, total, limit, offset });
   } catch (err) {
     appLogger.error('[ResumeOptimization] History list failed', {
       error: err instanceof Error ? err.message : 'Unknown',

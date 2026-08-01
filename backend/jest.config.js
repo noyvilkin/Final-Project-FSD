@@ -1,6 +1,6 @@
 ﻿import { createDefaultPreset } from "ts-jest";
 
-const tsJestTransformCfg = createDefaultPreset().transform;
+const tsJestTransformCfg = createDefaultPreset({ diagnostics: { ignoreCodes: [151002] } }).transform;
 
 /** @type {import("jest").Config} **/
 const config = {
@@ -14,19 +14,21 @@ const config = {
   setupFiles: ["<rootDir>/src/tests/setup-env.js"],
   collectCoverageFrom: [
     "src/common/auth/**/*.ts",
+    "src/common/services/**/*.ts",
+    "src/common/middlewares/**/*.ts",
     "src/features/auth/**/*.ts",
     "src/features/assignment/**/*.ts",
     "src/common/utils/zipProcessor.ts",
     "!src/**/*.d.ts",
     "!src/tests/**",
-    "!src/features/assignment/POC/**",
+    "!src/**/POC/**",
     "!src/features/assignment/scripts/**",
     "!src/features/assignment/eval/**",
     "!src/features/assignment/tests/**",
   ],
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
-  testMatch: ["**/tests/**/*.test.ts"],
+  testMatch: ["**/tests/**/*.test.ts", "**/__tests__/**/*.spec.ts"],
   testTimeout: 30000,
   maxWorkers: 1, // Run tests sequentially to avoid database conflicts
   forceExit: true, // Force Jest to exit after all tests complete
