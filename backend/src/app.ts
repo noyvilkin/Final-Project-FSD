@@ -61,6 +61,12 @@ app.use(
     //   back to the page (white screen after picking an account).
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    // Helmet's default CORP "same-origin" blocks <video>/<audio> src loads
+    // from the frontend dev server (localhost:5173) to the API (localhost:4000)
+    // — different ports count as cross-origin even though CORS separately
+    // allows it. "same-site" fixes local dev without opening media resources
+    // up to arbitrary external origins.
+    crossOriginResourcePolicy: { policy: "same-site" },
   })
 );
 app.use(requestId);

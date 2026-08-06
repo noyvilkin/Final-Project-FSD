@@ -5,6 +5,8 @@ import { asyncHandler } from '../../../common/middlewares/asyncHandler.js';
 import { appLogger } from '../../../common/services/logger.js';
 import { InterviewInsights } from '../models/interviewInsights.model.js';
 import { fetchBlobAsBuffer } from '../../../common/services/s3Upload.js';
+import { AuthTokenService } from '../../../common/auth/token.service.js';
+import { authConfig } from '../../../common/auth/auth.config.js';
 import {
   TranscriptionOrchestrationService,
   InterviewNotFoundError,
@@ -27,7 +29,23 @@ const router = Router();
 function resolveUserId(req: Request): string | null {
   const raw = req.headers['x-user-id'];
   const id  = Array.isArray(raw) ? raw[0] : raw;
-  return typeof id === 'string' && id.trim() ? id.trim() : null;
+  if (typeof id === 'string' && id.trim()) return id.trim();
+
+  // Fall back to the JWT access-token cookie. Every other interview route is
+  // called via axios and can set x-user-id directly, but browser-native
+  // <video>/<audio> elements load /:id/media through a plain src="..." URL —
+  // they send cookies automatically but cannot attach custom headers — so
+  // this is required for in-browser playback to authenticate at all.
+  const cookieToken = req.cookies?.[authConfig.accessToken.cookieName];
+  if (typeof cookieToken === 'string' && cookieToken) {
+    try {
+      return AuthTokenService.verifyAccessToken(cookieToken).sub;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 function isValidObjectId(id: string | string[]): boolean {
@@ -538,6 +556,8 @@ router.get(
 
     res.json({
       interviewId:               interview._id,
+      mediaType:                 interview.mediaType,
+      transcript:                interview.transcript                ?? null,
       processingStatus:          interview.processingStatus,
       insightsStatus:            interview.insightsStatus,
       fillerWordCount:           interview.fillerWordCount           ?? null,

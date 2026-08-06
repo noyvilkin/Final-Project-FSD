@@ -15,6 +15,19 @@ const STATUS_CONFIG = {
   failed: { label: "Failed", color: "bg-red-100 text-red-600" },
 };
 
+// Derives a single display status from the two independent status fields the
+// API actually returns (processingStatus covers upload -> transcription,
+// insightsStatus covers the separate LLM analysis stage that runs after).
+function deriveStatus(item) {
+  if (item.processingStatus === "failed" || item.insightsStatus === "failed") {
+    return "failed";
+  }
+  if (item.insightsStatus === "completed") return "completed";
+  if (item.insightsStatus === "analyzing") return "analyzing";
+  if (item.processingStatus === "transcribing") return "transcribing";
+  return "pending";
+}
+
 function ScorePill({ score }) {
   if (score == null) return null;
   const color =
@@ -84,16 +97,21 @@ export default function InterviewHistory() {
       {!loading && interviews.length > 0 && (
         <div className="space-y-3">
           {interviews.map((item) => {
-            const score = item.insights?.overallScore;
-            const statusCfg =
-              STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
-            const tone = item.insights?.sentiment?.overallTone;
+            const status = deriveStatus(item);
+            const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+            // Insights aren't available until analysis fully completes, so a
+            // still-processing interview should land on the progress tracker
+            // instead of the results view (which 400s until then).
+            const destination =
+              status === "completed"
+                ? `/interview/${item.id}`
+                : `/interview/${item.id}/processing`;
 
             return (
               <Card
-                key={item._id}
+                key={item.id}
                 className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/interview/${item._id}`)}
+                onClick={() => navigate(destination)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -101,31 +119,16 @@ export default function InterviewHistory() {
                       <Badge className={statusCfg.color}>
                         {statusCfg.label}
                       </Badge>
-                      <ScorePill score={score} />
+                      <ScorePill score={item.confidenceScore} />
                       <Badge className="bg-gray-100 text-gray-600">
                         {item.mediaType === "video" ? "Video" : "Audio"}
                       </Badge>
-                      {tone && (
-                        <Badge
-                          className={
-                            tone === "confident"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : tone === "hesitant"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-gray-100 text-gray-600"
-                          }
-                        >
-                          {tone.charAt(0).toUpperCase() + tone.slice(1)}
-                        </Badge>
+                      {(item.jobTitle || item.company) && (
+                        <span className="text-xs text-gray-500 truncate">
+                          {[item.jobTitle, item.company].filter(Boolean).join(" · ")}
+                        </span>
                       )}
                     </div>
-
-                    {item.insights?.fillerWords && (
-                      <p className="text-xs text-gray-500">
-                        Filler words: {item.insights.fillerWords.totalCount} (
-                        {item.insights.fillerWords.ratePerMinute?.toFixed(1)}/min)
-                      </p>
-                    )}
 
                     <p className="text-[10px] text-gray-400 mt-1">
                       {new Date(item.createdAt).toLocaleString()}
@@ -137,7 +140,7 @@ export default function InterviewHistory() {
                     variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/interview/${item._id}`);
+                      navigate(destination);
                     }}
                   >
                     View

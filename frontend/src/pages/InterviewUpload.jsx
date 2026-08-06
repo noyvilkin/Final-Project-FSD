@@ -182,6 +182,17 @@ export default function InterviewUpload() {
       showBack
     >
       <div className="space-y-4">
+        {/* Past interviews link */}
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/interview/archive")}
+          >
+            Past Interviews
+          </Button>
+        </div>
+
         {/* Job details */}
         <Card className="p-4">
           <div className="mb-3 flex items-start gap-2">
