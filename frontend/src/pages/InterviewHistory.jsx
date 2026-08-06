@@ -8,24 +8,34 @@ import { useAuth } from "../context/AuthContext";
 import { getInterviewHistory } from "../services/api";
 
 const STATUS_CONFIG = {
-  pending: { label: "Pending", color: "bg-gray-100 text-gray-600" },
+  not_analyzed: { label: "Not Analyzed", color: "bg-gray-100 text-gray-600" },
   transcribing: { label: "Transcribing", color: "bg-blue-100 text-blue-700" },
   analyzing: { label: "Analyzing", color: "bg-purple-100 text-purple-700" },
   completed: { label: "Completed", color: "bg-emerald-100 text-emerald-700" },
   failed: { label: "Failed", color: "bg-red-100 text-red-600" },
 };
 
+const ACTIVE_PROCESSING_STATUSES = [
+  "queued",
+  "downloading",
+  "extracting_audio",
+  "transcribing",
+];
+
 // Derives a single display status from the two independent status fields the
 // API actually returns (processingStatus covers upload -> transcription,
 // insightsStatus covers the separate LLM analysis stage that runs after).
+// An interview saved without ever triggering analysis sits at
+// processingStatus "uploaded" / insightsStatus "not_started" — that's
+// "not_analyzed", distinct from a pipeline that's actively running.
 function deriveStatus(item) {
   if (item.processingStatus === "failed" || item.insightsStatus === "failed") {
     return "failed";
   }
   if (item.insightsStatus === "completed") return "completed";
   if (item.insightsStatus === "analyzing") return "analyzing";
-  if (item.processingStatus === "transcribing") return "transcribing";
-  return "pending";
+  if (ACTIVE_PROCESSING_STATUSES.includes(item.processingStatus)) return "transcribing";
+  return "not_analyzed";
 }
 
 function ScorePill({ score }) {
@@ -98,12 +108,13 @@ export default function InterviewHistory() {
         <div className="space-y-3">
           {interviews.map((item) => {
             const status = deriveStatus(item);
-            const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-            // Insights aren't available until analysis fully completes, so a
-            // still-processing interview should land on the progress tracker
-            // instead of the results view (which 400s until then).
+            const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.not_analyzed;
+            // A still-running pipeline should land on the progress tracker.
+            // Completed and never-analyzed interviews both go straight to the
+            // player — it shows full insights or a "not analyzed yet" state
+            // with an Analyze button, depending on which this is.
             const destination =
-              status === "completed"
+              status === "completed" || status === "not_analyzed"
                 ? `/interview/${item.id}`
                 : `/interview/${item.id}/processing`;
 

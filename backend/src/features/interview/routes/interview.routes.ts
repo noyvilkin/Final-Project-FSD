@@ -186,6 +186,9 @@ router.get(
 
     res.json({
       id:               interview._id,
+      mediaType:        interview.mediaType,
+      jobTitle:         interview.jobTitle ?? null,
+      company:          interview.company  ?? null,
       processingStatus: interview.processingStatus,
       insightsStatus:   interview.insightsStatus,
       hasTranscript:    !!interview.transcript,

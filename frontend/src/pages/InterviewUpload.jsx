@@ -72,6 +72,7 @@ export default function InterviewUpload() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitError, setSubmitError] = useState("");
+  const [analyzeNow, setAnalyzeNow] = useState(true);
   const previewUrlRef = useRef(null);
 
   // Revoke the previous object URL whenever a new file is chosen or component unmounts
@@ -163,10 +164,15 @@ export default function InterviewUpload() {
         previewUrlRef.current = null;
       }
 
-      // Trigger full pipeline immediately after upload
-      await processInterview(interviewId, userId);
-
-      navigate(`/interview/${interviewId}/processing`, { replace: true });
+      if (analyzeNow) {
+        // Trigger full pipeline immediately after upload
+        await processInterview(interviewId, userId);
+        navigate(`/interview/${interviewId}/processing`, { replace: true });
+      } else {
+        // Saved as-is — the interview sits in "not analyzed" state until the
+        // user chooses to run analysis from the player page.
+        navigate(`/interview/${interviewId}`, { replace: true });
+      }
     } catch (err) {
       const msg = err?.response?.data?.error?.message || err?.message || "Upload failed. Please try again.";
       setSubmitError(msg);
@@ -187,7 +193,7 @@ export default function InterviewUpload() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/interview/archive")}
+            onClick={() => navigate("/interview/history")}
           >
             Past Interviews
           </Button>
@@ -343,6 +349,23 @@ export default function InterviewUpload() {
             </div>
           ) : null}
 
+          <label className="mb-3 flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={analyzeNow}
+              onChange={(e) => setAnalyzeNow(e.target.checked)}
+              disabled={submitting}
+              className="mt-0.5"
+            />
+            <span>
+              Analyze this interview now
+              <span className="block text-xs text-gray-500">
+                Uncheck to just save the recording — you can run AI analysis
+                on it anytime from Past Interviews.
+              </span>
+            </span>
+          </label>
+
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -360,8 +383,12 @@ export default function InterviewUpload() {
               {submitting
                 ? uploadProgress < 100
                   ? `Uploading ${uploadProgress}%…`
-                  : "Starting analysis…"
-                : "Generate Insights"}
+                  : analyzeNow
+                  ? "Starting analysis…"
+                  : "Saving…"
+                : analyzeNow
+                ? "Generate Insights"
+                : "Save Without Analyzing"}
             </Button>
           </div>
         </Card>

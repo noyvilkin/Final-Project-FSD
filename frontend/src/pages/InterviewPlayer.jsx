@@ -6,7 +6,12 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Progress } from "../components/ui/progress";
 import { useAuth } from "../context/AuthContext";
-import { getInterviewInsights, getInterviewMediaUrl } from "../services/api";
+import {
+  getInterviewInsights,
+  getInterviewMediaUrl,
+  getInterviewStatus,
+  processInterview,
+} from "../services/api";
 import InterviewPlayerComponent from "../components/interview/InterviewPlayer";
 import InteractiveTranscript from "../components/interview/InteractiveTranscript";
 
@@ -145,6 +150,8 @@ export default function InterviewPlayerPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState("");
 
   // Player state lifted up for transcript sync
   const [currentTime, setCurrentTime] = useState(0);
@@ -157,8 +164,28 @@ export default function InterviewPlayerPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await getInterviewInsights(id, authUserId);
-        if (!cancelled) setData(res);
+        // /insights 400s until analysis is fully complete, so check the
+        // lightweight status first — this is also how we detect an interview
+        // that was saved without ever being analyzed.
+        const status = await getInterviewStatus(id, authUserId);
+        if (cancelled) return;
+
+        const activeProcessing =
+          ["queued", "downloading", "extracting_audio", "transcribing"].includes(
+            status.processingStatus
+          ) || status.insightsStatus === "analyzing";
+
+        if (activeProcessing) {
+          navigate(`/interview/${id}/processing`, { replace: true });
+          return;
+        }
+
+        if (status.insightsStatus === "completed") {
+          const insights = await getInterviewInsights(id, authUserId);
+          if (!cancelled) setData({ ...status, ...insights });
+        } else if (!cancelled) {
+          setData(status);
+        }
       } catch (err) {
         if (!cancelled) setError(err.message || "Failed to load interview");
       } finally {
@@ -168,7 +195,7 @@ export default function InterviewPlayerPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, authUserId]);
+  }, [id, authUserId, navigate]);
 
   const handleTranscriptSeek = useCallback((time) => {
     setSeekTarget(time);
@@ -176,10 +203,37 @@ export default function InterviewPlayerPage() {
     setTimeout(() => setSeekTarget(null), 50);
   }, []);
 
+  async function handleAnalyze() {
+    if (!id || analyzing) return;
+    setAnalyzing(true);
+    setAnalyzeError("");
+    try {
+      await processInterview(id, authUserId);
+      navigate(`/interview/${id}/processing`);
+    } catch (err) {
+      setAnalyzeError(err.message || "Failed to start analysis. Please try again.");
+      setAnalyzing(false);
+    }
+  }
+
+  const needsAnalysis = data && data.insightsStatus !== "completed";
+  const analysisFailed =
+    data && (data.processingStatus === "failed" || data.insightsStatus === "failed");
+
   return (
     <PageLayout
       title="Interview Insights"
-      subtitle={data ? `${data.mediaType === "video" ? "Video" : "Audio"} Analysis` : ""}
+      subtitle={
+        data
+          ? `${data.mediaType === "video" ? "Video" : "Audio"}${
+              needsAnalysis
+                ? analysisFailed
+                  ? " • Analysis failed"
+                  : " • Not analyzed yet"
+                : " Analysis"
+            }`
+          : ""
+      }
       showBack
       right={
         <Button
@@ -219,17 +273,63 @@ export default function InterviewPlayerPage() {
               />
 
               {/* Interactive transcript */}
-              <InteractiveTranscript
-                transcript={data.transcript}
-                currentTime={currentTime}
-                duration={duration}
-                fillerWordExamples={data.fillerWordsBreakdown || []}
-                onSeek={handleTranscriptSeek}
-              />
+              {!needsAnalysis && (
+                <InteractiveTranscript
+                  transcript={data.transcript}
+                  currentTime={currentTime}
+                  duration={duration}
+                  fillerWordExamples={data.fillerWordsBreakdown || []}
+                  onSeek={handleTranscriptSeek}
+                />
+              )}
             </div>
 
             {/* Right column: Metrics + STAR (2/5 width) */}
             <div className="lg:col-span-2 space-y-4">
+              {needsAnalysis ? (
+                <Card
+                  className={[
+                    "p-5 text-center",
+                    analysisFailed
+                      ? "border-red-200 bg-red-50"
+                      : "border-amber-200 bg-amber-50",
+                  ].join(" ")}
+                >
+                  <div
+                    className={[
+                      "mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full text-lg",
+                      analysisFailed
+                        ? "bg-red-100 text-red-600"
+                        : "bg-amber-100 text-amber-600",
+                    ].join(" ")}
+                  >
+                    {analysisFailed ? "✕" : "!"}
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    {analysisFailed ? "Analysis failed" : "Not analyzed yet"}
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-600">
+                    {analysisFailed
+                      ? "Something went wrong during analysis. You can try again."
+                      : "This interview was saved without AI feedback. Run analysis anytime to get a transcript, STAR breakdown, and coaching tips."}
+                  </p>
+                  {analyzeError && (
+                    <p className="mt-2 text-xs text-red-700">{analyzeError}</p>
+                  )}
+                  <Button
+                    className="mt-4 w-full"
+                    onClick={handleAnalyze}
+                    disabled={analyzing}
+                  >
+                    {analyzing
+                      ? "Starting…"
+                      : analysisFailed
+                      ? "Retry Analysis"
+                      : "Analyze Now"}
+                  </Button>
+                </Card>
+              ) : (
+                <>
               {/* Overall score */}
               {data.confidenceScore != null && (
                 <Card className="p-4">
@@ -352,6 +452,8 @@ export default function InterviewPlayerPage() {
                     ))}
                   </ul>
                 </Card>
+              )}
+                </>
               )}
             </div>
           </div>
