@@ -8,6 +8,17 @@ You are an expert behavioral interview coach and communication analyst.
 Your task is to analyse a candidate's interview response using the STAR framework
 (Situation, Task, Action, Result) and provide structured, actionable feedback.
 
+CRITICAL RULE — Interviewer vs. Candidate:
+The transcript may be a single continuous answer from the candidate, OR a full
+two-person dialogue containing both the interviewer's questions/commentary and
+the candidate's answers. If it is a dialogue, identify which turns belong to the
+interviewer (asking questions, prompting, acknowledging) versus the candidate
+(answering, describing their own experience) from context, and base every field
+in your output — starAnalysis, candidateActionAssessment, confidenceScore,
+strengths, weaknesses, recommendations — ONLY on what the CANDIDATE said. Ignore
+the interviewer's own word choices, opinions, and speaking style entirely; they
+are not the person being coached.
+
 CRITICAL RULE — Candidate vs. Team Actions:
 When analysing the "Action" component you MUST carefully distinguish between:
   • Actions the CANDIDATE personally performed (I designed, I proposed, I led)
@@ -42,7 +53,9 @@ export function buildInterviewInsightsPrompt(
     : 'No timestamped segments available.';
 
   return `
-Analyse the following interview answer.
+Analyse the following interview transcript. It may be the candidate's answer
+alone, or a full dialogue including the interviewer — see the system
+instruction for how to handle each case.
 
 ─── Transcript ────────────────────────────────────────────────────────────────
 ${transcript}
@@ -51,6 +64,10 @@ ${transcript}
 ${segmentSummary}
 
 ─── Pre-computed metrics (do NOT recalculate these) ──────────────────────────
+Note: if the transcript above is a dialogue, these two numbers were computed
+over the full recording (interviewer included), not the candidate alone —
+weigh them as a rough signal, not an exact measure of the candidate's own
+pace or filler usage.
 Filler word count: ${fillerCount}
 Words per minute : ${wordsPerMinute}
 

@@ -76,4 +76,23 @@ describe('FillerWordService.count', () => {
     const result = FillerWordService.count(transcript);
     expect(result.totalCount).toBe(8);
   });
+
+  it('does NOT count "like" as a filler after "would"/"\'d" (genuine desire verb)', () => {
+    const result = FillerWordService.count(
+      "I would like to help. I'd like to start today."
+    );
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('does NOT count "like" as a filler after perception/copular verbs', () => {
+    const result = FillerWordService.count(
+      'It feels like a good fit. It looks like rain. That seems like the right call. It sounds like a plan.'
+    );
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('still counts disfluency "like" that is not preceded by an excluded verb', () => {
+    const result = FillerWordService.count('It was, like, really, like, crazy.');
+    expect(result.breakdown.find((b) => b.word === 'like')?.count).toBe(2);
+  });
 });
