@@ -34,6 +34,12 @@ function deriveStatus(item) {
   }
   if (item.insightsStatus === "completed") return "completed";
   if (item.insightsStatus === "analyzing") return "analyzing";
+  // Transcription just finished and insight analysis is about to start (or
+  // is already running but the next poll hasn't landed yet). Matches
+  // InterviewProcessing's resolveStage — without this, this window briefly
+  // shows "Not Analyzed" and routes to the player's "Analyze Now" button,
+  // risking a duplicate /process trigger.
+  if (item.processingStatus === "completed") return "analyzing";
   if (ACTIVE_PROCESSING_STATUSES.includes(item.processingStatus)) return "transcribing";
   return "not_analyzed";
 }
@@ -96,7 +102,7 @@ export default function InterviewHistory() {
       {!loading && interviews.length === 0 && (
         <Card className="p-8 text-center">
           <p className="text-sm text-gray-500 mb-3">
-            No interview analyses yet.
+            No interviews yet.
           </p>
           <Button size="sm" onClick={() => navigate("/interview")}>
             Upload your first interview
@@ -109,14 +115,12 @@ export default function InterviewHistory() {
           {interviews.map((item) => {
             const status = deriveStatus(item);
             const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.not_analyzed;
-            // A still-running pipeline should land on the progress tracker.
-            // Completed and never-analyzed interviews both go straight to the
-            // player — it shows full insights or a "not analyzed yet" state
-            // with an Analyze button, depending on which this is.
-            const destination =
-              status === "completed" || status === "not_analyzed"
-                ? `/interview/${item.id}`
-                : `/interview/${item.id}/processing`;
+            // Always land on the player — it fetches the interview's status
+            // itself and redirects to the progress tracker when a pipeline is
+            // actively running, so this list doesn't need to duplicate that
+            // decision (and failed interviews reach the player's own
+            // retry banner instead of a second, separate failure screen).
+            const destination = `/interview/${item.id}`;
 
             return (
               <Card

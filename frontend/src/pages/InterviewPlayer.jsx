@@ -4,7 +4,6 @@ import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Progress } from "../components/ui/progress";
 import { useAuth } from "../context/AuthContext";
 import {
   getInterviewInsights,
@@ -173,7 +172,13 @@ export default function InterviewPlayerPage() {
         const activeProcessing =
           ["queued", "downloading", "extracting_audio", "transcribing"].includes(
             status.processingStatus
-          ) || status.insightsStatus === "analyzing";
+          ) ||
+          status.insightsStatus === "analyzing" ||
+          // Transcription just finished and insight analysis is about to
+          // start — matches InterviewProcessing's resolveStage. Without this,
+          // this window briefly shows "Not analyzed yet" / "Analyze Now"
+          // instead of the progress tracker, risking a duplicate trigger.
+          (status.processingStatus === "completed" && status.insightsStatus === "not_started");
 
         if (activeProcessing) {
           navigate(`/interview/${id}/processing`, { replace: true });
