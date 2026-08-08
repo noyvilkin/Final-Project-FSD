@@ -8,17 +8,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useParams } from "react-router-dom";
 
 // ─── Mock API ────────────────────────────────────────────────────────────────
 
 vi.mock("../services/api", () => ({
-  uploadInterview:      vi.fn(),
-  processInterview:     vi.fn(),
-  getInterviewStatus:   vi.fn(),
-  getInterviewInsights: vi.fn(),
+  uploadInterview:        vi.fn(),
+  processInterview:       vi.fn(),
+  getInterviewStatus:     vi.fn(),
+  getInterviewInsights:   vi.fn(),
   getInterviewTranscript: vi.fn(),
-  apiConfig:            { baseUrl: "http://localhost:4000" },
+  getInterviewHistory:    vi.fn(),
+  getInterviewMediaUrl:   vi.fn((id) => `http://localhost:4000/api/interviews/${id}/media`),
+  apiConfig:              { baseUrl: "http://localhost:4000" },
 }));
 
 // InterviewUpload now uploads directly via axios (for progress tracking)
@@ -146,6 +148,37 @@ describe("InterviewUpload", () => {
     expect(screen.getByText(/filler words/i)).toBeInTheDocument();
     expect(screen.getByText(/strengths, areas to improve/i)).toBeInTheDocument();
   });
+
+  it('"Analyze this interview now" is checked by default', () => {
+    renderWithRouter(
+      <Routes>
+        <Route path="/" element={<InterviewUpload />} />
+      </Routes>
+    );
+    expect(screen.getByRole("checkbox")).toBeChecked();
+  });
+
+  it("unchecking Analyze now skips processInterview and navigates straight to the player", async () => {
+    renderWithRouter(
+      <Routes>
+        <Route path="/" element={<InterviewUpload />} />
+        <Route path="/interview/:id" element={<div>Player page</div>} />
+      </Routes>
+    );
+
+    const input = document.getElementById("interview-file-input");
+    await userEvent.upload(input, makeAudioFile());
+    await userEvent.click(screen.getByRole("checkbox"));
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+
+    await userEvent.click(screen.getByRole("button", { name: /save without analyzing/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/player page/i)).toBeInTheDocument();
+    });
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(api.processInterview).not.toHaveBeenCalled();
+  });
 });
 
 // ─── InterviewProcessing tests ────────────────────────────────────────────────
@@ -163,7 +196,7 @@ describe("InterviewProcessing", () => {
     return renderWithRouter(
       <Routes>
         <Route path="/interview/:id/processing" element={<InterviewProcessing />} />
-        <Route path="/interview/:id/insights" element={<div>Insights page</div>} />
+        <Route path="/interview/:id" element={<div>Player page</div>} />
         <Route path="/interview" element={<div>Upload page</div>} />
       </Routes>,
       { initialEntries: [`/interview/${id}/processing`] }
@@ -202,14 +235,14 @@ describe("InterviewProcessing", () => {
     });
   });
 
-  it("navigates to insights page when insightsStatus is completed", async () => {
+  it("navigates to the player when insightsStatus is completed", async () => {
     api.getInterviewStatus.mockResolvedValue({
       processingStatus: "completed",
       insightsStatus: "completed",
     });
     renderProcessing("abc-123");
     await waitFor(() => {
-      expect(screen.getByText(/insights page/i)).toBeInTheDocument();
+      expect(screen.getByText(/player page/i)).toBeInTheDocument();
     });
   });
 
@@ -236,7 +269,7 @@ describe("InterviewProcessing", () => {
     renderProcessing();
 
     await waitFor(() => {
-      expect(screen.getByText(/insights page/i)).toBeInTheDocument();
+      expect(screen.getByText(/player page/i)).toBeInTheDocument();
     });
 
     // Only one call was needed to reach the terminal state
@@ -600,6 +633,228 @@ describe("InterviewProcessing — resolveStage after transcription fix", () => {
     );
     await waitFor(() => {
       expect(screen.getByText(/analyzing interview/i)).toBeInTheDocument();
+    });
+  });
+});
+
+// ─── InterviewPlayer page tests ───────────────────────────────────────────────
+
+import InterviewPlayerPage from "../pages/InterviewPlayer";
+
+describe("InterviewPlayer page", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  function renderPlayer(id = "abc-123") {
+    return renderWithRouter(
+      <Routes>
+        <Route path="/interview/:id" element={<InterviewPlayerPage />} />
+        <Route path="/interview/:id/processing" element={<div>Processing page</div>} />
+      </Routes>,
+      { initialEntries: [`/interview/${id}`] }
+    );
+  }
+
+  it("redirects to the progress tracker while the pipeline is actively running", async () => {
+    api.getInterviewStatus.mockResolvedValue({
+      processingStatus: "transcribing",
+      insightsStatus: "not_started",
+      mediaType: "audio",
+    });
+    renderPlayer();
+    await waitFor(() => {
+      expect(screen.getByText(/processing page/i)).toBeInTheDocument();
+    });
+    expect(api.getInterviewInsights).not.toHaveBeenCalled();
+  });
+
+  it("redirects to the progress tracker when transcription just finished and insights haven't started", async () => {
+    // processingStatus=completed + insightsStatus=not_started is the brief
+    // window between transcription finishing and insight analysis kicking
+    // off — must be treated as active, not as "never analyzed".
+    api.getInterviewStatus.mockResolvedValue({
+      processingStatus: "completed",
+      insightsStatus: "not_started",
+      mediaType: "audio",
+    });
+    renderPlayer();
+    await waitFor(() => {
+      expect(screen.getByText(/processing page/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows a "Not analyzed yet" banner with an Analyze Now button for an interview saved without analysis', async () => {
+    api.getInterviewStatus.mockResolvedValue({
+      processingStatus: "uploaded",
+      insightsStatus: "not_started",
+      mediaType: "audio",
+    });
+    renderPlayer();
+    await waitFor(() => {
+      // "Not analyzed yet" also appears in the page subtitle, so scope to the heading
+      expect(screen.getByRole("heading", { name: /not analyzed yet/i })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /analyze now/i })).toBeInTheDocument();
+    expect(api.getInterviewInsights).not.toHaveBeenCalled();
+  });
+
+  it("clicking Analyze Now triggers processing and navigates to the progress tracker", async () => {
+    api.getInterviewStatus.mockResolvedValue({
+      processingStatus: "uploaded",
+      insightsStatus: "not_started",
+      mediaType: "audio",
+    });
+    api.processInterview.mockResolvedValue({});
+    renderPlayer("abc-123");
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /analyze now/i })).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole("button", { name: /analyze now/i }));
+
+    await waitFor(() => {
+      expect(api.processInterview).toHaveBeenCalledWith("abc-123", "test-user-id");
+      expect(screen.getByText(/processing page/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows an "Analysis failed" banner with a Retry button when the pipeline failed', async () => {
+    api.getInterviewStatus.mockResolvedValue({
+      processingStatus: "failed",
+      insightsStatus: "not_started",
+      mediaType: "video",
+    });
+    renderPlayer();
+    await waitFor(() => {
+      // "Analysis failed" also appears in the page subtitle, so scope to the heading
+      expect(screen.getByRole("heading", { name: /analysis failed/i })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /retry analysis/i })).toBeInTheDocument();
+  });
+
+  it("renders full insights when analysis is completed", async () => {
+    api.getInterviewStatus.mockResolvedValue({
+      processingStatus: "completed",
+      insightsStatus: "completed",
+      mediaType: "audio",
+    });
+    api.getInterviewInsights.mockResolvedValue({
+      confidenceScore: 82,
+      transcript: "I led the migration project.",
+      strengths: [],
+      weaknesses: [],
+      recommendations: [],
+      fillerWordsBreakdown: [],
+    });
+    renderPlayer();
+    await waitFor(() => {
+      expect(screen.getByText("82")).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/not analyzed yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /analyze now/i })).not.toBeInTheDocument();
+  });
+});
+
+// ─── InterviewHistory page tests ──────────────────────────────────────────────
+
+import InterviewHistory from "../pages/InterviewHistory";
+
+describe("InterviewHistory page", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  function PlayerRouteProbe() {
+    const { id } = useParams();
+    return <div>Player page for {id}</div>;
+  }
+
+  function renderHistory() {
+    return renderWithRouter(
+      <Routes>
+        <Route path="/" element={<InterviewHistory />} />
+        <Route path="/interview/:id" element={<PlayerRouteProbe />} />
+      </Routes>
+    );
+  }
+
+  it("shows an empty state that doesn't imply every save has an analysis", async () => {
+    api.getInterviewHistory.mockResolvedValue({ interviews: [] });
+    renderHistory();
+    await waitFor(() => {
+      expect(screen.getByText(/no interviews yet/i)).toBeInTheDocument();
+    });
+  });
+
+  it('badges a never-analyzed interview as "Not Analyzed"', async () => {
+    api.getInterviewHistory.mockResolvedValue({
+      interviews: [{
+        id: "int-1",
+        mediaType: "audio",
+        processingStatus: "uploaded",
+        insightsStatus: "not_started",
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    renderHistory();
+    await waitFor(() => {
+      expect(screen.getByText("Not Analyzed")).toBeInTheDocument();
+    });
+  });
+
+  it('badges the transcription-done/insights-not-started window as "Analyzing", not "Not Analyzed"', async () => {
+    api.getInterviewHistory.mockResolvedValue({
+      interviews: [{
+        id: "int-2",
+        mediaType: "audio",
+        processingStatus: "completed",
+        insightsStatus: "not_started",
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    renderHistory();
+    await waitFor(() => {
+      expect(screen.getByText("Analyzing")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Not Analyzed")).not.toBeInTheDocument();
+  });
+
+  it('badges a completed interview as "Completed" and shows its score', async () => {
+    api.getInterviewHistory.mockResolvedValue({
+      interviews: [{
+        id: "int-3",
+        mediaType: "video",
+        processingStatus: "completed",
+        insightsStatus: "completed",
+        confidenceScore: 91,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    renderHistory();
+    await waitFor(() => {
+      expect(screen.getByText("Completed")).toBeInTheDocument();
+      expect(screen.getByText("91%")).toBeInTheDocument();
+    });
+  });
+
+  it("routes every card — including a failed one — to the player, not the progress tracker", async () => {
+    api.getInterviewHistory.mockResolvedValue({
+      interviews: [{
+        id: "int-4",
+        mediaType: "audio",
+        processingStatus: "failed",
+        insightsStatus: "not_started",
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    renderHistory();
+    await waitFor(() => {
+      expect(screen.getByText("Failed")).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole("button", { name: /view/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/player page for int-4/i)).toBeInTheDocument();
     });
   });
 });

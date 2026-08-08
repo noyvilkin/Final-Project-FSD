@@ -4,9 +4,13 @@ import PageLayout from "../components/layouts/PageLayout";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Progress } from "../components/ui/progress";
 import { useAuth } from "../context/AuthContext";
-import { getInterviewInsights } from "../services/api";
+import {
+  getInterviewInsights,
+  getInterviewMediaUrl,
+  getInterviewStatus,
+  processInterview,
+} from "../services/api";
 import InterviewPlayerComponent from "../components/interview/InterviewPlayer";
 import InteractiveTranscript from "../components/interview/InteractiveTranscript";
 
@@ -77,27 +81,31 @@ const STAR_LABELS = [
   },
 ];
 
-function StarVisualization({ starAlignment }) {
-  if (!starAlignment) return null;
+function StarVisualization({ starAnalysis }) {
+  if (!starAnalysis) return null;
+
+  const scores = STAR_LABELS.map(({ key }) => starAnalysis[key]?.score ?? 0);
+  const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+
   return (
     <Card className="p-4">
       <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
         STAR Alignment
       </h3>
       <div className="flex items-center justify-center gap-1 mb-4">
-        <ScoreRing score={starAlignment.score} size={70} label="STAR Score" />
+        <ScoreRing score={avgScore} size={70} label="STAR Score" />
       </div>
       <div className="grid grid-cols-2 gap-2">
         {STAR_LABELS.map(({ key, label, full, bg, border, dot }) => {
-          const comp = starAlignment[key];
+          const comp = starAnalysis[key];
           if (!comp) return null;
-          const detected = comp.detected;
+          const present = comp.score >= 40;
           return (
             <div
               key={key}
               className={[
                 "rounded-xl border p-3 transition-all",
-                detected
+                present
                   ? `${bg} ${border}`
                   : "bg-gray-50 border-gray-200 opacity-70",
               ].join(" ")}
@@ -106,7 +114,7 @@ function StarVisualization({ starAlignment }) {
                 <span
                   className={[
                     "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white",
-                    detected ? dot : "bg-gray-400",
+                    present ? dot : "bg-gray-400",
                   ].join(" ")}
                 >
                   {label}
@@ -114,15 +122,9 @@ function StarVisualization({ starAlignment }) {
                 <span className="text-sm font-semibold text-gray-800">
                   {full}
                 </span>
-                {detected ? (
-                  <Badge className="ml-auto bg-emerald-100 text-emerald-700 text-[10px]">
-                    Detected
-                  </Badge>
-                ) : (
-                  <Badge className="ml-auto bg-red-100 text-red-600 text-[10px]">
-                    Missing
-                  </Badge>
-                )}
+                <Badge className="ml-auto bg-white/70 text-gray-700 text-[10px]">
+                  {comp.score}%
+                </Badge>
               </div>
               {comp.feedback && (
                 <p className="text-xs text-gray-600 mt-1 leading-relaxed">
@@ -137,27 +139,6 @@ function StarVisualization({ starAlignment }) {
   );
 }
 
-function ToneBadge({ tone }) {
-  const styles = {
-    confident: "bg-emerald-100 text-emerald-700",
-    neutral: "bg-gray-100 text-gray-600",
-    hesitant: "bg-amber-100 text-amber-700",
-  };
-  return (
-    <Badge className={styles[tone] || styles.neutral}>
-      {tone?.charAt(0).toUpperCase() + tone?.slice(1)}
-    </Badge>
-  );
-}
-
-const STATUS_CONFIG = {
-  pending: { label: "Pending", color: "bg-gray-100 text-gray-600" },
-  transcribing: { label: "Transcribing...", color: "bg-blue-100 text-blue-700" },
-  analyzing: { label: "Analyzing...", color: "bg-purple-100 text-purple-700" },
-  completed: { label: "Completed", color: "bg-emerald-100 text-emerald-700" },
-  failed: { label: "Failed", color: "bg-red-100 text-red-600" },
-};
-
 /* ---------- page ---------- */
 
 export default function InterviewPlayerPage() {
@@ -168,6 +149,8 @@ export default function InterviewPlayerPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState("");
 
   // Player state lifted up for transcript sync
   const [currentTime, setCurrentTime] = useState(0);
@@ -180,8 +163,34 @@ export default function InterviewPlayerPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await getInterviewInsights(id);
-        if (!cancelled) setData(res.data);
+        // /insights 400s until analysis is fully complete, so check the
+        // lightweight status first — this is also how we detect an interview
+        // that was saved without ever being analyzed.
+        const status = await getInterviewStatus(id, authUserId);
+        if (cancelled) return;
+
+        const activeProcessing =
+          ["queued", "downloading", "extracting_audio", "transcribing"].includes(
+            status.processingStatus
+          ) ||
+          status.insightsStatus === "analyzing" ||
+          // Transcription just finished and insight analysis is about to
+          // start — matches InterviewProcessing's resolveStage. Without this,
+          // this window briefly shows "Not analyzed yet" / "Analyze Now"
+          // instead of the progress tracker, risking a duplicate trigger.
+          (status.processingStatus === "completed" && status.insightsStatus === "not_started");
+
+        if (activeProcessing) {
+          navigate(`/interview/${id}/processing`, { replace: true });
+          return;
+        }
+
+        if (status.insightsStatus === "completed") {
+          const insights = await getInterviewInsights(id, authUserId);
+          if (!cancelled) setData({ ...status, ...insights });
+        } else if (!cancelled) {
+          setData(status);
+        }
       } catch (err) {
         if (!cancelled) setError(err.message || "Failed to load interview");
       } finally {
@@ -191,7 +200,7 @@ export default function InterviewPlayerPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, authUserId, navigate]);
 
   const handleTranscriptSeek = useCallback((time) => {
     setSeekTarget(time);
@@ -199,13 +208,37 @@ export default function InterviewPlayerPage() {
     setTimeout(() => setSeekTarget(null), 50);
   }, []);
 
-  const insights = data?.insights;
-  const statusCfg = STATUS_CONFIG[data?.status] || STATUS_CONFIG.pending;
+  async function handleAnalyze() {
+    if (!id || analyzing) return;
+    setAnalyzing(true);
+    setAnalyzeError("");
+    try {
+      await processInterview(id, authUserId);
+      navigate(`/interview/${id}/processing`);
+    } catch (err) {
+      setAnalyzeError(err.message || "Failed to start analysis. Please try again.");
+      setAnalyzing(false);
+    }
+  }
+
+  const needsAnalysis = data && data.insightsStatus !== "completed";
+  const analysisFailed =
+    data && (data.processingStatus === "failed" || data.insightsStatus === "failed");
 
   return (
     <PageLayout
       title="Interview Insights"
-      subtitle={data ? `${data.mediaType === "video" ? "Video" : "Audio"} Analysis` : ""}
+      subtitle={
+        data
+          ? `${data.mediaType === "video" ? "Video" : "Audio"}${
+              needsAnalysis
+                ? analysisFailed
+                  ? " • Analysis failed"
+                  : " • Not analyzed yet"
+                : " Analysis"
+            }`
+          : ""
+      }
       showBack
       right={
         <Button
@@ -231,33 +264,13 @@ export default function InterviewPlayerPage() {
 
       {!loading && data && (
         <div className="space-y-4">
-          {/* Status badge */}
-          {data.status !== "completed" && (
-            <Card className="p-4 flex items-center gap-3">
-              <Badge className={statusCfg.color}>{statusCfg.label}</Badge>
-              {(data.status === "transcribing" || data.status === "analyzing") && (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
-              )}
-              <span className="text-sm text-gray-600">
-                {data.status === "transcribing" &&
-                  "Your interview is being transcribed..."}
-                {data.status === "analyzing" &&
-                  "Analyzing your interview performance..."}
-                {data.status === "pending" &&
-                  "Waiting to start processing..."}
-                {data.status === "failed" &&
-                  "Processing failed. Please try uploading again."}
-              </span>
-            </Card>
-          )}
-
           {/* Two-column layout: Player + Transcript | Insights */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             {/* Left column: Player + Transcript (3/5 width) */}
             <div className="lg:col-span-3 space-y-4">
               {/* Media player */}
               <InterviewPlayerComponent
-                mediaUrl={data.mediaUrl || `/api/interviews/${id}/media`}
+                mediaUrl={getInterviewMediaUrl(id)}
                 mediaType={data.mediaType}
                 onTimeUpdate={setCurrentTime}
                 onDurationChange={setDuration}
@@ -265,28 +278,74 @@ export default function InterviewPlayerPage() {
               />
 
               {/* Interactive transcript */}
-              <InteractiveTranscript
-                transcript={data.transcript}
-                currentTime={currentTime}
-                duration={duration}
-                fillerWordExamples={insights?.fillerWords?.examples || []}
-                onSeek={handleTranscriptSeek}
-              />
+              {!needsAnalysis && (
+                <InteractiveTranscript
+                  transcript={data.transcript}
+                  currentTime={currentTime}
+                  duration={duration}
+                  fillerWordExamples={data.fillerWordsBreakdown || []}
+                  onSeek={handleTranscriptSeek}
+                />
+              )}
             </div>
 
             {/* Right column: Metrics + STAR (2/5 width) */}
             <div className="lg:col-span-2 space-y-4">
+              {needsAnalysis ? (
+                <Card
+                  className={[
+                    "p-5 text-center",
+                    analysisFailed
+                      ? "border-red-200 bg-red-50"
+                      : "border-amber-200 bg-amber-50",
+                  ].join(" ")}
+                >
+                  <div
+                    className={[
+                      "mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full text-lg",
+                      analysisFailed
+                        ? "bg-red-100 text-red-600"
+                        : "bg-amber-100 text-amber-600",
+                    ].join(" ")}
+                  >
+                    {analysisFailed ? "✕" : "!"}
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    {analysisFailed ? "Analysis failed" : "Not analyzed yet"}
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-600">
+                    {analysisFailed
+                      ? "Something went wrong during analysis. You can try again."
+                      : "This interview was saved without AI feedback. Run analysis anytime to get a transcript, STAR breakdown, and coaching tips."}
+                  </p>
+                  {analyzeError && (
+                    <p className="mt-2 text-xs text-red-700">{analyzeError}</p>
+                  )}
+                  <Button
+                    className="mt-4 w-full"
+                    onClick={handleAnalyze}
+                    disabled={analyzing}
+                  >
+                    {analyzing
+                      ? "Starting…"
+                      : analysisFailed
+                      ? "Retry Analysis"
+                      : "Analyze Now"}
+                  </Button>
+                </Card>
+              ) : (
+                <>
               {/* Overall score */}
-              {insights && (
+              {data.confidenceScore != null && (
                 <Card className="p-4">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                     Overall Performance
                   </h3>
                   <div className="flex justify-center mb-4">
                     <ScoreRing
-                      score={insights.overallScore}
+                      score={data.confidenceScore}
                       size={100}
-                      label="Overall Score"
+                      label="Confidence Score"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -296,48 +355,32 @@ export default function InterviewPlayerPage() {
                         Filler Words
                       </p>
                       <p className="text-lg font-bold text-amber-800">
-                        {insights.fillerWords?.totalCount ?? 0}
-                      </p>
-                      <p className="text-[10px] text-amber-600">
-                        {insights.fillerWords?.ratePerMinute?.toFixed(1) ?? "0"} / min
+                        {data.fillerWordCount ?? 0}
                       </p>
                     </div>
 
-                    {/* Tone */}
+                    {/* Pacing */}
                     <div className="rounded-xl bg-blue-50 border border-blue-200 p-3">
                       <p className="text-[10px] uppercase text-blue-600 font-semibold mb-1">
-                        Tone
+                        Pace
                       </p>
-                      <div className="mb-1">
-                        <ToneBadge tone={insights.sentiment?.overallTone} />
-                      </div>
-                      <p className="text-[10px] text-blue-600">
-                        Clarity: {insights.sentiment?.clarityScore ?? 0}%
+                      <p className="text-lg font-bold text-blue-800">
+                        {data.wordsPerMinute != null ? Math.round(data.wordsPerMinute) : "—"}
                       </p>
-                    </div>
-
-                    {/* Clarity progress */}
-                    <div className="col-span-2">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-600">Clarity Score</span>
-                        <span className="font-semibold">
-                          {insights.sentiment?.clarityScore ?? 0}/100
-                        </span>
-                      </div>
-                      <Progress value={insights.sentiment?.clarityScore ?? 0} />
+                      <p className="text-[10px] text-blue-600">words / min</p>
                     </div>
                   </div>
                 </Card>
               )}
 
               {/* Filler word breakdown */}
-              {insights?.fillerWords?.examples?.length > 0 && (
+              {data.fillerWordsBreakdown?.length > 0 && (
                 <Card className="p-4">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                     Filler Word Breakdown
                   </h3>
                   <div className="space-y-2">
-                    {insights.fillerWords.examples.map((fw, i) => (
+                    {data.fillerWordsBreakdown.map((fw, i) => (
                       <div
                         key={i}
                         className="flex items-center justify-between text-sm"
@@ -355,18 +398,18 @@ export default function InterviewPlayerPage() {
               )}
 
               {/* STAR Alignment */}
-              {insights?.starAlignment && (
-                <StarVisualization starAlignment={insights.starAlignment} />
+              {data.starAnalysis && (
+                <StarVisualization starAnalysis={data.starAnalysis} />
               )}
 
               {/* Strengths */}
-              {insights?.strengths?.length > 0 && (
+              {data.strengths?.length > 0 && (
                 <Card className="p-4">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                     Strengths
                   </h3>
                   <ul className="space-y-2">
-                    {insights.strengths.map((s, i) => (
+                    {data.strengths.map((s, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
                         <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xs">
                           +
@@ -378,14 +421,14 @@ export default function InterviewPlayerPage() {
                 </Card>
               )}
 
-              {/* Improvements */}
-              {insights?.improvements?.length > 0 && (
+              {/* Weaknesses */}
+              {data.weaknesses?.length > 0 && (
                 <Card className="p-4">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                     Areas for Improvement
                   </h3>
                   <ul className="space-y-2">
-                    {insights.improvements.map((s, i) => (
+                    {data.weaknesses.map((s, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
                         <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-xs">
                           !
@@ -395,6 +438,27 @@ export default function InterviewPlayerPage() {
                     ))}
                   </ul>
                 </Card>
+              )}
+
+              {/* Recommendations */}
+              {data.recommendations?.length > 0 && (
+                <Card className="p-4">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                    Recommendations
+                  </h3>
+                  <ul className="space-y-2">
+                    {data.recommendations.map((s, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-xs">
+                          →
+                        </span>
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+                </>
               )}
             </div>
           </div>
