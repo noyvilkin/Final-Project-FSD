@@ -204,6 +204,21 @@ export class ResumeParsingService {
         return s.length === 0 || s.toLowerCase() === 'null' ? null : s;
       };
 
+      // The prompt tells the model to omit endDate for ongoing roles, but it
+      // sometimes writes "Present"/"Current" literally instead — neither
+      // Date() nor Mongoose's date cast can make sense of that, so validate
+      // before it ever reaches the database.
+      const isValidDateStr = (s: string): boolean => !Number.isNaN(new Date(s).getTime());
+      const toDateStrOrUndefined = (v: unknown): string | undefined => {
+        if (v == null) return undefined;
+        const s = String(v).trim();
+        return s && isValidDateStr(s) ? s : undefined;
+      };
+      const toDateStrOrFallback = (v: unknown, fallback: string): string => {
+        const s = toDateStrOrUndefined(v);
+        return s ?? fallback;
+      };
+
       return {
         candidateName: toStr(parsed.candidateName),
         candidateEmail: toStr(parsed.candidateEmail),
@@ -229,8 +244,8 @@ export class ResumeParsingService {
         experience: (parsed.experience ?? []).map((e: Record<string, unknown>) => ({
           company: String(e.company ?? 'Unknown'),
           role: String(e.role ?? 'Unknown'),
-          startDate: String(e.startDate ?? '2020-01-01'),
-          endDate: e.endDate ? String(e.endDate) : undefined,
+          startDate: toDateStrOrFallback(e.startDate, '2020-01-01'),
+          endDate: toDateStrOrUndefined(e.endDate),
           isCurrent: Boolean(e.isCurrent),
           description: String(e.description ?? ''),
           extractedSkills: Array.isArray(e.extractedSkills) ? e.extractedSkills.map(String) : [],
@@ -239,8 +254,8 @@ export class ResumeParsingService {
           institution: String(ed.institution ?? 'Unknown'),
           degree: String(ed.degree ?? 'Unknown'),
           fieldOfStudy: String(ed.fieldOfStudy ?? 'General'),
-          startDate: String(ed.startDate ?? '2015-01-01'),
-          endDate: ed.endDate ? String(ed.endDate) : undefined,
+          startDate: toDateStrOrFallback(ed.startDate, '2015-01-01'),
+          endDate: toDateStrOrUndefined(ed.endDate),
           // The schema stores GPA on a 0-4 scale, but resumes from countries that
           // grade on a 0-100 or other scale confuse the model into returning the
           // raw number as-is. Drop anything outside the valid range rather than
