@@ -1,0 +1,7 @@
+Hard Requirements:
+- Use Node.js and Express to implement a REST API.
+- Use PostgreSQL as the primary datastore.
+- Implement authentication via JWT.
+- Include unit tests for every endpoint: GET /health,
+  POST /auth/login, GET /api/users/:id and POST /api/items.
+- Provide a health endpoint at GET /health returning 200.

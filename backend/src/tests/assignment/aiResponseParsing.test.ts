@@ -67,6 +67,113 @@ describe("AIAnalysisService.tryParseAIResponse", () => {
     expect(result?.overall.score).toBe(65);
   });
 
+  test("overrides a letter grade that contradicts overall.score", () => {
+    const inconsistent = {
+      ...validResponse,
+      overall: { score: 45, grade: "D+", summary: "wrong-stack solution" },
+    };
+
+    const result = AIAnalysisService.tryParseAIResponse(JSON.stringify(inconsistent));
+
+    expect(result?.overall.score).toBe(45);
+    expect(result?.overall.grade).toBe("F");
+  });
+
+  test.each([
+    [
+      "The code does not meet all requirements, specifically missing JWT authentication. Grade: D+.",
+      "The code does not meet all requirements, specifically missing JWT authentication.",
+    ],
+    [
+      "The code meets some requirements but fails to persist tasks, resulting in a D+ grade.",
+      "The code meets some requirements but fails to persist tasks.",
+    ],
+    [
+      "The submission lacks unit tests, earning a C grade.",
+      "The submission lacks unit tests.",
+    ],
+  ])("drops the letter grade the model wrote into the summary", (written, expected) => {
+    const response = {
+      ...validResponse,
+      overall: { score: 56, grade: "F", summary: written },
+    };
+
+    const result = AIAnalysisService.tryParseAIResponse(JSON.stringify(response));
+
+    expect(result?.overall.summary).toBe(expected);
+    expect(result?.overall.grade).toBe("F");
+  });
+
+  test("leaves a summary that makes no grade claim untouched", () => {
+    const summary = "Clean, well-structured code that meets every stated requirement.";
+    const response = { ...validResponse, overall: { score: 87, grade: "B+", summary } };
+
+    const result = AIAnalysisService.tryParseAIResponse(JSON.stringify(response));
+
+    expect(result?.overall.summary).toBe(summary);
+  });
+
+  test("clamps overall.score when a core requirement is missing", () => {
+    const inflated = {
+      ...validResponse,
+      requirementsCoverage: [
+        {
+          requirement: "Implement authentication via JWT",
+          status: "missing",
+          justification: "JWT is imported but never used to protect endpoints.",
+        },
+        {
+          requirement: "Provide GET /health returning 200",
+          status: "met",
+          justification: "Health endpoint is present.",
+        },
+      ],
+      functionalCorrectness: {
+        score: 90,
+        meetsRequirements: true,
+        missingFeatures: ["JWT authentication"],
+      },
+      overall: { score: 85, grade: "B", summary: "Mostly solid aside from auth." },
+    };
+
+    const result = AIAnalysisService.tryParseAIResponse(JSON.stringify(inflated));
+
+    expect(result?.overall.score).toBe(59);
+    expect(result?.overall.grade).toBe("F");
+    expect(result?.functionalCorrectness.score).toBe(40);
+    expect(result?.functionalCorrectness.meetsRequirements).toBe(false);
+  });
+
+  test("does not clamp when only a secondary requirement is missing", () => {
+    const secondaryOnly = {
+      ...validResponse,
+      requirementsCoverage: [
+        {
+          requirement: "Build a REST API in Node.js using Express",
+          status: "met",
+          justification: "Uses Express.",
+        },
+        {
+          requirement: "Unit tests covering both endpoints",
+          status: "missing",
+          justification: "No test files present.",
+        },
+      ],
+      functionalCorrectness: {
+        score: 70,
+        meetsRequirements: false,
+        missingFeatures: ["Unit tests"],
+      },
+      overall: { score: 74, grade: "C", summary: "Missing unit tests." },
+    };
+
+    const result = AIAnalysisService.tryParseAIResponse(JSON.stringify(secondaryOnly));
+
+    expect(result?.overall.score).toBe(74);
+    expect(result?.overall.grade).toBe("C");
+    expect(result?.functionalCorrectness.score).toBe(70);
+  });
+
   test("returns null when a required section is missing", () => {
     const { overall, ...missingOverall } = validResponse;
     void overall;
