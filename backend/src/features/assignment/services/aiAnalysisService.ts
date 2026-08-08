@@ -568,7 +568,9 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
   functionalCorrectness. If every core requirement is met and only tests are partial or such
   hardening is missing, functionalCorrectness is 80–95 and the grade is B or higher.
 - requirementsCoverage must contain AT MOST 10 entries and cover only EXPLICIT requirements.
-- summary: 1–3 sentences naming the most important issue(s) and the resulting grade.
+- summary: 1–3 sentences naming the most important issue(s). Do NOT state a letter grade
+  here — the grade is reported separately from overall.score, and a letter written into
+  this text contradicts it whenever the two disagree. Describe the work, not the mark.
     `.trim();
   }
 
@@ -644,6 +646,32 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
   }
 
   /**
+   * Removes letter grades the model wrote into the summary prose.
+   *
+   * The grade shown to a student is derived from overall.score, but the model still tends
+   * to sign off with "resulting in a D+ grade" — which contradicts the reported letter
+   * whenever its own score and instinct disagree. Dropping the claim is safer than
+   * rewriting it, since the surrounding sentence is still accurate without it.
+   */
+  private static stripGradeClaims(summary: string): string {
+    // A trailing \b would let "D+" match as just "D", leaving a stray "+" behind, so the
+    // grade is instead anchored on "not followed by more of a grade-like token".
+    const GRADE = '[A-DF][+-]?(?![\\w+-])';
+
+    return summary
+      // "Grade: D+." / "Grade is F" — usually a trailing sentence of its own.
+      .replace(new RegExp(`\\s*\\bgrades?\\s*(?:is|:|=)\\s*${GRADE}\\.?`, 'gi'), '')
+      // "resulting in a D+ grade", "which earns a B- grade"
+      .replace(new RegExp(`,?\\s*\\b(?:resulting in|earning|earns|for|worth)\\s+an?\\s+${GRADE}\\s+grade\\b`, 'gi'), '')
+      // "a D+ grade" / "an F grade" left anywhere else
+      .replace(new RegExp(`\\s*\\ban?\\s+${GRADE}\\s+grade\\b`, 'gi'), '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\s+([.,])/g, '$1')
+      .replace(/[,\s]+\.$/, '.')
+      .trim();
+  }
+
+  /**
    * Parses the AI response into structured feedback, or returns null if the
    * response is not valid/recoverable JSON. Callers can use null to trigger a retry.
    */
@@ -688,7 +716,8 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
         // e.g. score 45 with grade "D+", when 45 is an F. A student must never see a letter
         // that disagrees with their number, so the band table is enforced here in code.
         grade: this.gradeFromScore(Number(parsed.overall?.score) || 0),
-        summary: String(parsed.overall?.summary) || 'No summary provided'
+        summary:
+          this.stripGradeClaims(String(parsed.overall?.summary ?? '')) || 'No summary provided'
       }
     };
   }

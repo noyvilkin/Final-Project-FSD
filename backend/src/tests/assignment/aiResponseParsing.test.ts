@@ -79,6 +79,40 @@ describe("AIAnalysisService.tryParseAIResponse", () => {
     expect(result?.overall.grade).toBe("F");
   });
 
+  test.each([
+    [
+      "The code does not meet all requirements, specifically missing JWT authentication. Grade: D+.",
+      "The code does not meet all requirements, specifically missing JWT authentication.",
+    ],
+    [
+      "The code meets some requirements but fails to persist tasks, resulting in a D+ grade.",
+      "The code meets some requirements but fails to persist tasks.",
+    ],
+    [
+      "The submission lacks unit tests, earning a C grade.",
+      "The submission lacks unit tests.",
+    ],
+  ])("drops the letter grade the model wrote into the summary", (written, expected) => {
+    const response = {
+      ...validResponse,
+      overall: { score: 56, grade: "F", summary: written },
+    };
+
+    const result = AIAnalysisService.tryParseAIResponse(JSON.stringify(response));
+
+    expect(result?.overall.summary).toBe(expected);
+    expect(result?.overall.grade).toBe("F");
+  });
+
+  test("leaves a summary that makes no grade claim untouched", () => {
+    const summary = "Clean, well-structured code that meets every stated requirement.";
+    const response = { ...validResponse, overall: { score: 87, grade: "B+", summary } };
+
+    const result = AIAnalysisService.tryParseAIResponse(JSON.stringify(response));
+
+    expect(result?.overall.summary).toBe(summary);
+  });
+
   test("returns null when a required section is missing", () => {
     const { overall, ...missingOverall } = validResponse;
     void overall;
