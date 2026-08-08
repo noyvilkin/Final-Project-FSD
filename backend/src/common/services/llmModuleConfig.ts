@@ -1,9 +1,10 @@
-export type LLMModule = 'interview' | 'assignment' | 'resume';
+export type LLMModule = 'interview' | 'assignment' | 'resume' | 'profile-analysis';
 
 const MODULE_ENV_VARS: Record<LLMModule, string> = {
-  interview:  'COLMAN_LLM_MODEL_INTERVIEW',
-  assignment: 'COLMAN_LLM_MODEL_ASSIGNMENT',
-  resume:     'COLMAN_LLM_MODEL_RESUME',
+  interview:          'COLMAN_LLM_MODEL_INTERVIEW',
+  assignment:         'COLMAN_LLM_MODEL_ASSIGNMENT',
+  resume:             'COLMAN_LLM_MODEL_RESUME',
+  'profile-analysis': 'COLMAN_LLM_MODEL_PROFILE_ANALYSIS',
 };
 
 /**

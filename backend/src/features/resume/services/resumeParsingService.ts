@@ -77,10 +77,15 @@ export class ResumeParsingService {
   /**
    * Full pipeline: PDF buffer → text extraction → LLM parsing →
    * User upsert → ProfessionalDNA creation → returns userId + dnaId.
+   *
+   * `client` lets a caller that owns its own LLMClient (e.g. profile-analysis,
+   * which runs an independent model) use this pipeline without going through
+   * this service's own 'resume' client. Defaults to this service's client.
    */
   static async parseAndStore(
     pdfBuffer: Buffer,
-    existingUserId?: string
+    existingUserId?: string,
+    client?: LLMClient
   ): Promise<{
     userId: string;
     dnaId: string;
@@ -105,7 +110,7 @@ export class ResumeParsingService {
       cleanChars: cleanText.length,
     });
 
-    const parsed = await this.callLLMForDNA(cleanText);
+    const parsed = await this.callLLMForDNA(cleanText, client);
 
     appLogger.info('[ResumeParser] LLM DNA extraction complete', {
       skills: parsed.skills.length,
@@ -165,7 +170,10 @@ export class ResumeParsingService {
 
   // ── LLM call ─────────────────────────────────────────────────
 
-  private static async callLLMForDNA(resumeText: string): Promise<ParsedDNA> {
+  private static async callLLMForDNA(
+    resumeText: string,
+    client?: LLMClient
+  ): Promise<ParsedDNA> {
     const userMessage = buildDnaExtractionUserMessage(resumeText);
 
     const payload: LLMPayload = {
@@ -173,8 +181,8 @@ export class ResumeParsingService {
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
     };
 
-    const client = this.getClient();
-    const rawResponse = await client.generate(payload);
+    const activeClient = client ?? this.getClient();
+    const rawResponse = await activeClient.generate(payload);
 
     return this.parseResponse(rawResponse);
   }
