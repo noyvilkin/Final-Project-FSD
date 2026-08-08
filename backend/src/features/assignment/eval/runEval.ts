@@ -2,7 +2,7 @@
  * Assignment AI evaluation harness — measures violation detection,
  * score calibration, noise reduction, and pkg-06 specificity.
  *
- * Run: `npm run eval:assignment` (requires GEMINI_API_KEY).
+ * Run: `npm run eval:assignment` (requires COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD).
  */
 
 import 'dotenv/config';
@@ -127,7 +127,7 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
 
   const solutionFileKey = `${fixture.zipBaseName}.zip`;
 
-  console.log(`  calling Gemini...`);
+  console.log(`  calling Colman LLM...`);
   const aiResult = await AIAnalysisService.analyzeFromMetadata({
     metadata: {
       ...analysis.metadata,
@@ -313,8 +313,8 @@ function writeJsonReport(report: FullEvalReport): string {
 async function main() {
   header('Assignment AI Evaluation Harness');
 
-  if (!process.env.GEMINI_API_KEY) {
-    console.error('\n  ERROR: GEMINI_API_KEY is not set in .env.\n');
+  if (!process.env.COLMAN_LLM_USERNAME || !process.env.COLMAN_LLM_PASSWORD) {
+    console.error('\n  ERROR: COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD are not set in .env.\n');
     process.exit(1);
   }
 

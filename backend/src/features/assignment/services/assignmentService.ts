@@ -5,7 +5,7 @@ import { fetchBlobAsBuffer, deleteBlob } from '../../../common/services/s3Upload
 import { AssignmentAnalysisService } from './assignmentAnalysisService.js';
 import { AIAnalysisService } from './aiAnalysisService.js';
 import { ZipProcessor } from '../../../common/utils/zipProcessor.js';
-import { GeminiQuotaExceededError, GeminiRateLimitError } from '../../../common/services/geminiClient.js';
+import { ColmanRateLimitError } from '../../../common/services/colmanLLMClient.js';
 
 export interface AssignmentCreationResult {
   assignmentId: string;
@@ -27,8 +27,9 @@ export type AssignmentFileRole = 'requirements' | 'solution';
 export class AssignmentService {
   /**
    * Max assignments a single user may submit per rolling 24h. Each submission
-   * costs Gemini requests from a shared free-tier quota (10 RPM / 250 RPD), so
-   * this stops one user starving everyone else. Override via env.
+   * costs LLM requests from the shared Colman LLM quota (5 req/min, shared
+   * across the whole app), so this stops one user starving everyone else.
+   * Override via env.
    */
   static readonly MAX_ASSIGNMENTS_PER_DAY = Number(process.env.ASSIGNMENT_DAILY_LIMIT || '20');
 
@@ -96,7 +97,7 @@ export class AssignmentService {
       });
 
       // Run analysis in the background so the upload response isn't blocked by
-      // the S3 download + ZIP scan + Gemini call. The client polls the status.
+      // the S3 download + ZIP scan + LLM call. The client polls the status.
       this.runAnalysisInBackground(assignmentId, resolvedUserId.toString(), files);
 
       return {
@@ -134,10 +135,8 @@ export class AssignmentService {
           error: error instanceof Error ? error.message : 'Unknown error'
         });
 
-        // Turn the shared-quota errors into a friendly, actionable message.
-        const isQuota =
-          error instanceof GeminiQuotaExceededError ||
-          error instanceof GeminiRateLimitError;
+        // Turn the shared rate-limit errors into a friendly, actionable message.
+        const isQuota = error instanceof ColmanRateLimitError;
         const message = isQuota
           ? 'Our analysis service is temporarily at capacity. Please try again later.'
           : error instanceof Error
@@ -354,7 +353,7 @@ export class AssignmentService {
    * Whether the user is under the per-day submission cap. Counts records created
    * in the last 24h, including still-in-progress ones so bursts can't slip
    * through, but excluding `failed` ones — a user shouldn't lose quota because
-   * storage/Gemini was down and their attempt never produced a result.
+   * storage/the LLM service was down and their attempt never produced a result.
    */
   static async isWithinDailyLimit(userId: string): Promise<boolean> {
     if (!Types.ObjectId.isValid(userId)) {

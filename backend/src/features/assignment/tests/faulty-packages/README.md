@@ -2,7 +2,7 @@
 
 This folder contains intentionally faulty solution packages used by the semantic audit test runner and unit tests.
 
-How to run the semantic audit test runner (requires `GEMINI_API_KEY`):
+How to run the semantic audit test runner (requires `COLMAN_LLM_USERNAME`/`COLMAN_LLM_PASSWORD`):
 
 ```powershell
 $env:SEMANTIC_AUDIT_PACKAGE_COOLDOWN_MS='1000'

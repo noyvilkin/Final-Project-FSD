@@ -1,6 +1,6 @@
-// ── Gemini Raw Response Shapes ───────────────────────────────────────
+// ── LLM Raw Response Shapes ───────────────────────────────────────
 
-export interface GeminiOptimizedBullet {
+export interface LLMOptimizedBullet {
   // Index of the experience entry this bullet belongs to. Multiple
   // optimized bullets can share the same experienceIndex.
   experienceIndex: number;
@@ -11,12 +11,12 @@ export interface GeminiOptimizedBullet {
   keywordsUsed: string[];
 }
 
-export interface GeminiOptimizationResponse {
-  optimizedBullets: GeminiOptimizedBullet[];
+export interface LLMOptimizationResponse {
+  optimizedBullets: LLMOptimizedBullet[];
   generalAdvice: string;
 }
 
-export interface GeminiSemanticScoreResponse {
+export interface LLMSemanticScoreResponse {
   semanticScore: number;
   reasoning: string;
   strongMatches: string[];

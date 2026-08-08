@@ -1,5 +1,5 @@
 /**
- * Unit tests for GeminiInsightsService.parseAndValidate
+ * Unit tests for LLMInsightsService.parseAndValidate
  * Pure parsing — no network, no DB, no mocks needed.
  */
 
@@ -7,16 +7,17 @@ process.env.S3_ENDPOINT         = 'http://localhost:9000';
 process.env.S3_ACCESS_KEY_ID    = 'test';
 process.env.S3_SECRET_ACCESS_KEY = 'test';
 process.env.S3_BUCKET_NAME      = 'test';
-process.env.GEMINI_API_KEY      = 'test-key';
+process.env.COLMAN_LLM_USERNAME = 'test-user';
+process.env.COLMAN_LLM_PASSWORD = 'test-pass';
 
 import {
-  GeminiInsightsService,
-  GeminiInsightsParseError,
-} from '../../features/interview/services/geminiInsightsService.js';
+  LLMInsightsService,
+  LLMInsightsParseError,
+} from '../../features/interview/services/llmInsightsService.js';
 
 // ─── Fixture ──────────────────────────────────────────────────────────────────
 
-const VALID_GEMINI_JSON = JSON.stringify({
+const VALID_LLM_JSON = JSON.stringify({
   starAnalysis: {
     situation: { text: 'At my last job', start: 0,    end: 5,  score: 80, feedback: 'Good context' },
     task:      { text: 'I had to lead',  start: 5,    end: 10, score: 75, feedback: 'Clear task'   },
@@ -45,9 +46,9 @@ const VALID_GEMINI_JSON = JSON.stringify({
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe('GeminiInsightsService.parseAndValidate', () => {
-  it('parses a valid Gemini JSON response correctly', () => {
-    const result = GeminiInsightsService.parseAndValidate(VALID_GEMINI_JSON);
+describe('LLMInsightsService.parseAndValidate', () => {
+  it('parses a valid LLM JSON response correctly', () => {
+    const result = LLMInsightsService.parseAndValidate(VALID_LLM_JSON);
 
     expect(result.starAnalysis.situation.score).toBe(80);
     expect(result.starAnalysis.action.candidateOwnedAction).toBe(true);
@@ -61,66 +62,66 @@ describe('GeminiInsightsService.parseAndValidate', () => {
   });
 
   it('strips markdown code fences before parsing', () => {
-    const withFences = '```json\n' + VALID_GEMINI_JSON + '\n```';
-    expect(() => GeminiInsightsService.parseAndValidate(withFences)).not.toThrow();
+    const withFences = '```json\n' + VALID_LLM_JSON + '\n```';
+    expect(() => LLMInsightsService.parseAndValidate(withFences)).not.toThrow();
   });
 
-  it('throws GeminiInsightsParseError for invalid JSON', () => {
-    expect(() => GeminiInsightsService.parseAndValidate('not json at all'))
-      .toThrow(GeminiInsightsParseError);
+  it('throws LLMInsightsParseError for invalid JSON', () => {
+    expect(() => LLMInsightsService.parseAndValidate('not json at all'))
+      .toThrow(LLMInsightsParseError);
   });
 
-  it('throws GeminiInsightsParseError when starAnalysis is missing', () => {
+  it('throws LLMInsightsParseError when starAnalysis is missing', () => {
     const noStar = JSON.stringify({
       confidenceScore: 50,
       strengths: [],
       weaknesses: [],
       recommendations: [],
     });
-    expect(() => GeminiInsightsService.parseAndValidate(noStar))
-      .toThrow(GeminiInsightsParseError);
+    expect(() => LLMInsightsService.parseAndValidate(noStar))
+      .toThrow(LLMInsightsParseError);
   });
 
   it('clamps confidenceScore to 0–100', () => {
-    const overScore = JSON.parse(VALID_GEMINI_JSON);
+    const overScore = JSON.parse(VALID_LLM_JSON);
     overScore.confidenceScore = 150;
-    const result = GeminiInsightsService.parseAndValidate(JSON.stringify(overScore));
+    const result = LLMInsightsService.parseAndValidate(JSON.stringify(overScore));
     expect(result.confidenceScore).toBe(100);
   });
 
   it('returns empty arrays when strengths/weaknesses/recommendations are missing', () => {
-    const parsed = JSON.parse(VALID_GEMINI_JSON);
+    const parsed = JSON.parse(VALID_LLM_JSON);
     delete parsed.strengths;
     delete parsed.weaknesses;
     delete parsed.recommendations;
-    const result = GeminiInsightsService.parseAndValidate(JSON.stringify(parsed));
+    const result = LLMInsightsService.parseAndValidate(JSON.stringify(parsed));
     expect(result.strengths).toEqual([]);
     expect(result.weaknesses).toEqual([]);
     expect(result.recommendations).toEqual([]);
   });
 
   it('saves candidateOwnedAction = false and teamOnlyLanguageDetected = true', () => {
-    const teamFocused = JSON.parse(VALID_GEMINI_JSON);
+    const teamFocused = JSON.parse(VALID_LLM_JSON);
     teamFocused.starAnalysis.action.candidateOwnedAction     = false;
     teamFocused.starAnalysis.action.teamOnlyLanguageDetected = true;
-    const result = GeminiInsightsService.parseAndValidate(JSON.stringify(teamFocused));
+    const result = LLMInsightsService.parseAndValidate(JSON.stringify(teamFocused));
     expect(result.starAnalysis.action.candidateOwnedAction).toBe(false);
     expect(result.starAnalysis.action.teamOnlyLanguageDetected).toBe(true);
   });
 
-  it('handles null start/end timestamps from Gemini', () => {
-    const withNulls = JSON.parse(VALID_GEMINI_JSON);
+  it('handles null start/end timestamps from the LLM', () => {
+    const withNulls = JSON.parse(VALID_LLM_JSON);
     withNulls.starAnalysis.situation.start = null;
     withNulls.starAnalysis.situation.end   = null;
-    const result = GeminiInsightsService.parseAndValidate(JSON.stringify(withNulls));
+    const result = LLMInsightsService.parseAndValidate(JSON.stringify(withNulls));
     expect(result.starAnalysis.situation.start).toBeNull();
     expect(result.starAnalysis.situation.end).toBeNull();
   });
 
   it('defaults missing action fields to safe values', () => {
-    const minimal = JSON.parse(VALID_GEMINI_JSON);
+    const minimal = JSON.parse(VALID_LLM_JSON);
     minimal.starAnalysis.action = {}; // completely empty
-    const result = GeminiInsightsService.parseAndValidate(JSON.stringify(minimal));
+    const result = LLMInsightsService.parseAndValidate(JSON.stringify(minimal));
     expect(result.starAnalysis.action.candidateOwnedAction).toBe(false);
     expect(result.starAnalysis.action.teamOnlyLanguageDetected).toBe(false);
     expect(result.starAnalysis.action.score).toBe(0);

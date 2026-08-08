@@ -4,14 +4,14 @@
  * Run:  npx tsx src/features/resume/POC/poc-ai-optimization-test.ts
  *   or: npm run poc:optimize
  *
- * Requires: GEMINI_API_KEY in .env (no database needed).
+ * Requires: COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD in .env (no database needed).
  */
 
 import 'dotenv/config';
 import { JdIngestionService } from '../services/jdIngestionService.js';
 import { KeywordExtractor } from '../services/keywordExtractor.js';
 import { EntityAlignmentService } from '../services/entityAlignmentService.js';
-import { GeminiOptimizationService } from '../services/geminiOptimizationService.js';
+import { LLMOptimizationService } from '../services/llmOptimizationService.js';
 import type { ISkill, IExperience, IEducation } from '../types/professionalDNA.types.js';
 import type { ResumeOptimizationPayload, ProfessionalDNASummary } from '../types/resumeOptimization.types.js';
 
@@ -127,8 +127,8 @@ function buildMockPayload(): ResumeOptimizationPayload {
 async function main() {
   printHeader('AI Resume Optimization POC');
 
-  if (!process.env.GEMINI_API_KEY) {
-    console.error('\n  ERROR: GEMINI_API_KEY not set in .env\n');
+  if (!process.env.COLMAN_LLM_USERNAME || !process.env.COLMAN_LLM_PASSWORD) {
+    console.error('\n  ERROR: COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD not set in .env\n');
     process.exit(1);
   }
 
@@ -140,10 +140,10 @@ async function main() {
   console.log(`  Matching Skills : ${payload.alignment.matchingSkills.join(', ')}`);
   console.log(`  Missing Skills  : ${payload.alignment.missingSkills.join(', ')}`);
 
-  printSection('Calling Gemini for optimization + scoring...');
+  printSection('Calling Colman LLM for optimization + scoring...');
   console.log('  (This may take 15-30 seconds)\n');
 
-  const result = await GeminiOptimizationService.optimizeResume(payload);
+  const result = await LLMOptimizationService.optimizeResume(payload);
 
   printSection('Hybrid Score');
   console.log(`  Final Score     : ${result.hybridScore.finalScore}/100`);

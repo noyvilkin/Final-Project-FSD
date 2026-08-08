@@ -1,16 +1,14 @@
 import { evaluateStarAlignment, parseStarResponse } from '../../features/interview/services/starEvaluationService.js';
-import { GeminiClient } from '../../common/services/geminiClient.js';
-
-// Mock the GeminiClient
-jest.mock('../../common/services/geminiClient.js');
+import type { LLMClient } from '../../common/services/llmClient.js';
 
 describe('starEvaluationService', () => {
-  let mockGeminiClient: jest.Mocked<GeminiClient>;
+  let mockLlmClient: jest.Mocked<LLMClient>;
 
   beforeEach(() => {
-    mockGeminiClient = {
+    mockLlmClient = {
+      model: 'test-model',
       generate: jest.fn(),
-    } as unknown as jest.Mocked<GeminiClient>;
+    } as unknown as jest.Mocked<LLMClient>;
   });
 
   describe('parseStarResponse', () => {
@@ -111,18 +109,18 @@ describe('starEvaluationService', () => {
 
   describe('evaluateStarAlignment', () => {
     it('should return zero-score result for empty transcript', async () => {
-      const result = await evaluateStarAlignment(mockGeminiClient, '');
+      const result = await evaluateStarAlignment(mockLlmClient, '');
 
       expect(result.score).toBe(0);
       expect(result.situation.detected).toBe(false);
       expect(result.task.detected).toBe(false);
       expect(result.action.detected).toBe(false);
       expect(result.result.detected).toBe(false);
-      expect(mockGeminiClient.generate).not.toHaveBeenCalled();
+      expect(mockLlmClient.generate).not.toHaveBeenCalled();
     });
 
-    it('should call Gemini with the transcript and return parsed result', async () => {
-      const geminiResponse = JSON.stringify({
+    it('should call the LLM with the transcript and return parsed result', async () => {
+      const llmResponse = JSON.stringify({
         score: 90,
         situation: { detected: true, feedback: 'Great context.' },
         task: { detected: true, feedback: 'Clear task.' },
@@ -130,21 +128,21 @@ describe('starEvaluationService', () => {
         result: { detected: true, feedback: 'Strong outcome.' },
       });
 
-      mockGeminiClient.generate.mockResolvedValue(geminiResponse);
+      mockLlmClient.generate.mockResolvedValue(llmResponse);
 
       const result = await evaluateStarAlignment(
-        mockGeminiClient,
+        mockLlmClient,
         'I was working at Company X when we faced a database scaling issue...',
       );
 
-      expect(mockGeminiClient.generate).toHaveBeenCalledTimes(1);
+      expect(mockLlmClient.generate).toHaveBeenCalledTimes(1);
       expect(result.score).toBe(90);
       expect(result.situation.detected).toBe(true);
       expect(result.action.feedback).toBe('Specific actions.');
     });
 
     it('should include the question in the prompt when provided', async () => {
-      mockGeminiClient.generate.mockResolvedValue(
+      mockLlmClient.generate.mockResolvedValue(
         JSON.stringify({
           score: 50,
           situation: { detected: true, feedback: '' },
@@ -155,12 +153,12 @@ describe('starEvaluationService', () => {
       );
 
       await evaluateStarAlignment(
-        mockGeminiClient,
+        mockLlmClient,
         'I organized a team event...',
         'Tell me about a time you showed leadership.',
       );
 
-      const payload = mockGeminiClient.generate.mock.calls[0][0];
+      const payload = mockLlmClient.generate.mock.calls[0][0];
       const userText = payload.contents[0].parts[0].text;
 
       expect(userText).toContain('Tell me about a time you showed leadership.');
@@ -168,7 +166,7 @@ describe('starEvaluationService', () => {
     });
 
     it('should include STAR system prompt in the payload', async () => {
-      mockGeminiClient.generate.mockResolvedValue(
+      mockLlmClient.generate.mockResolvedValue(
         JSON.stringify({
           score: 50,
           situation: { detected: true, feedback: '' },
@@ -178,21 +176,21 @@ describe('starEvaluationService', () => {
         }),
       );
 
-      await evaluateStarAlignment(mockGeminiClient, 'Some transcript text.');
+      await evaluateStarAlignment(mockLlmClient, 'Some transcript text.');
 
-      const payload = mockGeminiClient.generate.mock.calls[0][0];
+      const payload = mockLlmClient.generate.mock.calls[0][0];
       expect(payload.system_instruction).toBeDefined();
       expect(payload.system_instruction!.parts[0].text).toContain('STAR');
       expect(payload.system_instruction!.parts[0].text).toContain('Situation');
       expect(payload.system_instruction!.parts[0].text).toContain('Action');
     });
 
-    it('should propagate Gemini errors', async () => {
-      mockGeminiClient.generate.mockRejectedValue(new Error('Gemini API down'));
+    it('should propagate LLM errors', async () => {
+      mockLlmClient.generate.mockRejectedValue(new Error('LLM API down'));
 
       await expect(
-        evaluateStarAlignment(mockGeminiClient, 'Some transcript.'),
-      ).rejects.toThrow('Gemini API down');
+        evaluateStarAlignment(mockLlmClient, 'Some transcript.'),
+      ).rejects.toThrow('LLM API down');
     });
 
     it('should correctly identify Action segment (acceptance criteria: 4/5)', async () => {
@@ -223,7 +221,7 @@ describe('starEvaluationService', () => {
 
       let correctCount = 0;
       for (const tc of testCases) {
-        mockGeminiClient.generate.mockResolvedValueOnce(
+        mockLlmClient.generate.mockResolvedValueOnce(
           JSON.stringify({
             score: tc.expectedAction ? 75 : 25,
             situation: { detected: true, feedback: '' },
@@ -233,7 +231,7 @@ describe('starEvaluationService', () => {
           }),
         );
 
-        const result = await evaluateStarAlignment(mockGeminiClient, tc.transcript);
+        const result = await evaluateStarAlignment(mockLlmClient, tc.transcript);
         if (result.action.detected === tc.expectedAction) {
           correctCount++;
         }

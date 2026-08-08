@@ -1,15 +1,14 @@
 import { analyzeSentiment, parseSentimentResponse } from '../../features/interview/services/sentimentAnalysisService.js';
-import { GeminiClient } from '../../common/services/geminiClient.js';
-
-jest.mock('../../common/services/geminiClient.js');
+import type { LLMClient } from '../../common/services/llmClient.js';
 
 describe('sentimentAnalysisService', () => {
-  let mockGeminiClient: jest.Mocked<GeminiClient>;
+  let mockLlmClient: jest.Mocked<LLMClient>;
 
   beforeEach(() => {
-    mockGeminiClient = {
+    mockLlmClient = {
+      model: 'test-model',
       generate: jest.fn(),
-    } as unknown as jest.Mocked<GeminiClient>;
+    } as unknown as jest.Mocked<LLMClient>;
   });
 
   describe('parseSentimentResponse', () => {
@@ -96,15 +95,15 @@ describe('sentimentAnalysisService', () => {
 
   describe('analyzeSentiment', () => {
     it('should return default result for empty transcript', async () => {
-      const result = await analyzeSentiment(mockGeminiClient, '');
+      const result = await analyzeSentiment(mockLlmClient, '');
 
       expect(result.overallTone).toBe('neutral');
       expect(result.clarityScore).toBe(0);
-      expect(mockGeminiClient.generate).not.toHaveBeenCalled();
+      expect(mockLlmClient.generate).not.toHaveBeenCalled();
     });
 
-    it('should call Gemini and return parsed result', async () => {
-      mockGeminiClient.generate.mockResolvedValue(
+    it('should call the LLM and return parsed result', async () => {
+      mockLlmClient.generate.mockResolvedValue(
         JSON.stringify({
           overallTone: 'confident',
           clarityScore: 88,
@@ -113,68 +112,68 @@ describe('sentimentAnalysisService', () => {
       );
 
       const result = await analyzeSentiment(
-        mockGeminiClient,
+        mockLlmClient,
         'I led the initiative to restructure our CI/CD pipeline, reducing build times by 60%.',
       );
 
-      expect(mockGeminiClient.generate).toHaveBeenCalledTimes(1);
+      expect(mockLlmClient.generate).toHaveBeenCalledTimes(1);
       expect(result.overallTone).toBe('confident');
       expect(result.clarityScore).toBe(88);
       expect(result.signals).toHaveLength(2);
     });
 
     it('should include filler rate context when provided', async () => {
-      mockGeminiClient.generate.mockResolvedValue(
+      mockLlmClient.generate.mockResolvedValue(
         JSON.stringify({ overallTone: 'hesitant', clarityScore: 40, signals: [] }),
       );
 
-      await analyzeSentiment(mockGeminiClient, 'Some transcript.', 8.5);
+      await analyzeSentiment(mockLlmClient, 'Some transcript.', 8.5);
 
-      const payload = mockGeminiClient.generate.mock.calls[0][0];
+      const payload = mockLlmClient.generate.mock.calls[0][0];
       const userText = payload.contents[0].parts[0].text;
       expect(userText).toContain('8.5 per minute');
     });
 
     it('should not include filler rate when not provided', async () => {
-      mockGeminiClient.generate.mockResolvedValue(
+      mockLlmClient.generate.mockResolvedValue(
         JSON.stringify({ overallTone: 'neutral', clarityScore: 60, signals: [] }),
       );
 
-      await analyzeSentiment(mockGeminiClient, 'Some transcript.');
+      await analyzeSentiment(mockLlmClient, 'Some transcript.');
 
-      const payload = mockGeminiClient.generate.mock.calls[0][0];
+      const payload = mockLlmClient.generate.mock.calls[0][0];
       const userText = payload.contents[0].parts[0].text;
       expect(userText).not.toContain('filler word rate');
     });
 
     it('should include sentiment system prompt', async () => {
-      mockGeminiClient.generate.mockResolvedValue(
+      mockLlmClient.generate.mockResolvedValue(
         JSON.stringify({ overallTone: 'neutral', clarityScore: 50, signals: [] }),
       );
 
-      await analyzeSentiment(mockGeminiClient, 'Test transcript.');
+      await analyzeSentiment(mockLlmClient, 'Test transcript.');
 
-      const payload = mockGeminiClient.generate.mock.calls[0][0];
+      const payload = mockLlmClient.generate.mock.calls[0][0];
       expect(payload.system_instruction).toBeDefined();
       expect(payload.system_instruction!.parts[0].text).toContain('confident');
       expect(payload.system_instruction!.parts[0].text).toContain('hesitant');
       expect(payload.system_instruction!.parts[0].text).toContain('CLARITY SCORE');
     });
 
-    it('should propagate Gemini errors', async () => {
-      mockGeminiClient.generate.mockRejectedValue(new Error('Rate limit exceeded'));
+    it('should propagate LLM errors', async () => {
+      mockLlmClient.generate.mockRejectedValue(new Error('Rate limit exceeded'));
 
-      await expect(analyzeSentiment(mockGeminiClient, 'Some text.')).rejects.toThrow(
+      await expect(analyzeSentiment(mockLlmClient, 'Some text.')).rejects.toThrow(
         'Rate limit exceeded',
       );
     });
 
-    it('should handle Gemini returning markdown-wrapped JSON', async () => {
-      mockGeminiClient.generate.mockResolvedValue(
+    it('should handle the LLM returning markdown-wrapped JSON', async () => {
+      mockLlmClient.generate.mockResolvedValue(
         '```json\n{"overallTone":"confident","clarityScore":92,"signals":["Clear and direct"]}\n```',
       );
 
-      const result = await analyzeSentiment(mockGeminiClient, 'I implemented the solution.');
+      const result = await analyzeSentiment(mockLlmClient, 'I implemented the solution.');
       expect(result.overallTone).toBe('confident');
       expect(result.clarityScore).toBe(92);
     });

@@ -1,12 +1,12 @@
 /**
  * Sentiment Analysis Service
  *
- * Uses Gemini to assess confidence, clarity, and overall tone from an
+ * Uses the shared LLM client to assess confidence, clarity, and overall tone from an
  * interview transcript. Returns structured ISentiment data compatible
  * with the interviewInsights model.
  */
 
-import { GeminiClient, GeminiPayload } from '../../../common/services/geminiClient.js';
+import type { LLMClient, LLMPayload } from '../../../common/services/llmClient.js';
 
 /** Matches ISentiment from interviewInsights.model */
 export interface SentimentResult {
@@ -20,8 +20,8 @@ export interface SentimentAnalysisResult extends SentimentResult {
   signals?: string[];
 }
 
-/** Expected Gemini response shape */
-interface GeminiSentimentResponse {
+/** Expected LLM response shape */
+interface LLMSentimentResponse {
   overallTone: string;
   clarityScore: number;
   signals?: string[];
@@ -59,13 +59,13 @@ Respond with ONLY valid JSON matching this exact structure:
 /**
  * Analyze the sentiment/confidence/clarity of an interview transcript.
  *
- * @param geminiClient  Shared Gemini client instance
+ * @param llmClient  Shared LLM client instance
  * @param transcript    The interview transcript text
  * @param fillerRate    Optional filler-word rate per minute (provides extra context)
  * @returns             Structured sentiment analysis result
  */
 export async function analyzeSentiment(
-  geminiClient: GeminiClient,
+  llmClient: LLMClient,
   transcript: string,
   fillerRate?: number,
 ): Promise<SentimentAnalysisResult> {
@@ -83,7 +83,7 @@ export async function analyzeSentiment(
     userMessage += `\n\nAdditional context: The candidate's filler word rate is ${fillerRate} per minute.`;
   }
 
-  const payload: GeminiPayload = {
+  const payload: LLMPayload = {
     system_instruction: {
       parts: [{ text: SENTIMENT_SYSTEM_PROMPT }],
     },
@@ -95,17 +95,17 @@ export async function analyzeSentiment(
     ],
   };
 
-  const rawResponse = await geminiClient.generate(payload);
+  const rawResponse = await llmClient.generate(payload);
   return parseSentimentResponse(rawResponse);
 }
 
 /**
- * Parse and validate the Gemini JSON response into a SentimentAnalysisResult.
+ * Parse and validate the LLM JSON response into a SentimentAnalysisResult.
  */
 export function parseSentimentResponse(rawJson: string): SentimentAnalysisResult {
   const cleaned = rawJson.replace(/```(?:json)?\s*/g, '').replace(/```\s*$/g, '').trim();
 
-  let parsed: GeminiSentimentResponse;
+  let parsed: LLMSentimentResponse;
   try {
     parsed = JSON.parse(cleaned);
   } catch {

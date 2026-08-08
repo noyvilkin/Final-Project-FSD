@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { Types } from 'mongoose';
 import multer from 'multer';
 import { ResumeOptimizationService } from '../services/resumeOptimizationService.js';
-import { GeminiOptimizationService } from '../services/geminiOptimizationService.js';
+import { LLMOptimizationService } from '../services/llmOptimizationService.js';
 import { HybridScoringService } from '../services/hybridScoringService.js';
 import { CvReconstructionService } from '../services/cvReconstructionService.js';
 import { CvDocumentService } from '../services/cvDocumentService.js';
@@ -73,7 +73,7 @@ router.post('/optimize', async (req: Request, res: Response): Promise<void> => {
     appLogger.info('[ResumeOptimization] Starting optimization pipeline', { userId });
 
     const payload = await ResumeOptimizationService.prepareFromText(userId, jobDescriptionText);
-    const dashboardData = await GeminiOptimizationService.optimizeResume(payload);
+    const dashboardData = await LLMOptimizationService.optimizeResume(payload);
 
     const versionTag = Date.now().toString(36);
     const originalResumeText = payload.professionalDNA.rawResumeText || '';

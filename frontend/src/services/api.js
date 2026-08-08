@@ -368,7 +368,7 @@ export function getInterviewTranscript(interviewId, userId) {
 }
 
 /**
- * Fetch the final Gemini insight results.
+ * Fetch the final LLM insight results.
  * Returns 400 if insights have not completed yet.
  */
 export function getInterviewInsights(interviewId, userId) {

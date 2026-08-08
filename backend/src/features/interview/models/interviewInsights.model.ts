@@ -129,7 +129,7 @@ export interface IInterviewInsights extends Document {
   // Internal transcription error – never returned to the frontend
   processingError?: IProcessingError;
 
-  // ── Gemini insight fields ─────────────────────────────────────────────────
+  // ── LLM insight fields ─────────────────────────────────────────────────
   insightsStatus:              InsightsStatus;
   fillerWordCount?:            number;
   fillerWordsBreakdown?:       IFillerWordBreakdown[];
@@ -141,8 +141,8 @@ export interface IInterviewInsights extends Document {
   strengths?:                  string[];
   weaknesses?:                 string[];
   recommendations?:            string[];
-  geminiProvider?:             string;
-  geminiModel?:                string;
+  llmProvider?:             string;
+  llmModel?:                string;
   insightsCompletedAt?:        Date;
   // Internal insights error – never returned to the frontend
   insightsError?: IProcessingError;
@@ -298,7 +298,7 @@ const InterviewInsightsSchema = new Schema<IInterviewInsights>(
     // Internal transcription error – never returned to callers
     processingError: { type: ProcessingErrorSchema },
 
-    // ── Gemini insight fields ───────────────────────────────────────────────
+    // ── LLM insight fields ───────────────────────────────────────────────
     insightsStatus: {
       type:    String,
       enum:    INSIGHTS_STATUSES,
@@ -315,8 +315,8 @@ const InterviewInsightsSchema = new Schema<IInterviewInsights>(
     strengths:                  { type: [String], default: undefined },
     weaknesses:                 { type: [String], default: undefined },
     recommendations:            { type: [String], default: undefined },
-    geminiProvider:             { type: String },
-    geminiModel:                { type: String },
+    llmProvider:             { type: String },
+    llmModel:                { type: String },
     insightsCompletedAt:        { type: Date },
     // Internal insights error – never returned to callers
     insightsError:              { type: ProcessingErrorSchema },

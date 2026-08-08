@@ -68,7 +68,7 @@ router.post(
     const hasAssignmentFiles = !!(files['assignments']?.length);
     if (hasAssignmentFiles) {
       // Enforce the per-user daily cap BEFORE uploading anything to S3, so a
-      // capped user never consumes storage or the shared Gemini quota.
+      // capped user never consumes storage or the shared Colman LLM quota.
       const withinLimit = await AssignmentService.isWithinDailyLimit(userId);
       if (!withinLimit) {
         res.status(429).json({

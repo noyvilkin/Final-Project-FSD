@@ -1,5 +1,7 @@
 import { randomUUID } from "crypto";
-import { GeminiClient, GeminiPayload } from "../../../common/services/geminiClient.js";
+import { createLLMClient } from "../../../common/services/llmClientFactory.js";
+import type { LLMClient } from "../../../common/services/llmClient.js";
+import type { LLMPayload } from "../../../common/types/llmTypes.js";
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
 import { appLogger } from "../../../common/services/logger.js";
 import type { AssignmentMetadata } from "../../resume/types/professionalDNA.types.js"
@@ -50,9 +52,10 @@ export interface AIAnalysisResult {
 }
 
 /**
- * OpenAPI-subset schema handed to Gemini (`responseSchema`) so the model is
- * constrained to emit schema-valid JSON. This eliminates the ad-hoc parse
- * failures we previously saw on longer responses (e.g. the clean solution).
+ * OpenAPI-subset schema handed to the LLM (`generationConfig.responseSchema`)
+ * so the model is constrained to emit schema-valid JSON. This eliminates the
+ * ad-hoc parse failures we previously saw on longer responses (e.g. the clean
+ * solution).
  */
 const ANALYSIS_RESPONSE_SCHEMA = {
   type: 'object',
@@ -122,32 +125,17 @@ const ANALYSIS_RESPONSE_SCHEMA = {
 } as const;
 
 export class AIAnalysisService {
-  private static geminiClient: GeminiClient | null = null;
+  private static llmClient: LLMClient | null = null;
 
-  private static getGeminiClient(): GeminiClient {
-    if (!this.geminiClient) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('GEMINI_API_KEY environment variable is required');
-      }
-      
-      this.geminiClient = new GeminiClient({
-        apiKey,
-        model: 'gemini-3.6-flash',
+  private static getClient(): LLMClient {
+    if (!this.llmClient) {
+      this.llmClient = createLLMClient({
         temperature: 0,        // Grading must be reproducible — no sampling variance.
         maxOutputTokens: 4096, // Headroom so structured JSON is never truncated.
-        rateLimiter: {
-          // Google free tier for gemini-3.6-flash (per GCP project, NOT per API key).
-          // Official: 10 RPM / 250 RPD. NOTE: since Dec 2025 some accounts are silently
-          // throttled to ~20 RPD — if you keep seeing 429s, check AI Studio → Rate Limits
-          // and lower requestsPerDay to match. RPD resets at midnight US Pacific.
-          requestsPerMinute: 10,
-          requestsPerDay: 250
-        }
       });
     }
-    
-    return this.geminiClient;
+
+    return this.llmClient;
   }
 
   /**
@@ -273,7 +261,7 @@ export class AIAnalysisService {
   ): Promise<AIAnalysisResult> {
     const { assignmentId } = ctx;
 
-    const geminiPayload: GeminiPayload = {
+    const llmPayload: LLMPayload = {
       system_instruction: {
         parts: [{
           text: `You are an experienced, fair university professor grading programming assignments.
@@ -302,10 +290,10 @@ export class AIAnalysisService {
       },
     };
 
-    const client = this.getGeminiClient();
+    const client = this.getClient();
 
     // First attempt.
-    let rawResponse = await client.generate(geminiPayload);
+    let rawResponse = await client.generate(llmPayload);
     appLogger.info("[AIAnalysisService] Raw AI response received", {
       assignmentId,
       responseLength: rawResponse.length,
@@ -319,7 +307,7 @@ export class AIAnalysisService {
     // a false negative/positive downstream.
     if (!feedback) {
       appLogger.warn("[AIAnalysisService] Parse failed, retrying once", { assignmentId });
-      rawResponse = await client.generate(geminiPayload);
+      rawResponse = await client.generate(llmPayload);
       feedback = this.tryParseAIResponse(rawResponse);
     }
 
@@ -378,7 +366,7 @@ export class AIAnalysisService {
   }
 
   /**
-   * Builds the complete analysis prompt for Gemini with strict grading criteria
+   * Builds the complete analysis prompt for the LLM with strict grading criteria
    */
   private static buildAnalysisPrompt(payload: UnifiedAnalysisPayload): string {
     // Per-call random nonce on the fences so untrusted content can't forge a

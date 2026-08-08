@@ -48,6 +48,10 @@ app.use(
         connectSrc: ["'self'", "https://accounts.google.com/gsi/"],
         frameSrc: ["'self'", "https://accounts.google.com/gsi/"],
         imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
+        // Local video/audio preview (interview upload, playback) uses
+        // blob: object URLs before/instead of the network request; without
+        // this, CSP falls back to default-src 'self' and blocks them.
+        mediaSrc: ["'self'", "blob:"],
       },
     },
     // Helmet's defaults break Google Sign-In (GSI):

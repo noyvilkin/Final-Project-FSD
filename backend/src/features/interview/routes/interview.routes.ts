@@ -306,7 +306,7 @@ router.get(
 // ─── POST /interviews/:id/analyze ────────────────────────────────────────────
 
 /**
- * Trigger Gemini insight analysis for an interview that already has a transcript.
+ * Trigger LLM insight analysis for an interview that already has a transcript.
  * Returns 202 immediately; analysis runs asynchronously.
  */
 router.post(
@@ -384,7 +384,7 @@ router.post(
 // ─── POST /interviews/:id/process ────────────────────────────────────────────
 
 /**
- * Full pipeline: transcription (if needed) → Gemini insights.
+ * Full pipeline: transcription (if needed) → LLM insights.
  * Returns 202 immediately; both stages run asynchronously in sequence.
  */
 router.post(
@@ -488,9 +488,9 @@ router.post(
 // ─── GET /interviews/:id/insights ────────────────────────────────────────────
 
 /**
- * Return full Gemini insights once analysis is complete.
+ * Return full LLM insights once analysis is complete.
  * Returns 400 with INSIGHTS_NOT_READY if insightsStatus is not 'completed'.
- * insightsError and gemini raw responses are never included.
+ * insightsError and LLM raw responses are never included.
  */
 router.get(
   '/:id/insights',
