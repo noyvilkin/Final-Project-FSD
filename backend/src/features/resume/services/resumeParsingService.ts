@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import { createLLMClient } from '../../../common/services/llmClientFactory.js';
+import { resolveModelForModule } from '../../../common/services/llmModuleConfig.js';
 import type { LLMClient } from '../../../common/services/llmClient.js';
 import type { LLMPayload } from '../../../common/types/llmTypes.js';
 import { PdfProcessor } from '../../../common/utils/pdfProcessor.js';
@@ -64,7 +65,11 @@ export class ResumeParsingService {
 
   private static getClient(): LLMClient {
     if (!this.llmClient) {
-      this.llmClient = createLLMClient({ temperature: 0.1, maxOutputTokens: 16384 });
+      this.llmClient = createLLMClient({
+        model: resolveModelForModule('resume'),
+        temperature: 0.1,
+        maxOutputTokens: 16384,
+      });
     }
     return this.llmClient;
   }

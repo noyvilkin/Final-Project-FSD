@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { createLLMClient } from "../../../common/services/llmClientFactory.js";
+import { resolveModelForModule } from "../../../common/services/llmModuleConfig.js";
 import type { LLMClient } from "../../../common/services/llmClient.js";
 import type { LLMPayload } from "../../../common/types/llmTypes.js";
 import { AssignmentFeedback } from "../models/assignmentFeedback.model.js";
@@ -130,6 +131,7 @@ export class AIAnalysisService {
   private static getClient(): LLMClient {
     if (!this.llmClient) {
       this.llmClient = createLLMClient({
+        model: resolveModelForModule('assignment'),
         temperature: 0,        // Grading must be reproducible — no sampling variance.
         maxOutputTokens: 4096, // Headroom so structured JSON is never truncated.
       });
