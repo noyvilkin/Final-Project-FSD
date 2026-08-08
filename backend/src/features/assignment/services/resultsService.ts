@@ -9,6 +9,11 @@ export interface AssignmentResultsSummary {
   overallScore: number;
   feedback: {
     summary: string;
+    requirementsCoverage: Array<{
+      requirement: string;
+      status: 'met' | 'partial' | 'missing';
+      justification: string;
+    }>;
     codeQuality: {
       score: number;
       highlights: string[];
@@ -40,7 +45,9 @@ export class ResultsService {
     try {
       appLogger.info("[ResultsService] Generating results summary", { assignmentId });
 
-      const assignment = await AssignmentFeedback.findById(assignmentId);
+      const assignment = await AssignmentFeedback.findById(assignmentId)
+        .select('userId status aiFeedback metadata createdAt updatedAt aiAnalysisCompletedAt')
+        .lean();
       
       if (!assignment) {
         appLogger.error("[ResultsService] Assignment not found", { assignmentId });
@@ -68,6 +75,11 @@ export class ResultsService {
         overallScore: assignment.aiFeedback.overall.score,
         feedback: {
           summary: assignment.aiFeedback.overall.summary,
+          requirementsCoverage: (assignment.aiFeedback.requirementsCoverage || []).map((r) => ({
+            requirement: r.requirement,
+            status: r.status,
+            justification: r.justification
+          })),
           codeQuality: {
             score: assignment.aiFeedback.codeQuality.score,
             highlights: assignment.aiFeedback.codeQuality.strengths,
@@ -180,6 +192,13 @@ export class ResultsService {
           title: 'Overall Summary',
           content: [summary.feedback.summary],
           score: summary.overallScore
+        },
+        {
+          title: 'Requirement Coverage',
+          content: summary.feedback.requirementsCoverage.map((r) => {
+            const icon = r.status === 'met' ? '✓' : r.status === 'partial' ? '~' : '✗';
+            return `${icon} ${r.requirement} — ${r.justification}`;
+          })
         },
         {
           title: 'Code Quality Analysis',

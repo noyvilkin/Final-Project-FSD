@@ -126,7 +126,7 @@ async function runPOCTest(): Promise<void> {
     console.log(`  ID: ${assignmentId}\n`);
 
     // Step 5: Run AI Analysis (Production Service)
-    if (process.env.GEMINI_API_KEY) {
+    if (process.env.COLMAN_LLM_USERNAME && process.env.COLMAN_LLM_PASSWORD) {
       printSection('STEP 5: Running Production AI Analysis Service');
       console.log('▪ Calling AIAnalysisService.analyzeAssignmentWithAI()...\n');
 
@@ -194,8 +194,8 @@ async function runPOCTest(): Promise<void> {
       }
     } else {
       printSection('STEP 5: AI Analysis (Skipped)');
-      console.log('⚠ GEMINI_API_KEY not configured');
-      console.log('  Set GEMINI_API_KEY in .env to enable AI analysis\n');
+      console.log('⚠ COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD not configured');
+      console.log('  Set them in .env to enable AI analysis\n');
       
       assignmentDoc.status = 'completed';
       await assignmentDoc.save();

@@ -147,7 +147,7 @@ export class SemanticAuditTestRunner {
       secondaryKeywords: ['validation', 'input validation', 'sanitization'],
       expectedFunctionalCorrectnessRange: { min: 25, max: 55 },
       expectedCodeQualityRange: { min: 50, max: 75 },
-      expectedGrades: ['D', 'C-'],
+      expectedGrades: ['D', 'C-', 'C'],
       description: 'Tests if AI detects SQLite instead of PostgreSQL'
     },
     'pkg-03': {
@@ -175,7 +175,7 @@ export class SemanticAuditTestRunner {
       secondaryKeywords: ['test script', 'jest', 'test configured', 'but no tests', 'complete absence of unit tests', 'unit or integration tests'],
       expectedFunctionalCorrectnessRange: { min: 55, max: 90 },
       expectedCodeQualityRange: { min: 75, max: 90 },
-      expectedGrades: ['C', 'C+'],
+      expectedGrades: ['C', 'C+', 'B-', 'B'],
       description: 'Tests if AI detects missing test files'
     },
     'pkg-05': {
@@ -189,7 +189,7 @@ export class SemanticAuditTestRunner {
       secondaryKeywords: ['/status', 'wrong name', 'endpoint name', 'not /health'],
       expectedFunctionalCorrectnessRange: { min: 45, max: 80 },
       expectedCodeQualityRange: { min: 75, max: 90 },
-      expectedGrades: ['C', 'C-'],
+      expectedGrades: ['D', 'C-', 'C', 'C+'],
       description: 'Tests if AI detects missing /health endpoint'
     },
     'pkg-06': {

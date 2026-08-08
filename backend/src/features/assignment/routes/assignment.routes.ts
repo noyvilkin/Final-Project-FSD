@@ -71,7 +71,9 @@ router.get(
         solutionFileKey: assignment.solutionFileKey,
         userNotes: assignment.userNotes,
         metadata: assignment.metadata,
-        feedback: assignment.feedback,
+        ...(assignment.processingErrors?.length && {
+          processingErrors: assignment.processingErrors
+        }),
         createdAt: assignment.createdAt,
         updatedAt: assignment.updatedAt
       },
@@ -88,8 +90,9 @@ router.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const userId = req.params.userId as string;
-    const { limit = '10', offset = '0' } = req.query;
-    
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 10, 100);
+    const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+
     if (!userId) {
       res.status(400).json({
         error: {
@@ -113,11 +116,7 @@ router.get(
     }
 
     const [assignments, total] = await Promise.all([
-      AssignmentService.getUserAssignments(
-        userId,
-        parseInt(limit as string, 10),
-        parseInt(offset as string, 10)
-      ),
+      AssignmentService.getUserAssignments(userId, limit, offset),
       AssignmentService.countUserAssignments(userId)
     ]);
 
@@ -149,6 +148,8 @@ router.get(
       })),
       count: assignments.length,
       total,
+      limit,
+      offset,
       requestId: req.requestId ?? '-'
     });
   })
@@ -207,87 +208,6 @@ router.delete(
     res.json({
       success: true,
       deleted: assignmentId,
-      requestId: req.requestId ?? '-'
-    });
-  })
-);
-
-/**
- * Update assignment status (for internal use or admin)
- */
-router.patch(
-  '/:assignmentId/status',
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const assignmentId = req.params.assignmentId as string;
-    const { status, metadata } = req.body;
-    
-    if (!assignmentId || !status) {
-      res.status(400).json({
-        error: {
-          code: 'MISSING_REQUIRED_FIELDS',
-          message: 'Assignment ID and status are required'
-        },
-        requestId: req.requestId ?? '-'
-      });
-      return;
-    }
-
-    const validStatuses = ['pending', 'scanning', 'processing', 'completed', 'failed'];
-    if (!validStatuses.includes(status)) {
-      res.status(400).json({
-        error: {
-          code: 'INVALID_STATUS',
-          message: `Status must be one of: ${validStatuses.join(', ')}`
-        },
-        requestId: req.requestId ?? '-'
-      });
-      return;
-    }
-
-    const existing = await AssignmentService.getAssignment(assignmentId);
-    if (!existing) {
-      res.status(404).json({
-        error: {
-          code: 'ASSIGNMENT_NOT_FOUND',
-          message: 'Assignment not found'
-        },
-        requestId: req.requestId ?? '-'
-      });
-      return;
-    }
-    if (!isOwner(existing, req)) {
-      forbid(req, res);
-      return;
-    }
-
-    const success = await AssignmentService.updateAssignmentStatus(
-      assignmentId,
-      status,
-      metadata
-    );
-
-    if (!success) {
-      res.status(404).json({
-        error: {
-          code: 'UPDATE_FAILED',
-          message: 'Failed to update assignment status'
-        },
-        requestId: req.requestId ?? '-'
-      });
-      return;
-    }
-
-    appLogger.info('Assignment status updated via API', {
-      assignmentId,
-      status,
-      requestId: req.requestId
-    });
-
-    res.json({
-      success: true,
-      assignmentId,
-      status,
       requestId: req.requestId ?? '-'
     });
   })

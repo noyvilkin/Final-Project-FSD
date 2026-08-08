@@ -2,7 +2,7 @@
  * Assignment AI evaluation harness — measures violation detection,
  * score calibration, noise reduction, and pkg-06 specificity.
  *
- * Run: `npm run eval:assignment` (requires GEMINI_API_KEY).
+ * Run: `npm run eval:assignment` (requires COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD).
  */
 
 import 'dotenv/config';
@@ -30,7 +30,7 @@ const PACKAGE_COOLDOWN_MS = Number(process.env.SEMANTIC_AUDIT_PACKAGE_COOLDOWN_M
 const FINAL_PACKAGE_COOLDOWN_MS = Number(process.env.SEMANTIC_AUDIT_FINAL_PACKAGE_COOLDOWN_MS || '45000');
 
 // Easy → hard, good package last (calmer rate-limit window for the final score).
-const RUN_ORDER = ['pkg-01', 'pkg-04', 'pkg-05', 'pkg-02', 'pkg-03', 'pkg-06'];
+const RUN_ORDER = ['pkg-01', 'pkg-04', 'pkg-05', 'pkg-02', 'pkg-03', 'pkg-07', 'pkg-08', 'pkg-06'];
 
 // Optional subset filter, e.g. EVAL_ONLY=pkg-03,pkg-06 runs just those two packages.
 // Useful for re-checking specific packages without spending quota on the whole suite.
@@ -127,7 +127,7 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
 
   const solutionFileKey = `${fixture.zipBaseName}.zip`;
 
-  console.log(`  calling Gemini...`);
+  console.log(`  calling Colman LLM...`);
   const aiResult = await AIAnalysisService.analyzeFromMetadata({
     metadata: {
       ...analysis.metadata,
@@ -313,14 +313,12 @@ function writeJsonReport(report: FullEvalReport): string {
 async function main() {
   header('Assignment AI Evaluation Harness');
 
-  const useMock = process.env.SEMANTIC_AUDIT_USE_MOCK_AI === 'true';
-  if (!useMock && !process.env.GEMINI_API_KEY) {
-    console.error('\n  ERROR: GEMINI_API_KEY is not set in .env (and SEMANTIC_AUDIT_USE_MOCK_AI is not true).\n');
+  if (!process.env.COLMAN_LLM_USERNAME || !process.env.COLMAN_LLM_PASSWORD) {
+    console.error('\n  ERROR: COLMAN_LLM_USERNAME / COLMAN_LLM_PASSWORD are not set in .env.\n');
     process.exit(1);
   }
 
   console.log(`  Packages          : ${PACKAGE_FIXTURES.length}`);
-  console.log(`  Mode              : ${useMock ? 'mock AI' : 'real Gemini'}`);
   console.log(`  Cooldown / package: ${PACKAGE_COOLDOWN_MS}ms (final: ${FINAL_PACKAGE_COOLDOWN_MS}ms)`);
 
   const orderedFixtures = RUN_ORDER
@@ -377,7 +375,7 @@ async function main() {
     }
 
     const isLast = i === orderedFixtures.length - 1;
-    if (!isLast && !useMock) {
+    if (!isLast) {
       const nextIsGood = orderedFixtures[i + 1]?.isGood;
       const cooldown = nextIsGood ? FINAL_PACKAGE_COOLDOWN_MS : PACKAGE_COOLDOWN_MS;
       if (cooldown > 0) {

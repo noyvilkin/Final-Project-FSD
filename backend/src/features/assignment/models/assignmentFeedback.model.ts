@@ -1,26 +1,11 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
-interface IRequirementAnalysis {
+interface IAIRequirementCoverage {
   requirement: string;
-  isCovered: boolean;
-  comment?: string;
+  status: 'met' | 'partial' | 'missing';
+  justification: string;
 }
 
-interface ICodeQuality {
-  score: number;
-  comments: string[];
-}
-
-interface IFeedback {
-  overallScore: number;
-  requirementsCoverage: number;
-  strengths: string[];
-  improvements: string[];
-  codeQuality: ICodeQuality;
-  requirementsAnalysis: IRequirementAnalysis[];
-}
-
-// New AI-generated feedback interfaces
 interface IAICodeQuality {
   score: number;
   strengths: string[];
@@ -46,6 +31,7 @@ interface IAIOverall {
 }
 
 interface IAIFeedback {
+  requirementsCoverage?: IAIRequirementCoverage[];
   codeQuality: IAICodeQuality;
   functionalCorrectness: IAIFunctionalCorrectness;
   bestPractices: IAIBestPractices;
@@ -86,33 +72,17 @@ export interface IAssignmentFeedback extends Document {
   userNotes?: string;
   metadata: IMetadata;
   status: 'pending' | 'scanning' | 'processing' | 'completed' | 'failed';
-  feedback?: IFeedback;
   aiFeedback?: IAIFeedback;
-  jobId?: string;
   processingErrors?: string[];
   aiAnalysisCompletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const RequirementAnalysisSchema = new Schema<IRequirementAnalysis>({
-  requirement: { type: String, required: true },
-  isCovered:   { type: Boolean, required: true },
-  comment:     { type: String },
-}, { _id: false });
-
-const CodeQualitySchema = new Schema<ICodeQuality>({
-  score:    { type: Number, min: 0, max: 100 },
-  comments: { type: [String], default: [] },
-}, { _id: false });
-
-const FeedbackSchema = new Schema<IFeedback>({
-  overallScore:        { type: Number, min: 0, max: 100 },
-  requirementsCoverage: { type: Number, min: 0, max: 100 },
-  strengths:           { type: [String], default: [] },
-  improvements:        { type: [String], default: [] },
-  codeQuality:         { type: CodeQualitySchema },
-  requirementsAnalysis: { type: [RequirementAnalysisSchema], default: [] }
+const AIRequirementCoverageSchema = new Schema<IAIRequirementCoverage>({
+  requirement:   { type: String },
+  status:        { type: String, enum: ['met', 'partial', 'missing'], default: 'partial' },
+  justification: { type: String }
 }, { _id: false });
 
 const AICodeQualitySchema = new Schema<IAICodeQuality>({
@@ -140,6 +110,7 @@ const AIOverallSchema = new Schema<IAIOverall>({
 }, { _id: false });
 
 const AIFeedbackSchema = new Schema<IAIFeedback>({
+  requirementsCoverage:     { type: [AIRequirementCoverageSchema], default: [] },
   codeQuality:              { type: AICodeQualitySchema },
   functionalCorrectness:    { type: AIFunctionalCorrectnessSchema },
   bestPractices:            { type: AIBestPracticesSchema },
@@ -175,14 +146,21 @@ const AssignmentFeedbackSchema = new Schema<IAssignmentFeedback>(
       enum: ['pending', 'scanning', 'processing', 'completed', 'failed'],
       default: 'pending'
     },
-    feedback:            { type: FeedbackSchema },
     aiFeedback:          { type: AIFeedbackSchema },
-    jobId:               { type: String },
     processingErrors:    { type: [String], default: [] },
     aiAnalysisCompletedAt: { type: Date }
   },
   { timestamps: true }
 );
+
+// Compound index for user history queries sorted by date
+AssignmentFeedbackSchema.index({ userId: 1, createdAt: -1 });
+
+// Status index for pipeline/admin queries filtering by processing state
+AssignmentFeedbackSchema.index({ status: 1 });
+
+// Compound index for user-scoped status filtering (used by getAssignmentsByStatus)
+AssignmentFeedbackSchema.index({ userId: 1, status: 1 });
 
 export const AssignmentFeedback = mongoose.model<IAssignmentFeedback>(
   'AssignmentFeedback',

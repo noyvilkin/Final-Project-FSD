@@ -1,6 +1,8 @@
 import { Types } from 'mongoose';
-import { GeminiClient } from '../../../common/services/geminiClient.js';
-import type { GeminiPayload } from '../../../common/types/geminiTypes.js';
+import { createLLMClient } from '../../../common/services/llmClientFactory.js';
+import { resolveModelForModule } from '../../../common/services/llmModuleConfig.js';
+import type { LLMClient } from '../../../common/services/llmClient.js';
+import type { LLMPayload } from '../../../common/types/llmTypes.js';
 import { PdfProcessor } from '../../../common/utils/pdfProcessor.js';
 import { sanitizeText } from '../../../common/utils/textSanitizer.js';
 import { appLogger } from '../../../common/services/logger.js';
@@ -10,8 +12,6 @@ import {
   DNA_EXTRACTION_SYSTEM_INSTRUCTION,
   buildDnaExtractionUserMessage,
 } from '../prompts/dnaExtractionPrompts.js';
-
-const MODEL_NAME = 'gemini-2.5-flash';
 
 interface ParsedProfileSummary {
   hasDegree: boolean;
@@ -61,30 +61,31 @@ export interface ParsedDNA {
 }
 
 export class ResumeParsingService {
-  private static geminiClient: GeminiClient | null = null;
+  private static llmClient: LLMClient | null = null;
 
-  private static getClient(): GeminiClient {
-    if (!this.geminiClient) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error('GEMINI_API_KEY environment variable is required');
-      this.geminiClient = new GeminiClient({
-        apiKey,
-        model: MODEL_NAME,
+  private static getClient(): LLMClient {
+    if (!this.llmClient) {
+      this.llmClient = createLLMClient({
+        model: resolveModelForModule('resume'),
         temperature: 0.1,
         maxOutputTokens: 16384,
-        rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
       });
     }
-    return this.geminiClient;
+    return this.llmClient;
   }
 
   /**
-   * Full pipeline: PDF buffer → text extraction → Gemini parsing →
+   * Full pipeline: PDF buffer → text extraction → LLM parsing →
    * User upsert → ProfessionalDNA creation → returns userId + dnaId.
+   *
+   * `client` lets a caller that owns its own LLMClient (e.g. profile-analysis,
+   * which runs an independent model) use this pipeline without going through
+   * this service's own 'resume' client. Defaults to this service's client.
    */
   static async parseAndStore(
     pdfBuffer: Buffer,
-    existingUserId?: string
+    existingUserId?: string,
+    client?: LLMClient
   ): Promise<{
     userId: string;
     dnaId: string;
@@ -109,9 +110,9 @@ export class ResumeParsingService {
       cleanChars: cleanText.length,
     });
 
-    const parsed = await this.callGeminiForDNA(cleanText);
+    const parsed = await this.callLLMForDNA(cleanText, client);
 
-    appLogger.info('[ResumeParser] Gemini DNA extraction complete', {
+    appLogger.info('[ResumeParser] LLM DNA extraction complete', {
       skills: parsed.skills.length,
       experience: parsed.experience.length,
       education: parsed.education.length,
@@ -164,21 +165,24 @@ export class ResumeParsingService {
    * against a corpus of resume texts without persisting anything.
    */
   static async extractDNAFromText(cleanText: string): Promise<ParsedDNA> {
-    return this.callGeminiForDNA(cleanText);
+    return this.callLLMForDNA(cleanText);
   }
 
-  // ── Gemini call ─────────────────────────────────────────────────
+  // ── LLM call ─────────────────────────────────────────────────
 
-  private static async callGeminiForDNA(resumeText: string): Promise<ParsedDNA> {
+  private static async callLLMForDNA(
+    resumeText: string,
+    client?: LLMClient
+  ): Promise<ParsedDNA> {
     const userMessage = buildDnaExtractionUserMessage(resumeText);
 
-    const payload: GeminiPayload = {
+    const payload: LLMPayload = {
       system_instruction: { parts: [{ text: DNA_EXTRACTION_SYSTEM_INSTRUCTION }] },
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
     };
 
-    const client = this.getClient();
-    const rawResponse = await client.generate(payload);
+    const activeClient = client ?? this.getClient();
+    const rawResponse = await activeClient.generate(payload);
 
     return this.parseResponse(rawResponse);
   }
@@ -198,6 +202,21 @@ export class ResumeParsingService {
         if (v == null) return null;
         const s = String(v).trim();
         return s.length === 0 || s.toLowerCase() === 'null' ? null : s;
+      };
+
+      // The prompt tells the model to omit endDate for ongoing roles, but it
+      // sometimes writes "Present"/"Current" literally instead — neither
+      // Date() nor Mongoose's date cast can make sense of that, so validate
+      // before it ever reaches the database.
+      const isValidDateStr = (s: string): boolean => !Number.isNaN(new Date(s).getTime());
+      const toDateStrOrUndefined = (v: unknown): string | undefined => {
+        if (v == null) return undefined;
+        const s = String(v).trim();
+        return s && isValidDateStr(s) ? s : undefined;
+      };
+      const toDateStrOrFallback = (v: unknown, fallback: string): string => {
+        const s = toDateStrOrUndefined(v);
+        return s ?? fallback;
       };
 
       return {
@@ -225,8 +244,8 @@ export class ResumeParsingService {
         experience: (parsed.experience ?? []).map((e: Record<string, unknown>) => ({
           company: String(e.company ?? 'Unknown'),
           role: String(e.role ?? 'Unknown'),
-          startDate: String(e.startDate ?? '2020-01-01'),
-          endDate: e.endDate ? String(e.endDate) : undefined,
+          startDate: toDateStrOrFallback(e.startDate, '2020-01-01'),
+          endDate: toDateStrOrUndefined(e.endDate),
           isCurrent: Boolean(e.isCurrent),
           description: String(e.description ?? ''),
           extractedSkills: Array.isArray(e.extractedSkills) ? e.extractedSkills.map(String) : [],
@@ -235,14 +254,21 @@ export class ResumeParsingService {
           institution: String(ed.institution ?? 'Unknown'),
           degree: String(ed.degree ?? 'Unknown'),
           fieldOfStudy: String(ed.fieldOfStudy ?? 'General'),
-          startDate: String(ed.startDate ?? '2015-01-01'),
-          endDate: ed.endDate ? String(ed.endDate) : undefined,
-          gpa: ed.gpa != null ? Number(ed.gpa) : undefined,
+          startDate: toDateStrOrFallback(ed.startDate, '2015-01-01'),
+          endDate: toDateStrOrUndefined(ed.endDate),
+          // The schema stores GPA on a 0-4 scale, but resumes from countries that
+          // grade on a 0-100 or other scale confuse the model into returning the
+          // raw number as-is. Drop anything outside the valid range rather than
+          // let one unreliable field fail the whole extraction.
+          gpa: (() => {
+            const n = ed.gpa != null ? Number(ed.gpa) : NaN;
+            return Number.isFinite(n) && n >= 0 && n <= 4 ? n : undefined;
+          })(),
         })),
         profileSummary: this.normalizeProfileSummary(parsed.profileSummary),
       };
     } catch (err) {
-      appLogger.error('[ResumeParser] Failed to parse Gemini response', {
+      appLogger.error('[ResumeParser] Failed to parse LLM response', {
         error: err instanceof Error ? err.message : 'Unknown',
         rawPreview: raw.substring(0, 500),
       });

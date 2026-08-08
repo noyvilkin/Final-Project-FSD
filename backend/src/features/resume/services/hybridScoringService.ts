@@ -1,5 +1,7 @@
-import { GeminiClient } from '../../../common/services/geminiClient.js';
-import type { GeminiPayload } from '../../../common/types/geminiTypes.js';
+import { createLLMClient } from '../../../common/services/llmClientFactory.js';
+import { resolveModelForModule } from '../../../common/services/llmModuleConfig.js';
+import type { LLMClient } from '../../../common/services/llmClient.js';
+import type { LLMPayload } from '../../../common/types/llmTypes.js';
 import { appLogger } from '../../../common/services/logger.js';
 
 import {
@@ -10,31 +12,26 @@ import {
 import type { ResumeOptimizationPayload } from '../types/resumeOptimization.types.js';
 import type {
   HybridScoreBreakdown,
-  GeminiSemanticScoreResponse,
+  LLMSemanticScoreResponse,
 } from '../types/aiOptimization.types.js';
 
 const HARD_RULE_WEIGHT = 0.4;
 const SEMANTIC_WEIGHT  = 0.6;
 
 export class HybridScoringService {
-  private static geminiClient: GeminiClient | null = null;
+  private static llmClient: LLMClient | null = null;
 
-  private static getClient(): GeminiClient {
-    if (!this.geminiClient) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error('GEMINI_API_KEY environment variable is required');
-
-      this.geminiClient = new GeminiClient({
-        apiKey,
-        model: 'gemini-2.5-flash',
+  private static getClient(): LLMClient {
+    if (!this.llmClient) {
+      this.llmClient = createLLMClient({
+        model: resolveModelForModule('resume'),
         // Deterministic scoring: the same candidate/JD pair must yield the
         // same score so that a truthful bullet rewrite never regresses it.
         temperature: 0,
         maxOutputTokens: 4096,
-        rateLimiter: { requestsPerMinute: 8, requestsPerDay: 1200 },
       });
     }
-    return this.geminiClient;
+    return this.llmClient;
   }
 
   /**
@@ -46,7 +43,7 @@ export class HybridScoringService {
   ): Promise<HybridScoreBreakdown> {
     const hardRuleResult = this.calculateHardRuleScore(payload);
 
-    let semanticResult: GeminiSemanticScoreResponse;
+    let semanticResult: LLMSemanticScoreResponse;
     try {
       semanticResult = await this.calculateSemanticScore(payload);
     } catch (err) {
@@ -128,13 +125,13 @@ export class HybridScoringService {
 
   private static async calculateSemanticScore(
     payload: ResumeOptimizationPayload
-  ): Promise<GeminiSemanticScoreResponse> {
+  ): Promise<LLMSemanticScoreResponse> {
     const dnaEssence = this.buildDNAEssence(payload);
     const jdResponsibilities = payload.normalizedJD.cleanText;
 
     const userMessage = buildSemanticScoringUserMessage(dnaEssence, jdResponsibilities);
 
-    const geminiPayload: GeminiPayload = {
+    const llmPayload: LLMPayload = {
       system_instruction: {
         parts: [{ text: SEMANTIC_SCORING_SYSTEM_INSTRUCTION }],
       },
@@ -142,7 +139,7 @@ export class HybridScoringService {
     };
 
     const client = this.getClient();
-    const rawResponse = await client.generate(geminiPayload);
+    const rawResponse = await client.generate(llmPayload);
 
     return this.parseSemanticResponse(rawResponse);
   }
@@ -180,7 +177,7 @@ export class HybridScoringService {
     return parts.join('\n') || 'No professional DNA data available.';
   }
 
-  private static parseSemanticResponse(raw: string): GeminiSemanticScoreResponse {
+  private static parseSemanticResponse(raw: string): LLMSemanticScoreResponse {
     try {
       const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
