@@ -233,7 +233,14 @@ export class ResumeParsingService {
           fieldOfStudy: String(ed.fieldOfStudy ?? 'General'),
           startDate: String(ed.startDate ?? '2015-01-01'),
           endDate: ed.endDate ? String(ed.endDate) : undefined,
-          gpa: ed.gpa != null ? Number(ed.gpa) : undefined,
+          // The schema stores GPA on a 0-4 scale, but resumes from countries that
+          // grade on a 0-100 or other scale confuse the model into returning the
+          // raw number as-is. Drop anything outside the valid range rather than
+          // let one unreliable field fail the whole extraction.
+          gpa: (() => {
+            const n = ed.gpa != null ? Number(ed.gpa) : NaN;
+            return Number.isFinite(n) && n >= 0 && n <= 4 ? n : undefined;
+          })(),
         })),
         profileSummary: this.normalizeProfileSummary(parsed.profileSummary),
       };
