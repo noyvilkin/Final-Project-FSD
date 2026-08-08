@@ -67,6 +67,18 @@ describe("AIAnalysisService.tryParseAIResponse", () => {
     expect(result?.overall.score).toBe(65);
   });
 
+  test("overrides a letter grade that contradicts overall.score", () => {
+    const inconsistent = {
+      ...validResponse,
+      overall: { score: 45, grade: "D+", summary: "wrong-stack solution" },
+    };
+
+    const result = AIAnalysisService.tryParseAIResponse(JSON.stringify(inconsistent));
+
+    expect(result?.overall.score).toBe(45);
+    expect(result?.overall.grade).toBe("F");
+  });
+
   test("returns null when a required section is missing", () => {
     const { overall, ...missingOverall } = validResponse;
     void overall;

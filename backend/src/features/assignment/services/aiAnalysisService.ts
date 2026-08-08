@@ -520,7 +520,7 @@ CRITICAL clarification — do NOT confuse auth credentials with the datastore:
 - 93–100 → A    90–92 → A-   87–89 → B+   83–86 → B    80–82 → B-
 - 77–79 → C+    73–76 → C    70–72 → C-   65–69 → D+   60–64 → D    below 60 → F
 - The letter grade MUST fall in the band that contains overall.score (never output grade "F" with a score of 70, or "A" with a score of 85).
-- Procedure: FIRST compute overall.score from the weighted blend, THEN copy the grade from the band containing that score. Do not pick the grade by feel — an overall.score of 55 is ALWAYS "F", 72 is ALWAYS "C-".
+- Procedure: FIRST compute overall.score from the weighted blend, THEN copy the grade from the band containing that score. Do not pick the grade by feel — an overall.score of 55 is ALWAYS "F", 72 is ALWAYS "C-". (The server re-derives the letter from overall.score using this same table, so an inconsistent letter is discarded — get the score right.)
 
 **CALIBRATION EXAMPLES:**
 - A working app on the CORRECT stack that only omits unit tests (secondary gap) → codeQuality
@@ -625,6 +625,25 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
   }
 
   /**
+   * Maps overall.score to a letter grade using the exact band table stated in the
+   * grading prompt. Kept in lockstep with that table so the enforced letter always
+   * matches what the model was instructed to produce.
+   */
+  private static gradeFromScore(score: number): string {
+    if (score >= 93) return 'A';
+    if (score >= 90) return 'A-';
+    if (score >= 87) return 'B+';
+    if (score >= 83) return 'B';
+    if (score >= 80) return 'B-';
+    if (score >= 77) return 'C+';
+    if (score >= 73) return 'C';
+    if (score >= 70) return 'C-';
+    if (score >= 65) return 'D+';
+    if (score >= 60) return 'D';
+    return 'F';
+  }
+
+  /**
    * Parses the AI response into structured feedback, or returns null if the
    * response is not valid/recoverable JSON. Callers can use null to trigger a retry.
    */
@@ -663,7 +682,12 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
       },
       overall: {
         score: Number(parsed.overall?.score) || 0,
-        grade: String(parsed.overall?.grade) || 'F',
+        // Derive the letter from the score rather than trusting the model's own letter.
+        // The prompt makes overall.score primary ("FIRST compute overall.score, THEN copy
+        // the grade from the band"), but the model still occasionally contradicts itself —
+        // e.g. score 45 with grade "D+", when 45 is an F. A student must never see a letter
+        // that disagrees with their number, so the band table is enforced here in code.
+        grade: this.gradeFromScore(Number(parsed.overall?.score) || 0),
         summary: String(parsed.overall?.summary) || 'No summary provided'
       }
     };
