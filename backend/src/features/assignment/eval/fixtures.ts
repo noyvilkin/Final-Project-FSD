@@ -194,9 +194,8 @@ export function assignmentPdfPathFor(fixture: PackageFixture): string {
 }
 
 /**
- * Resolves the absolute path to the committed plaintext requirements for a fixture.
- * The eval prefers this over the PDF because pdf-parse/pdfjs extracts these fixtures
- * nondeterministically (see evalPackage), which made grading unreproducible.
+ * Resolves the absolute path to the editable plaintext brief for a fixture.
+ * The eval grades from assignment.pdf; this file is the source used to regenerate it.
  */
 export function requirementsTxtPathFor(fixture: PackageFixture): string {
   return path.join(PACKAGES_BASE_PATH, fixture.folderName, 'requirements.txt');

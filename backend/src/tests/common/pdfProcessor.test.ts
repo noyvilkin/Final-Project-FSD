@@ -6,9 +6,32 @@
 
 const mockPdfParse = jest.fn();
 
-jest.mock("pdf-parse/lib/pdf-parse.js", () => ({
+jest.mock("pdfjs-dist/legacy/build/pdf.mjs", () => ({
   __esModule: true,
-  default: (buffer: Buffer) => mockPdfParse(buffer),
+  getDocument: () => {
+    // pdf.js hands back positioned fragments rather than lines, so the fake splits the
+    // requested text on newlines and flags each break with hasEOL, exactly as the real
+    // renderer does. Only page 1 carries text; the rest exercise the page loop.
+    const promise = Promise.resolve(mockPdfParse()).then(
+      ({ text, numpages }: { text: string; numpages: number }) => ({
+        numPages: numpages,
+        getPage: (pageNumber: number) =>
+          Promise.resolve({
+            getTextContent: () => {
+              if (pageNumber > 1) return Promise.resolve({ items: [] });
+              const lines = text.split("\n");
+              return Promise.resolve({
+                items: lines.map((line, index) => ({
+                  str: line,
+                  hasEOL: index < lines.length - 1,
+                })),
+              });
+            },
+          }),
+      })
+    );
+    return { promise, destroy: () => Promise.resolve() };
+  },
 }));
 
 jest.mock("../../common/services/logger.js", () => ({
@@ -19,7 +42,7 @@ import { PdfProcessor } from "../../common/utils/pdfProcessor.js";
 
 const buffer = Buffer.from("%PDF-1.4 fake");
 
-/** Builds a pdf-parse style payload. */
+/** Builds the page payload the pdf.js fake renders. */
 function pdfText(text: string, numpages = 1) {
   return { text, numpages };
 }

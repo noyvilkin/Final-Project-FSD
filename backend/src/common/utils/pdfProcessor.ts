@@ -5,27 +5,75 @@ interface PdfParseResult {
   numpages: number;
 }
 
-type PdfParseFn = (buffer: Buffer) => Promise<PdfParseResult>;
+interface PdfJsModule {
+  getDocument(params: Record<string, unknown>): {
+    promise: Promise<PdfJsDocument>;
+    destroy(): Promise<void>;
+  };
+}
 
-let pdfParseLoader: Promise<PdfParseFn> | null = null;
+interface PdfJsDocument {
+  numPages: number;
+  getPage(pageNumber: number): Promise<{
+    getTextContent(): Promise<{ items: Array<{ str?: string; hasEOL?: boolean }> }>;
+  }>;
+}
+
+let pdfjsLoader: Promise<PdfJsModule> | null = null;
 
 /**
- * Lazily loads pdf-parse.
+ * Lazily loads pdf.js.
  *
- * The implementation is imported from lib/ rather than the package root on purpose: the
- * root index.js treats a falsy `module.parent` as "debug mode" and, at load time, reads a
- * sample PDF from a path relative to the process cwd — which throws ENOENT and takes every
- * extraction down with it. Importing lib/ skips that block, and deferring the import keeps
- * this file loadable under the CommonJS test transform so extraction can be unit tested.
+ * The legacy build is the one that runs under plain Node without a DOM. Deferring the
+ * import also keeps this file loadable under the CommonJS test transform, so extraction
+ * can be unit tested without pulling the whole renderer in at module scope.
  */
-async function loadPdfParse(): Promise<PdfParseFn> {
-  if (!pdfParseLoader) {
-    pdfParseLoader = import('pdf-parse/lib/pdf-parse.js').then((mod) => {
-      const candidate = (mod as unknown as { default?: PdfParseFn }).default ?? mod;
-      return candidate as unknown as PdfParseFn;
-    });
+async function loadPdfjs(): Promise<PdfJsModule> {
+  if (!pdfjsLoader) {
+    pdfjsLoader = import('pdfjs-dist/legacy/build/pdf.mjs') as unknown as Promise<PdfJsModule>;
   }
-  return pdfParseLoader;
+  return pdfjsLoader;
+}
+
+/**
+ * Extracts page text with pdf.js.
+ *
+ * This replaced pdf-parse, whose bundled pdf.js 1.10.100 keeps mutable state across calls
+ * and corrupts roughly every third parse in a long-lived process — measured at 14 failures
+ * in 40 sequential extractions (`.X..X..X..`) with "bad XRef entry" and "Illegal character",
+ * on files that parse perfectly on their own. Under PM2 that meant intermittent upload
+ * failures; the same 40-extraction run is clean here.
+ */
+async function extractPages(pdfBuffer: Buffer): Promise<PdfParseResult> {
+  const pdfjs = await loadPdfjs();
+
+  // pdf.js takes ownership of the array it is handed and detaches the backing buffer,
+  // so it must never see memory that Node still owns.
+  const task = pdfjs.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    isEvalSupported: false,
+    useSystemFonts: true,
+    verbosity: 0
+  });
+
+  const doc = await task.promise;
+  try {
+    let text = '';
+    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+      const page = await doc.getPage(pageNumber);
+      const content = await page.getTextContent();
+      for (const item of content.items) {
+        text += item.str ?? '';
+        // pdf.js emits positioned fragments, not lines. hasEOL is what preserves the
+        // line breaks that bullet-list rubrics depend on downstream.
+        if (item.hasEOL) text += '\n';
+      }
+      text += '\n';
+    }
+    return { text, numpages: doc.numPages };
+  } finally {
+    await task.destroy();
+  }
 }
 
 export interface PdfExtractionResult {
@@ -61,8 +109,7 @@ export class PdfProcessor {
 
     try {
       // Extract text from PDF
-      const pdfParse = await loadPdfParse();
-      const data = await pdfParse(pdfBuffer);
+      const data = await extractPages(pdfBuffer);
       
       const rawText = data.text ?? '';
       result.extractedText = rawText;
