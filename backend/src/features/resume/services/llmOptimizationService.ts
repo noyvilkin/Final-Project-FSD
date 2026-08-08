@@ -1,4 +1,5 @@
 import { createLLMClient } from '../../../common/services/llmClientFactory.js';
+import { resolveModelForModule } from '../../../common/services/llmModuleConfig.js';
 import type { LLMClient } from '../../../common/services/llmClient.js';
 import type { LLMPayload } from '../../../common/types/llmTypes.js';
 import { appLogger } from '../../../common/services/logger.js';
@@ -26,6 +27,7 @@ export class LLMOptimizationService {
   private static getClient(): LLMClient {
     if (!this.llmClient) {
       this.llmClient = createLLMClient({
+        model: resolveModelForModule('resume'),
         // Lower temperature keeps rewrites faithful to the source bullet and
         // reduces the model's tendency to invent unearned keywords/skills.
         temperature: 0.2,

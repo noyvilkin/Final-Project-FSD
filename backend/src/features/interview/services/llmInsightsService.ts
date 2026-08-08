@@ -1,4 +1,5 @@
 import { createLLMClient } from '../../../common/services/llmClientFactory.js';
+import { resolveModelForModule } from '../../../common/services/llmModuleConfig.js';
 import type { LLMClient } from '../../../common/services/llmClient.js';
 import { appLogger } from '../../../common/services/logger.js';
 import {
@@ -52,6 +53,7 @@ export class LLMInsightsService {
   private static getClient(): LLMClient {
     if (!LLMInsightsService.llmClient) {
       LLMInsightsService.llmClient = createLLMClient({
+        model: resolveModelForModule('interview'),
         temperature: 0.2,
         maxOutputTokens: 8_192,
       });
