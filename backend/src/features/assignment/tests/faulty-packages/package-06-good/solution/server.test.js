@@ -1,101 +1,184 @@
+/**
+ * Unit tests for every core endpoint.
+ *
+ * Coverage:
+ *   GET  /health        — healthy response shape
+ *   POST /auth/login    — success, wrong password, unknown user, missing fields
+ *   GET  /api/users/:id — no token, bad token, invalid id, not found, success, db failure
+ *   POST /api/items     — no token, missing name, blank name, success, db failure
+ *
+ * PostgreSQL is mocked so every assertion is deterministic: a test fails if the
+ * endpoint misbehaves, rather than passing on an "unreachable database" fallback.
+ */
+
+jest.mock('pg', () => {
+  const mockQuery = jest.fn();
+  return {
+    Pool: jest.fn(() => ({ query: mockQuery })),
+    __mockQuery: mockQuery,
+  };
+});
+
 const request = require('supertest');
+const { __mockQuery: mockQuery } = require('pg');
 const app = require('./server');
 
 const CREDENTIALS = { username: 'testuser', password: 'password123' };
 
-describe('Core API Endpoints', () => {
-  describe('GET /health', () => {
-    test('should return 200 with ok status', async () => {
-      const res = await request(app)
-        .get('/health')
-        .expect(200);
+/** Logs in with the demo account and returns a valid bearer token. */
+async function getToken() {
+  const res = await request(app).post('/auth/login').send(CREDENTIALS).expect(200);
+  return res.body.token;
+}
 
-      expect(res.body).toHaveProperty('status', 'ok');
-      expect(res.body).toHaveProperty('timestamp');
-    });
+beforeEach(() => {
+  mockQuery.mockReset();
+});
+
+describe('GET /health', () => {
+  test('returns 200 with an ok status and a timestamp', async () => {
+    const res = await request(app).get('/health').expect(200);
+
+    expect(res.body.status).toBe('ok');
+    expect(Date.parse(res.body.timestamp)).not.toBeNaN();
+  });
+});
+
+describe('POST /auth/login', () => {
+  test('returns a signed JWT for valid credentials', async () => {
+    const res = await request(app).post('/auth/login').send(CREDENTIALS).expect(200);
+
+    expect(typeof res.body.token).toBe('string');
+    expect(res.body.token.split('.')).toHaveLength(3);
   });
 
-  describe('POST /auth/login', () => {
-    test('should return JWT token on successful login', async () => {
-      const res = await request(app)
-        .post('/auth/login')
-        .send(CREDENTIALS)
-        .expect(200);
+  test('rejects a wrong password with 401', async () => {
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ username: 'testuser', password: 'wrong' })
+      .expect(401);
 
-      expect(res.body).toHaveProperty('token');
-      expect(typeof res.body.token).toBe('string');
-    });
-
-    test('should reject invalid credentials', async () => {
-      await request(app)
-        .post('/auth/login')
-        .send({ username: 'testuser', password: 'wrong' })
-        .expect(401);
-    });
-
-    test('should reject missing credentials', async () => {
-      await request(app)
-        .post('/auth/login')
-        .send({})
-        .expect(400);
-    });
+    expect(res.body.error).toBe('invalid credentials');
   });
 
-  describe('Protected endpoints with authentication', () => {
-    let token;
-
-    beforeAll(async () => {
-      const loginRes = await request(app)
-        .post('/auth/login')
-        .send(CREDENTIALS);
-      token = loginRes.body.token;
-    });
-
-    test('should reject requests without token', async () => {
-      await request(app)
-        .get('/api/users/1')
-        .expect(401);
-    });
-
-    test('should allow requests with valid token', async () => {
-      await request(app)
-        .get('/api/users/1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect([200, 404, 500]); // 404 if user doesn't exist, 500 if DB unreachable in test
-    });
-
-    test('should reject requests with invalid token', async () => {
-      await request(app)
-        .get('/api/users/1')
-        .set('Authorization', 'Bearer invalid-token')
-        .expect(403);
-    });
+  test('rejects an unknown username with 401', async () => {
+    await request(app)
+      .post('/auth/login')
+      .send({ username: 'nobody', password: 'password123' })
+      .expect(401);
   });
 
-  describe('Item creation endpoint', () => {
-    let token;
+  test('rejects missing credentials with 400', async () => {
+    const res = await request(app).post('/auth/login').send({}).expect(400);
 
-    beforeAll(async () => {
-      const loginRes = await request(app)
-        .post('/auth/login')
-        .send(CREDENTIALS);
-      token = loginRes.body.token;
-    });
+    expect(res.body.error).toMatch(/required/);
+  });
+});
 
-    test('should allow authenticated users to create items', async () => {
-      await request(app)
-        .post('/api/items')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ name: 'Test Item' })
-        .expect([201, 500]); // 500 if DB unreachable in test
-    });
+describe('GET /api/users/:id', () => {
+  test('rejects a request with no token with 401', async () => {
+    await request(app).get('/api/users/1').expect(401);
+  });
 
-    test('should reject items without a name', async () => {
-      await request(app)
-        .post('/api/items')
-        .set('Authorization', `Bearer ${token}`)
-        .send({})
-        .expect(400);
-    });
+  test('rejects a malformed token with 403', async () => {
+    await request(app)
+      .get('/api/users/1')
+      .set('Authorization', 'Bearer invalid-token')
+      .expect(403);
+  });
+
+  test('rejects a non-numeric id with 400', async () => {
+    const token = await getToken();
+
+    const res = await request(app)
+      .get('/api/users/abc')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    expect(res.body.error).toMatch(/positive integer/);
+  });
+
+  test('returns 404 when the user does not exist', async () => {
+    const token = await getToken();
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
+    await request(app)
+      .get('/api/users/999')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+  });
+
+  test('returns the user for a valid id', async () => {
+    const token = await getToken();
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 1, username: 'testuser' }] });
+
+    const res = await request(app)
+      .get('/api/users/1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(res.body).toEqual({ id: 1, username: 'testuser' });
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('SELECT'), [1]);
+  });
+
+  test('returns 500 when the database query fails', async () => {
+    const token = await getToken();
+    mockQuery.mockRejectedValueOnce(new Error('connection refused'));
+
+    await request(app)
+      .get('/api/users/1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(500);
+  });
+});
+
+describe('POST /api/items', () => {
+  test('rejects a request with no token with 401', async () => {
+    await request(app).post('/api/items').send({ name: 'Test Item' }).expect(401);
+  });
+
+  test('rejects a missing name with 400', async () => {
+    const token = await getToken();
+
+    await request(app)
+      .post('/api/items')
+      .set('Authorization', `Bearer ${token}`)
+      .send({})
+      .expect(400);
+  });
+
+  test('rejects a blank name with 400', async () => {
+    const token = await getToken();
+
+    await request(app)
+      .post('/api/items')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: '   ' })
+      .expect(400);
+  });
+
+  test('creates an item for an authenticated user', async () => {
+    const token = await getToken();
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 7, name: 'Test Item' }] });
+
+    const res = await request(app)
+      .post('/api/items')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: '  Test Item  ' })
+      .expect(201);
+
+    expect(res.body).toEqual({ id: 7, name: 'Test Item' });
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT'), ['Test Item', 1]);
+  });
+
+  test('returns 500 when the insert fails', async () => {
+    const token = await getToken();
+    mockQuery.mockRejectedValueOnce(new Error('connection refused'));
+
+    await request(app)
+      .post('/api/items')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Test Item' })
+      .expect(500);
   });
 });

@@ -1,0 +1,10 @@
+Items API
+
+Build a REST API in Node.js using the Express framework.
+
+Requirements:
+1. Persist items in a PostgreSQL database.
+2. GET /items must return the stored items as JSON.
+3. Authentication and unit tests are not required.
+
+Deliverables: the Express application and its package.json.

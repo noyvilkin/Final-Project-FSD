@@ -1,0 +1,13 @@
+Task Manager REST API (Python)
+
+Build a REST API in Python using the Flask framework.
+
+Requirements:
+1. JWT authentication protecting every /tasks endpoint. Requests
+   without a valid Bearer token must be rejected with HTTP 401.
+2. PostgreSQL persistence for tasks (id, title, done).
+3. CRUD endpoints: GET /tasks, POST /tasks, PUT /tasks/<id>,
+   DELETE /tasks/<id>.
+4. A GET /health endpoint returning the service status.
+
+Deliverables: the Flask application and its dependency list.

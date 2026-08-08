@@ -1,0 +1,14 @@
+Items Service
+
+Build a small REST API in Node.js using the Express framework.
+
+Requirements:
+1. GET /items returning the list of items as JSON.
+2. GET /health returning HTTP 200 so the service can be
+   monitored.
+3. Unit tests covering both endpoints.
+4. Data may be kept in an in-process store. No external database
+   is required and no authentication is required.
+
+Deliverables: the Express application, its package.json, and the
+test files.

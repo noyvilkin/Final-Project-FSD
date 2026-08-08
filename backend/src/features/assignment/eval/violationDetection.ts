@@ -12,12 +12,22 @@ export interface ViolationDetectionResult {
 }
 
 export function flattenFeedbackText(feedback: NonNullable<AIAnalysisResult['feedback']>): string {
+  // requirementsCoverage is the model's structured detection channel: a "missing"
+  // or "partial" entry with its justification is where the model most reliably
+  // names the deviation (e.g. "uses SQLite instead of PostgreSQL"), even when the
+  // free-text summary/missingFeatures echoes only the *required* tech. Include
+  // those justifications so detection reflects what the model actually found.
+  const coverageDeviations = (feedback.requirementsCoverage || [])
+    .filter((r) => r.status === 'missing' || r.status === 'partial')
+    .flatMap((r) => [r.requirement, r.justification]);
+
   const parts: string[] = [
     feedback.overall.summary || '',
     ...(feedback.codeQuality.weaknesses || []),
     ...(feedback.codeQuality.strengths || []),
     ...(feedback.functionalCorrectness.missingFeatures || []),
     ...(feedback.bestPractices.suggestions || []),
+    ...coverageDeviations,
   ];
   return parts.join(' \n ').toLowerCase();
 }

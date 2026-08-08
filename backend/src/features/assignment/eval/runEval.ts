@@ -18,6 +18,7 @@ import {
   PACKAGE_FIXTURES,
   zipPathFor,
   assignmentPdfPathFor,
+  requirementsTxtPathFor,
   type PackageFixture,
 } from './fixtures.js';
 import { checkNoiseReduction, type NoiseReductionResult } from './noiseReduction.js';
@@ -99,10 +100,23 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
       ` (${(noise.noiseReductionRate * 100).toFixed(1)}% filtered)`
   );
 
-  const pdfBuffer = fs.readFileSync(pdfPath);
+  // Grade from requirements.txt, which holds the same brief as assignment.pdf (the PDF is
+  // generated from it — see the faulty-packages README). Extracting the PDFs here instead
+  // would make the eval unusable: pdf-parse fails every third extraction in a single
+  // process with "bad XRef entry", regardless of which file it is, so roughly a third of
+  // the packages would be graded against an empty rubric on every run. A single extraction
+  // per process — the shape of a real upload — always succeeds, which is why the product
+  // path is unaffected. PdfProcessor has its own unit tests for extraction.
+  const reqTxtPath = requirementsTxtPathFor(fixture);
+  const committedRequirements = fs.existsSync(reqTxtPath)
+    ? fs.readFileSync(reqTxtPath, 'utf8').trim()
+    : '';
+
   const analysis = await AssignmentAnalysisService.analyzeAssignment({
     zipScanResult: scan,
-    pdfBuffer,
+    ...(committedRequirements
+      ? { requirementsText: committedRequirements }
+      : { pdfBuffer: fs.readFileSync(pdfPath) }),
   });
 
   if (!analysis.success) {
@@ -127,6 +141,8 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
 
   const solutionFileKey = `${fixture.zipBaseName}.zip`;
 
+  const requirementsText = analysis.metadata.extractedRequirements || '';
+
   console.log(`  calling Colman LLM...`);
   const aiResult = await AIAnalysisService.analyzeFromMetadata({
     metadata: {
@@ -138,7 +154,7 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
       detectedFrameworks: analysis.metadata.detectedFrameworks?.length
         ? analysis.metadata.detectedFrameworks
         : scan.metadata.frameworks,
-      requirements: analysis.metadata.extractedRequirements || '',
+      requirements: requirementsText,
       sourceCodeContent,
       sourceCodeSummary: analysis.sourceCodeSummary,
     },
