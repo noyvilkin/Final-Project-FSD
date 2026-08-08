@@ -192,11 +192,3 @@ export function zipPathFor(fixture: PackageFixture): string {
 export function assignmentPdfPathFor(fixture: PackageFixture): string {
   return path.join(PACKAGES_BASE_PATH, fixture.folderName, 'assignment.pdf');
 }
-
-/**
- * Resolves the absolute path to the editable plaintext brief for a fixture.
- * The eval grades from assignment.pdf; this file is the source used to regenerate it.
- */
-export function requirementsTxtPathFor(fixture: PackageFixture): string {
-  return path.join(PACKAGES_BASE_PATH, fixture.folderName, 'requirements.txt');
-}

@@ -19,20 +19,6 @@
     "supertest": "^7.0.0",
     "nodemon": "^3.0.0"
   },
-  "jest": {
-    "testEnvironment": "node",
-    "collectCoverageFrom": [
-      "server.js"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "branches": 90,
-        "functions": 100,
-        "lines": 90,
-        "statements": 90
-      }
-    }
-  },
   "engines": {
     "postgresql": ">=12.0"
   }

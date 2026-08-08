@@ -173,10 +173,7 @@ describe('responseTime middleware', () => {
   });
 
   it('uses error log level when configured for slow requests', () => {
-    // -1ms threshold - everything is slow. A 0ms threshold is not enough: the middleware
-    // logs on `rounded > threshold`, and the handler finishes in well under 0.005ms, so
-    // the duration rounds to exactly 0 and the comparison intermittently fails.
-    const middleware = responseTime({ slowThresholdMs: -1, slowLogLevel: 'error' });
+    const middleware = responseTime({ slowThresholdMs: 0, slowLogLevel: 'error' });
     const req = createMockReq();
     const res = createMockRes();
     const next: NextFunction = jest.fn();

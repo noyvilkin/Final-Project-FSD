@@ -130,8 +130,6 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
 
   const solutionFileKey = `${fixture.zipBaseName}.zip`;
 
-  const requirementsText = analysis.metadata.extractedRequirements || '';
-
   console.log(`  calling Colman LLM...`);
   const aiResult = await AIAnalysisService.analyzeFromMetadata({
     metadata: {
@@ -143,7 +141,7 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
       detectedFrameworks: analysis.metadata.detectedFrameworks?.length
         ? analysis.metadata.detectedFrameworks
         : scan.metadata.frameworks,
-      requirements: requirementsText,
+      requirements: analysis.metadata.extractedRequirements || '',
       sourceCodeContent,
       sourceCodeSummary: analysis.sourceCodeSummary,
     },
