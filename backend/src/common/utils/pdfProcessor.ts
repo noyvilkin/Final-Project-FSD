@@ -1,9 +1,32 @@
-import { createRequire } from 'module';
 import { appLogger } from '../services/logger.js';
 
-// Load pdf-parse using require (CommonJS module)
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+interface PdfParseResult {
+  text: string;
+  numpages: number;
+}
+
+type PdfParseFn = (buffer: Buffer) => Promise<PdfParseResult>;
+
+let pdfParseLoader: Promise<PdfParseFn> | null = null;
+
+/**
+ * Lazily loads pdf-parse.
+ *
+ * The implementation is imported from lib/ rather than the package root on purpose: the
+ * root index.js treats a falsy `module.parent` as "debug mode" and, at load time, reads a
+ * sample PDF from a path relative to the process cwd — which throws ENOENT and takes every
+ * extraction down with it. Importing lib/ skips that block, and deferring the import keeps
+ * this file loadable under the CommonJS test transform so extraction can be unit tested.
+ */
+async function loadPdfParse(): Promise<PdfParseFn> {
+  if (!pdfParseLoader) {
+    pdfParseLoader = import('pdf-parse/lib/pdf-parse.js').then((mod) => {
+      const candidate = (mod as unknown as { default?: PdfParseFn }).default ?? mod;
+      return candidate as unknown as PdfParseFn;
+    });
+  }
+  return pdfParseLoader;
+}
 
 export interface PdfExtractionResult {
   success: boolean;
@@ -38,20 +61,34 @@ export class PdfProcessor {
 
     try {
       // Extract text from PDF
+      const pdfParse = await loadPdfParse();
       const data = await pdfParse(pdfBuffer);
       
-      result.extractedText = data.text;
+      const rawText = data.text ?? '';
+      result.extractedText = rawText;
       result.metadata.totalPages = data.numpages;
-      result.metadata.originalLength = data.text.length;
-      
-      if (data.text.length === 0) {
-        result.errors.push('No text content found in PDF');
+      result.metadata.originalLength = rawText.length;
+
+      // A whitespace-only payload means pdfjs found no glyphs (image-only scan, or a
+      // damaged content stream it recovered from without throwing). Length alone is not
+      // enough — these files commonly come back as "\n\n".
+      if (rawText.trim().length === 0) {
+        result.errors.push(
+          'No text content found in PDF — the file may be image-only, encrypted, or corrupt'
+        );
         return result;
       }
 
       // Normalize the extracted text
-      result.normalizedText = this.normalizeText(data.text);
+      result.normalizedText = this.normalizeText(rawText);
       result.metadata.normalizedLength = result.normalizedText.length;
+
+      // Normalization strips page furniture; if it consumed everything, there is no
+      // rubric left to grade against and the caller must not treat this as a success.
+      if (result.normalizedText.trim().length === 0) {
+        result.errors.push('PDF contained no usable text after normalization');
+        return result;
+      }
       
       // Check for images (basic heuristic)
       result.metadata.hasImages = data.text.includes('[image]') || 
@@ -135,55 +172,40 @@ export class PdfProcessor {
    * Identify likely header/footer lines
    */
   private static isLikelyHeaderFooter(line: string): boolean {
-    // Empty or very short lines
-    if (line.length <= 2) return true;
-    
+    // Blank lines are paragraph structure, not page furniture. Dropping them here
+    // collapsed whole documents (a whitespace-only PDF normalized to an empty rubric);
+    // the whitespace pass already limits consecutive newlines.
+    if (line.length === 0) return false;
+
     // Page numbers (standalone numbers)
     if (/^\d+$/.test(line) && line.length <= 3) return true;
-    
-    // Common footer patterns
+
+    // Lines beginning with "Assignment"/"Project"/"Task"/"Requirements" are deliberately
+    // NOT stripped. In an assignment brief those introduce the rubric the grader is
+    // scored against, so removing them fed the model a truncated brief.
     const footerPatterns = [
       /^page \d+/i,
       /^\d+ of \d+$/i,
       /^\d+\/\d+$/,
-      /^confidential/i,
-      /^proprietary/i,
-      /^copyright/i,
-      /^©.*\d{4}/i,
-      /^.*\d{4}.*copyright/i
+      /^confidential$/i,
+      /^proprietary$/i,
+      /^copyright\b/i,
+      /^©.*\d{4}/i
     ];
-    
-    if (footerPatterns.some(pattern => pattern.test(line))) {
-      return true;
-    }
 
-    // Headers (commonly at start of pages)
-    const headerPatterns = [
-      /^assignment/i,
-      /^project/i,
-      /^exercise/i,
-      /^task/i,
-      /^requirements/i
-    ];
-    
-    // Only consider as header if it's very short and matches pattern
-    if (line.length <= 50 && headerPatterns.some(pattern => pattern.test(line))) {
-      return true;
-    }
-
-    return false;
+    return footerPatterns.some(pattern => pattern.test(line));
   }
 
   /**
    * Remove table of contents patterns
    */
   private static removeTableOfContents(text: string): string {
-    // Look for table of contents patterns and remove them
+    // Only a standalone "Table of Contents" heading counts. The previous bare /contents/
+    // pattern matched the word anywhere in prose (e.g. "returns the contents of the cart")
+    // and deleted everything up to the next blank line, eating real requirements.
     const tocPatterns = [
-      /table of contents[\s\S]*?(?=\n\n|\n[A-Z])/i,
-      /contents[\s\S]*?(?=\n\n|\n[A-Z])/i,
-      /^(\d+\.|\d+\)|\•|\-)\s+.+\s+\.\.\.\s+\d+$/gm,  // ToC line with dots and page numbers
-      /^(\d+\.|\d+\))\s+[A-Z][^.]+\s+\d+$/gm          // Simple numbered ToC lines
+      /^[ \t]*(?:table of )?contents[ \t]*$[\s\S]*?(?=\n\s*\n)/im,
+      /^(\d+\.|\d+\)|\•|\-)\s+.+\s+\.{3,}\s*\d+$/gm,  // ToC line with dotted leaders
     ];
 
     let cleaned = text;
