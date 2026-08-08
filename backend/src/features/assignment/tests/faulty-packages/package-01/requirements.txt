@@ -1,0 +1,10 @@
+Hello API
+
+Build a REST API in Node.js using the Express framework.
+
+Requirements:
+1. GET /hello must return the text "Hello".
+2. Data may be kept in process. No database is required.
+3. Authentication and unit tests are not required.
+
+Deliverables: the Express application and its package.json.

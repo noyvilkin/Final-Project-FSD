@@ -40,11 +40,11 @@ export class AssignmentAnalysisService {
       });
 
       // Step 1: Extract requirements from PDF if provided
-      let requirementsText = input.requirementsText || '';
+      const requirementsText = input.requirementsText || '';
+      const rubricExpected = !!(input.pdfBuffer || requirementsText);
       if (input.pdfBuffer && !requirementsText) {
         const pdfResult = await this.processPdfRequirements(input.pdfBuffer);
         if (pdfResult.success) {
-          requirementsText = pdfResult.extractedText;
           result.metadata.extractedRequirements = pdfResult.normalizedText;
         } else {
           result.errors.push(...pdfResult.errors);
@@ -65,12 +65,26 @@ export class AssignmentAnalysisService {
         result.errors.push('No valid ZIP scan results provided for project analysis');
       }
 
-      result.success = result.errors.length === 0 || (result.errors.length > 0 && !!result.metadata.detectedLanguage);
+      // A rubric was expected but none survived extraction. Previously this still counted
+      // as a success whenever the ZIP yielded a language, so the grader ran against an
+      // empty requirements list and returned a confident, meaningless grade.
+      const hasRubric = !!result.metadata.extractedRequirements?.trim();
+      if (rubricExpected && !hasRubric) {
+        result.errors.push(
+          'No requirements could be extracted from the assignment document — cannot grade the submission against an empty rubric'
+        );
+      }
+
+      const analysisUsable = !rubricExpected || hasRubric;
+      result.success =
+        analysisUsable &&
+        (result.errors.length === 0 || !!result.metadata.detectedLanguage);
       result.processingTime = Date.now() - startTime;
 
       appLogger.info('Assignment analysis completed', {
         success: result.success,
         errorsCount: result.errors.length,
+        hasRubric,
         processingTime: result.processingTime,
         detectedLanguage: result.metadata.detectedLanguage,
         projectScope: result.metadata.projectScope
