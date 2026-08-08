@@ -23,7 +23,7 @@ export class ProfileAnalysisService {
   private static getClient(): LLMClient {
     if (!this.llmClient) {
       this.llmClient = createLLMClient({
-        model: resolveModelForModule('profile-analysis'),
+        model: resolveModelForModule('profileAnalysis'),
         temperature: 0.1,
         maxOutputTokens: 16384,
       });
