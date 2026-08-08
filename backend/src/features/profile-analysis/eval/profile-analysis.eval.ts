@@ -1,13 +1,68 @@
 import "dotenv/config";
-import { ResumeParsingService } from "../../resume/services/resumeParsingService.js";
 import { PROFILE_ANALYSIS_EVAL_SAMPLES } from "./profile-analysis.eval.samples.js";
 import type {
   EvalResult,
   FieldScore,
   ProfileAnalysisExpectedOutput
 } from "./profile-analysis.eval.types.js";
+import { createLLMClient } from "../../../common/services/llmClientFactory.js";
+import { resolveModelForModule } from "../../../common/services/llmModuleConfig.js";
+import type { LLMPayload } from "../../../common/types/llmTypes.js";
+
+const profileAnalysisModel = resolveModelForModule("profileAnalysis");
+
+const profileAnalysisClient = createLLMClient({
+  model: profileAnalysisModel,
+  temperature: 0.1,
+  maxOutputTokens: 2048
+});
+
+const PROFILE_ANALYSIS_SYSTEM_INSTRUCTION = `You are an expert resume profile analyzer.
+
+Extract only the fields required for the candidate profile.
+
+Rules:
+- Use only information supported by the resume.
+- candidateName and candidateEmail must come directly from the resume.
+- hasDegree is true only when an academic degree is clearly stated.
+- highestDegree should contain the degree type only.
+- fieldOfStudy should contain the academic field only.
+- institution should contain the academic institution name only.
+- gradeAverage must use only an explicitly stated overall degree GPA or academic average. Never use a course grade, high-school grade, or number of study units. If no overall degree GPA or average is stated, return null.
+- totalYearsOfExperience should prefer an explicit years-of-experience statement. Otherwise estimate from professional work dates without double-counting overlapping periods. Do not count education.
+- lastRoleTitle and lastRoleCompany must represent the most recent professional role.
+- topSkills must contain 3 to 5 strong professional or technical skills supported by the resume. Prefer skills demonstrated in work experience and avoid generic traits when stronger skills exist.
+- recommendedCourses must contain 3 to 5 realistic next-step learning topics related to the candidate's current role, field of study, strongest skills, and likely growth areas.
+- Return only valid JSON.
+- Do not include markdown, explanations, or code fences.`;
 
 type ActualProfileOutput = ProfileAnalysisExpectedOutput;
+
+function buildProfileAnalysisUserMessage(resumeText: string): string {
+  return `Resume:
+"""
+${resumeText}
+"""
+
+Return a JSON object with exactly this structure:
+
+{
+  "candidateName": "<string or null>",
+  "candidateEmail": "<string or null>",
+  "profileSummary": {
+    "hasDegree": <boolean>,
+    "highestDegree": "<string or null>",
+    "fieldOfStudy": "<string or null>",
+    "institution": "<string or null>",
+    "gradeAverage": <number or null>,
+    "totalYearsOfExperience": <number or null>,
+    "lastRoleTitle": "<string or null>",
+    "lastRoleCompany": "<string or null>",
+    "topSkills": ["<skill>", "<skill>", "<skill>"],
+    "recommendedCourses": ["<course/topic>", "<course/topic>", "<course/topic>"]
+  }
+}`;
+}
 
 function normalize(value: unknown): string {
   return String(value ?? "")
@@ -121,8 +176,6 @@ function scoreGradeAverageField(
     };
   }
 
-  // Handles converted GPA values.
-  // Example: 94/100 may be returned as 3.76/4.0.
   const expectedAsGpa = expected / 25;
   const gpaDiff = Math.abs(actual - expectedAsGpa);
 
@@ -134,8 +187,6 @@ function scoreGradeAverageField(
     };
   }
 
-  // Handles the reverse case.
-  // Example: expected 3.76, actual 94.
   const actualAsGpa = actual / 25;
   const reverseGpaDiff = Math.abs(actualAsGpa - expected);
 
@@ -230,15 +281,15 @@ function scoreCourseRelevance(
   const uniqueMatchedKeywords = new Set(matchedKeywords);
 
   const ratio =
-  uniqueMatchedKeywords.size / Math.max(uniqueExpectedKeywords.size, 1);
+    uniqueMatchedKeywords.size / Math.max(uniqueExpectedKeywords.size, 1);
 
-if (ratio >= 0.3) {
-  return {
-    field,
-    score: 1,
-    reason: `Relevant course recommendations returned (${actual.length} courses)`
-  };
-}
+  if (ratio >= 0.3) {
+    return {
+      field,
+      score: 1,
+      reason: `Relevant course recommendations returned (${actual.length} courses)`
+    };
+  }
 
   if (ratio >= 0.15) {
     return {
@@ -268,8 +319,17 @@ function evaluateOutput(
   expected: ProfileAnalysisExpectedOutput
 ): FieldScore[] {
   return [
-    scoreExactField("candidateName", actual.candidateName, expected.candidateName),
-    scoreExactField("candidateEmail", actual.candidateEmail, expected.candidateEmail),
+    scoreExactField(
+      "candidateName",
+      actual.candidateName,
+      expected.candidateName
+    ),
+
+    scoreExactField(
+      "candidateEmail",
+      actual.candidateEmail,
+      expected.candidateEmail
+    ),
 
     scoreBooleanField(
       "profileSummary.hasDegree",
@@ -334,27 +394,59 @@ function evaluateOutput(
 }
 
 async function analyzeResumeProfileForEval(
-  resumeText: string,
-  expected: ProfileAnalysisExpectedOutput
+  resumeText: string
 ): Promise<ActualProfileOutput> {
-  void expected;
+  const payload: LLMPayload = {
+    system_instruction: {
+      parts: [{ text: PROFILE_ANALYSIS_SYSTEM_INSTRUCTION }]
+    },
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: buildProfileAnalysisUserMessage(resumeText)
+          }
+        ]
+      }
+    ]
+  };
 
-  const dna = await ResumeParsingService.extractDNAFromText(resumeText);
+  const rawResponse = await profileAnalysisClient.generate(payload);
+
+  const cleaned = rawResponse
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "");
+
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
 
   return {
-    candidateName: dna.candidateName,
-    candidateEmail: dna.candidateEmail,
+    candidateName: parsed.candidateName ?? null,
+    candidateEmail: parsed.candidateEmail ?? null,
     profileSummary: {
-      hasDegree: dna.profileSummary.hasDegree,
-      highestDegree: dna.profileSummary.highestDegree ?? null,
-      fieldOfStudy: dna.profileSummary.fieldOfStudy ?? null,
-      institution: dna.profileSummary.institution ?? null,
-      gradeAverage: dna.profileSummary.gradeAverage ?? null,
-      totalYearsOfExperience: dna.profileSummary.totalYearsOfExperience ?? null,
-      lastRoleTitle: dna.profileSummary.lastRoleTitle ?? null,
-      lastRoleCompany: dna.profileSummary.lastRoleCompany ?? null,
-      topSkills: dna.profileSummary.topSkills ?? [],
-      recommendedCourses: dna.profileSummary.recommendedCourses ?? []
+      hasDegree: Boolean(parsed.profileSummary?.hasDegree),
+      highestDegree: parsed.profileSummary?.highestDegree ?? null,
+      fieldOfStudy: parsed.profileSummary?.fieldOfStudy ?? null,
+      institution: parsed.profileSummary?.institution ?? null,
+      gradeAverage:
+        typeof parsed.profileSummary?.gradeAverage === "number"
+          ? parsed.profileSummary.gradeAverage
+          : null,
+      totalYearsOfExperience:
+        typeof parsed.profileSummary?.totalYearsOfExperience === "number"
+          ? parsed.profileSummary.totalYearsOfExperience
+          : null,
+      lastRoleTitle: parsed.profileSummary?.lastRoleTitle ?? null,
+      lastRoleCompany: parsed.profileSummary?.lastRoleCompany ?? null,
+      topSkills: Array.isArray(parsed.profileSummary?.topSkills)
+        ? parsed.profileSummary.topSkills
+        : [],
+      recommendedCourses: Array.isArray(
+        parsed.profileSummary?.recommendedCourses
+      )
+        ? parsed.profileSummary.recommendedCourses
+        : []
     }
   };
 }
@@ -365,7 +457,9 @@ async function runEvaluation(): Promise<void> {
     .filter(Boolean);
 
   const samples = only?.length
-    ? PROFILE_ANALYSIS_EVAL_SAMPLES.filter((sample) => only.includes(sample.id))
+    ? PROFILE_ANALYSIS_EVAL_SAMPLES.filter((sample) =>
+        only.includes(sample.id)
+      )
     : PROFILE_ANALYSIS_EVAL_SAMPLES;
 
   if (samples.length === 0) {
@@ -376,20 +470,30 @@ async function runEvaluation(): Promise<void> {
   const results: EvalResult[] = [];
 
   for (const sample of samples) {
-    const actual = await analyzeResumeProfileForEval(sample.resumeText, sample.expected);
+    const startTime = performance.now();
+
+    const actual = await analyzeResumeProfileForEval(sample.resumeText);
+
+    const durationMs = Math.round(performance.now() - startTime);
 
     console.log("\nGenerated output:");
     console.dir(actual, { depth: null });
 
     const fieldScores = evaluateOutput(actual, sample.expected);
 
-    const totalScore = fieldScores.reduce((sum, item) => sum + item.score, 0);
+    const totalScore = fieldScores.reduce(
+      (sum, item) => sum + item.score,
+      0
+    );
+
     const maxScore = fieldScores.length;
     const percentage = Math.round((totalScore / maxScore) * 100);
 
     results.push({
       sampleId: sample.id,
       description: sample.description,
+      modelUsed: profileAnalysisModel ?? "default",
+      durationMs,
       totalScore,
       maxScore,
       percentage,
@@ -402,13 +506,21 @@ async function runEvaluation(): Promise<void> {
 
   for (const result of results) {
     console.log(`${result.sampleId} - ${result.description}`);
+
     console.log(
       `Score: ${result.totalScore}/${result.maxScore} (${result.percentage}%) Grade: ${result.grade}`
     );
 
+    console.log(`Model: ${result.modelUsed}`);
+    console.log(`Time: ${(result.durationMs / 1000).toFixed(2)}s`);
+
     for (const fieldScore of result.fieldScores) {
       const icon =
-        fieldScore.score === 1 ? "✅" : fieldScore.score === 0.5 ? "⚠️" : "❌";
+        fieldScore.score === 1
+          ? "✅"
+          : fieldScore.score === 0.5
+            ? "⚠️"
+            : "❌";
 
       console.log(
         `  ${icon} ${fieldScore.field}: ${fieldScore.score} - ${fieldScore.reason}`
@@ -422,7 +534,15 @@ async function runEvaluation(): Promise<void> {
     results.reduce((sum, result) => sum + result.percentage, 0) /
     Math.max(results.length, 1);
 
+  const averageDurationMs =
+    results.reduce((sum, result) => sum + result.durationMs, 0) /
+    Math.max(results.length, 1);
+
   console.log(`Average score: ${Math.round(avg)}%`);
+  console.log(
+    `Average response time: ${(averageDurationMs / 1000).toFixed(2)}s`
+  );
+  console.log(`Model evaluated: ${profileAnalysisModel ?? "default"}`);
 }
 
 runEvaluation().catch((error) => {

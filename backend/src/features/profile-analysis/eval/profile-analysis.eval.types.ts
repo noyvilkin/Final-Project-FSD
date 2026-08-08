@@ -1,6 +1,8 @@
 export type ProfileAnalysisExpectedOutput = {
   candidateName: string | null;
   candidateEmail: string | null;
+
+
   profileSummary: {
     hasDegree: boolean;
     highestDegree: string | null;
@@ -15,6 +17,7 @@ export type ProfileAnalysisExpectedOutput = {
   };
 };
 
+
 export type ProfileAnalysisEvalSample = {
   id: string;
   description: string;
@@ -22,15 +25,19 @@ export type ProfileAnalysisEvalSample = {
   expected: ProfileAnalysisExpectedOutput;
 };
 
+
 export type FieldScore = {
   field: string;
   score: number;
   reason: string;
 };
 
+
 export type EvalResult = {
   sampleId: string;
   description: string;
+  modelUsed: string;
+  durationMs: number;
   totalScore: number;
   maxScore: number;
   percentage: number;
