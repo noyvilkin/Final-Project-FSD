@@ -646,6 +646,67 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
   }
 
   /**
+   * True when a requirementsCoverage entry is one of the four CORE categories from the
+   * grading prompt: API style, datastore/persistence, authentication, or framework/language.
+   * Unit tests, /health, validation, and other secondary gaps return false.
+   */
+  private static isCoreRequirement(requirement: string): boolean {
+    const text = requirement.toLowerCase();
+
+    const withoutSecondaryNoise = text
+      .replace(/\bunit\s*tests?\b/g, ' ')
+      .replace(/\btest\s+(?:file|suite|coverage)s?\b/g, ' ')
+      .replace(/\/health\b/g, ' ')
+      .replace(/\bhealth\s+endpoint\b/g, ' ');
+
+    // A brief that only asks for tests or /health is never core, even if it mentions
+    // "API" in passing ("unit tests covering both API endpoints").
+    if (
+      !/\b(rest|graphql|apollo|express|flask|spring|node\.?js|python|java|postgresql|postgres|sqlite|mysql|mongodb|database|datastore|persistence|jpa|jwt|authenticat)/.test(
+        withoutSecondaryNoise
+      )
+    ) {
+      return false;
+    }
+
+    return /\b(rest|graphql|apollo|express|flask|spring(?:\s*boot)?|node\.?js|python|java|postgresql|postgres|sqlite|mysql|mongodb|database|datastore|persistence|jpa|jwt|authenticat)/.test(
+      text
+    );
+  }
+
+  /**
+   * Enforces the prompt's core-requirement hard rule in code: any missing CORE item
+   * caps functionalCorrectness at 40 and overall.score below 60 (F/D). The model
+   * sometimes still returns overall.score 85 with a missing JWT/REST/Postgres entry;
+   * without this clamp the derived letter would be B despite a core failure.
+   */
+  private static applyCoreRequirementClamp(
+    feedback: NonNullable<AIAnalysisResult['feedback']>
+  ): NonNullable<AIAnalysisResult['feedback']> {
+    const missingCore = feedback.requirementsCoverage.filter(
+      (entry) => entry.status === 'missing' && this.isCoreRequirement(entry.requirement)
+    );
+    if (missingCore.length === 0) return feedback;
+
+    const functionalScore = Math.min(feedback.functionalCorrectness.score, 40);
+    const overallScore = Math.min(feedback.overall.score, 59);
+
+    return {
+      ...feedback,
+      functionalCorrectness: {
+        ...feedback.functionalCorrectness,
+        score: functionalScore,
+        meetsRequirements: false,
+      },
+      overall: {
+        ...feedback.overall,
+        score: overallScore,
+        grade: this.gradeFromScore(overallScore),
+      },
+    };
+  }
+
+  /**
    * Removes letter grades the model wrote into the summary prose.
    *
    * The grade shown to a student is derived from overall.score, but the model still tends
@@ -691,7 +752,7 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
       return null;
     }
 
-    return {
+    const feedback: NonNullable<AIAnalysisResult['feedback']> = {
       requirementsCoverage: this.coerceRequirementsCoverage(parsed.requirementsCoverage),
       codeQuality: {
         score: Number(parsed.codeQuality?.score) || 0,
@@ -710,15 +771,23 @@ ${fence('STUDENT SOURCE CODE', payload.sourceCode)}
       },
       overall: {
         score: Number(parsed.overall?.score) || 0,
-        // Derive the letter from the score rather than trusting the model's own letter.
-        // The prompt makes overall.score primary ("FIRST compute overall.score, THEN copy
-        // the grade from the band"), but the model still occasionally contradicts itself —
-        // e.g. score 45 with grade "D+", when 45 is an F. A student must never see a letter
-        // that disagrees with their number, so the band table is enforced here in code.
-        grade: this.gradeFromScore(Number(parsed.overall?.score) || 0),
+        // Placeholder — grade is always re-derived after any score clamp below.
+        grade: 'F',
         summary:
           this.stripGradeClaims(String(parsed.overall?.summary ?? '')) || 'No summary provided'
       }
+    };
+
+    const clamped = this.applyCoreRequirementClamp(feedback);
+    return {
+      ...clamped,
+      overall: {
+        ...clamped.overall,
+        // Derive the letter from the (possibly clamped) score rather than trusting the
+        // model's own letter. The prompt makes overall.score primary, but the model still
+        // occasionally contradicts itself — e.g. score 45 with grade "D+", when 45 is an F.
+        grade: this.gradeFromScore(clamped.overall.score),
+      },
     };
   }
 
