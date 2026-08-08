@@ -99,7 +99,10 @@ export default function InterviewProcessing() {
           setStage(resolved);
 
           if (resolved === "insights_ready") {
-            navigate(`/interview/${interviewId}/insights`, { replace: true });
+            // The player is the single post-analysis destination — it's kept
+            // in sync with the real API shape, unlike the older /insights
+            // page (still reachable directly, just no longer linked to).
+            navigate(`/interview/${interviewId}`, { replace: true });
             return;
           }
 
@@ -203,7 +206,7 @@ export default function InterviewProcessing() {
             </Button>
           ) : (
             <Button
-              onClick={() => interviewId && navigate(`/interview/${interviewId}/insights`)}
+              onClick={() => interviewId && navigate(`/interview/${interviewId}`)}
               disabled={!interviewId || stage !== "insights_ready"}
             >
               View Insights

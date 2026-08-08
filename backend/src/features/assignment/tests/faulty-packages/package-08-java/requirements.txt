@@ -1,0 +1,13 @@
+Task Manager REST API (Java / Spring Boot)
+
+Build a REST API in Java using the Spring Boot framework.
+
+Requirements:
+1. Persist tasks in a PostgreSQL database using Spring Data JPA.
+2. CRUD endpoints: GET /tasks, POST /tasks, PUT /tasks/{id},
+   DELETE /tasks/{id}.
+3. A GET /health endpoint returning the service status.
+4. A Task entity exposing id, title and done fields.
+
+Deliverables: the Spring Boot application (pom.xml, sources and
+configuration).

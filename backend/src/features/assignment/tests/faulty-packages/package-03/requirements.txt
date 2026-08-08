@@ -1,0 +1,12 @@
+Protected Message API
+
+Build a REST API in Node.js using the Express framework.
+
+Requirements:
+1. GET /public must return a JSON message.
+2. Protect GET /public with JWT authentication. Requests without
+   a valid Bearer token must be rejected with HTTP 401.
+3. Data may be kept in process. No database is required.
+4. Unit tests are not required.
+
+Deliverables: the Express application and its package.json.
