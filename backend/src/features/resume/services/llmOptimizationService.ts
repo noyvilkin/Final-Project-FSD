@@ -10,6 +10,7 @@ import {
 } from '../prompts/optimizationPrompts.js';
 
 import type { ResumeOptimizationPayload } from '../types/resumeOptimization.types.js';
+import { splitBullets } from '../utils/bulletText.js';
 import type {
   LLMOptimizationResponse,
   LLMOptimizedBullet,
@@ -160,23 +161,51 @@ export class LLMOptimizationService {
   }
 
   private static normalizeText(s: string): string {
-    return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+    // Unicode-aware: [^a-z0-9] would strip non-Latin scripts (e.g. Hebrew)
+    // to an empty string, making every non-Latin bullet look identical.
+    return s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
   }
 
   // ── Adapter Pattern: LLM response → UI state ─────────────────
+
+  /**
+   * Resolve which experience entry a rewrite belongs to by locating its
+   * originalBullet among each job's bullets (split with the same
+   * splitBullets used to build the prompt). The model's claimed
+   * experienceIndex is only a fallback: smaller models often number
+   * bullets sequentially instead of copying the job index verbatim,
+   * which would attribute rewrites to the wrong job (or "Unknown").
+   */
+  private static resolveExperienceIndex(
+    bullet: LLMOptimizedBullet,
+    experience: ResumeOptimizationPayload['professionalDNA']['experience']
+  ): number {
+    const target = this.normalizeText(bullet.originalBullet);
+    if (target) {
+      for (let i = 0; i < experience.length; i++) {
+        const bullets = splitBullets(experience[i].description || '');
+        if (bullets.some((b) => this.normalizeText(b) === target)) return i;
+      }
+    }
+    return bullet.experienceIndex;
+  }
 
   private static adaptToUI(
     response: LLMOptimizationResponse,
     payload: ResumeOptimizationPayload
   ): OptimizedBulletUI[] {
     return response.optimizedBullets.map((bullet, i) => {
-      const experience = payload.professionalDNA.experience[bullet.experienceIndex];
+      const experienceIndex = LLMOptimizationService.resolveExperienceIndex(
+        bullet,
+        payload.professionalDNA.experience
+      );
+      const experience = payload.professionalDNA.experience[experienceIndex];
 
       return {
         // Several bullets can share the same experienceIndex, so include
         // the position `i` to keep every UI id unique.
-        id: `bullet-${bullet.experienceIndex}-${i}-${Date.now()}`,
-        index: bullet.experienceIndex,
+        id: `bullet-${experienceIndex}-${i}-${Date.now()}`,
+        index: experienceIndex,
         company: experience?.company ?? 'Unknown',
         role: experience?.role ?? 'Unknown',
         originalBullet: bullet.originalBullet,

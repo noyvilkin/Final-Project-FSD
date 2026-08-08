@@ -134,6 +134,14 @@ interface PairEvalRow {
   scoreBefore: number;
   scoreAfter: number;
   scoreBoost: number;
+  // The hard-rule component (40%) matches JD keywords against the skills
+  // list, which bullet rewrites never modify — it is invariant
+  // before/after by construction. The semantic component (60%) is the
+  // only part of the hybrid score that can respond to rewritten bullets,
+  // so it is tracked separately.
+  semanticBefore: number;
+  semanticAfter: number;
+  semanticBoost: number;
   keywordsBefore: number;
   keywordsAfter: number;
   keywordBoost: number;
@@ -149,6 +157,7 @@ interface FullEvalReport {
     avgHallucinationRate: number;
     totalHallucinations: number;
     avgScoreBoost: number;
+    avgSemanticBoost: number;
     avgKeywordBoost: number;
     avgDnaSupportRate: number;
     totalUnsupportedKeywords: number;
@@ -201,10 +210,12 @@ async function evalPair(
 
   const optimization = await LLMOptimizationService.optimizeResume(payload);
   const scoreBefore = optimization.hybridScore.finalScore;
+  const semanticBefore = optimization.hybridScore.semanticScore;
 
   const payloadAfter = applyOptimizedBulletsToPayload(payload, optimization);
   const hybridAfter = await HybridScoringService.calculateHybridScore(payloadAfter);
   const scoreAfter = hybridAfter.finalScore;
+  const semanticAfter = hybridAfter.semanticScore;
 
   const keywordsAfter = countKeywordIncorporation(
     payloadAfter.professionalDNA.experience,
@@ -220,6 +231,7 @@ async function evalPair(
 
   console.log(
     `  -> score: ${scoreBefore} → ${scoreAfter} (boost ${scoreAfter - scoreBefore >= 0 ? '+' : ''}${scoreAfter - scoreBefore})  ` +
+      `semantic: ${semanticBefore} → ${semanticAfter}  ` +
       `keywords: ${keywordsBefore.matched.length} → ${keywordsAfter.matched.length} of ${payload.extractedKeywords.hardSkills.length}`
   );
   console.log(
@@ -235,6 +247,9 @@ async function evalPair(
     scoreBefore,
     scoreAfter,
     scoreBoost: scoreAfter - scoreBefore,
+    semanticBefore,
+    semanticAfter,
+    semanticBoost: semanticAfter - semanticBefore,
     keywordsBefore: keywordsBefore.matched.length,
     keywordsAfter: keywordsAfter.matched.length,
     keywordBoost: keywordsAfter.matched.length - keywordsBefore.matched.length,
@@ -287,28 +302,33 @@ function printRelevanceTable(rows: PairEvalRow[]) {
   section('RELEVANCE BOOST');
   console.log(
     `  ${pad('Resume', 20)} ${pad('JD', 22)} ${pad('Before', 7, 'right')} ${pad('After', 6, 'right')} ` +
-      `${pad('Boost', 7, 'right')} ${pad('KW++', 6, 'right')}`
+      `${pad('Boost', 7, 'right')} ${pad('SemB', 6, 'right')} ${pad('SemA', 6, 'right')} ${pad('KW++', 6, 'right')}`
   );
-  console.log(`  ${'-'.repeat(72)}`);
+  console.log(`  ${'-'.repeat(86)}`);
 
   let totalBefore = 0;
   let totalAfter = 0;
+  let totalSemBefore = 0;
+  let totalSemAfter = 0;
   let totalKwBoost = 0;
   for (const r of rows) {
     totalBefore += r.scoreBefore;
     totalAfter += r.scoreAfter;
+    totalSemBefore += r.semanticBefore;
+    totalSemAfter += r.semanticAfter;
     totalKwBoost += r.keywordBoost;
     const sign = r.scoreBoost >= 0 ? '+' : '';
     console.log(
       `  ${pad(r.resumeId, 20)} ${pad(r.jdId, 22)} ${pad(r.scoreBefore, 7, 'right')} ` +
-        `${pad(r.scoreAfter, 6, 'right')} ${pad(`${sign}${r.scoreBoost}`, 7, 'right')} ${pad(
+        `${pad(r.scoreAfter, 6, 'right')} ${pad(`${sign}${r.scoreBoost}`, 7, 'right')} ` +
+        `${pad(r.semanticBefore, 6, 'right')} ${pad(r.semanticAfter, 6, 'right')} ${pad(
           (r.keywordBoost >= 0 ? '+' : '') + r.keywordBoost,
           6,
           'right'
         )}`
     );
   }
-  console.log(`  ${'-'.repeat(72)}`);
+  console.log(`  ${'-'.repeat(86)}`);
   const n = rows.length || 1;
   const avgBefore = totalBefore / n;
   const avgAfter = totalAfter / n;
@@ -317,7 +337,15 @@ function printRelevanceTable(rows: PairEvalRow[]) {
   console.log(
     `  ${pad('AVERAGE', 20)} ${pad('', 22)} ${pad(avgBefore.toFixed(1), 7, 'right')} ` +
       `${pad(avgAfter.toFixed(1), 6, 'right')} ${pad((avgBoost >= 0 ? '+' : '') + avgBoost.toFixed(1), 7, 'right')} ` +
+      `${pad((totalSemBefore / n).toFixed(1), 6, 'right')} ${pad((totalSemAfter / n).toFixed(1), 6, 'right')} ` +
       `${pad((avgKw >= 0 ? '+' : '') + avgKw.toFixed(1), 6, 'right')}`
+  );
+
+  console.log(
+    `\n  Note: the hard-rule component (40% of the score) matches JD keywords against the\n` +
+      `  candidate's skills list, which bullet rewrites never modify — it is identical\n` +
+      `  before/after by construction. SemB/SemA show the semantic component (60%), the\n` +
+      `  only part of the hybrid score that can respond to rewritten bullets.`
   );
 }
 
@@ -489,6 +517,8 @@ async function main() {
   const totalHallucinated = resumeRows.reduce((acc, r) => acc + r.hallucinatedCount, 0);
   const avgScoreBoost =
     pairRows.length === 0 ? 0 : pairRows.reduce((acc, r) => acc + r.scoreBoost, 0) / pairRows.length;
+  const avgSemanticBoost =
+    pairRows.length === 0 ? 0 : pairRows.reduce((acc, r) => acc + r.semanticBoost, 0) / pairRows.length;
   const avgKeywordBoost =
     pairRows.length === 0
       ? 0
@@ -513,6 +543,7 @@ async function main() {
       avgHallucinationRate: totalChecked === 0 ? 0 : totalHallucinated / totalChecked,
       totalHallucinations: totalHallucinated,
       avgScoreBoost,
+      avgSemanticBoost,
       avgKeywordBoost,
       avgDnaSupportRate,
       totalUnsupportedKeywords: totalKwUnsupported,
@@ -527,6 +558,9 @@ async function main() {
   console.log(`  Extraction hallucination rate: ${(report.summary.avgHallucinationRate * 100).toFixed(2)}%`);
   console.log(
     `  Avg score boost              : ${avgScoreBoost >= 0 ? '+' : ''}${avgScoreBoost.toFixed(1)} points`
+  );
+  console.log(
+    `  Avg semantic boost           : ${avgSemanticBoost >= 0 ? '+' : ''}${avgSemanticBoost.toFixed(1)} points (rewrite-sensitive component)`
   );
   console.log(
     `  Avg keyword boost            : ${avgKeywordBoost >= 0 ? '+' : ''}${avgKeywordBoost.toFixed(1)} keywords / pair`
