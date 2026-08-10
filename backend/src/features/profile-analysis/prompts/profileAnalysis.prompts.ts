@@ -1,62 +1,47 @@
-export const PROFILE_ANALYSIS_PROMPT_VERSION = "v2" as const;
+export const PROFILE_ANALYSIS_SYSTEM_INSTRUCTION = `You are an expert resume profile analyzer.
 
-export const PROFILE_ANALYSIS_SYSTEM_INSTRUCTION = `You are an expert resume analyzer (Prompt ${PROFILE_ANALYSIS_PROMPT_VERSION}).
+Extract only the fields required for the candidate profile.
 
-Your role is to analyze a candidate resume and extract profile-oriented insights for a career dashboard.
+Rules:
+- Use only information supported by the resume.
+- candidateName and candidateEmail must come directly from the resume.
+- hasDegree is true only when an academic degree is clearly stated.
+- highestDegree should contain the degree type only.
+- fieldOfStudy should contain the academic field only.
+- institution should contain the institution's core name only — omit trailing city/location text and parenthetical campus or branch qualifiers. For example, return "Reichman University" not "Reichman University (IDC Herzliya)", and "Afeka College of Engineering" not "Afeka College of Engineering, Tel Aviv".
+- gradeAverage must use only an explicitly stated overall degree GPA or academic average. Never use a course grade, high-school grade, or number of study units. If no overall degree GPA or average is stated, return null.
+- totalYearsOfExperience should prefer an explicit years-of-experience statement. Otherwise estimate from professional work dates without double-counting overlapping periods. Do not count education. Use today's date (given below) to resolve "Present" or ongoing roles. Compulsory military or national service counts toward experience only when the service role itself is professional and clearly relevant to the candidate's stated field or career direction — for example, an instructing/training role counts for a candidate pursuing an instructional or training career, but a combat, security, or general-duty role does not count for a software or business career.
+- lastRoleTitle and lastRoleCompany must represent the most recent professional role.
+- lastRoleTitle must be a short professional title, usually 2 to 6 words. Do not put responsibilities, descriptions, summaries, achievements, or long sentences in lastRoleTitle. Good examples: "Training Program Coordinator", "Frontend Developer", "Data Analyst". Bad example: "responsible for managing training schedules and implementation of learning systems".
+- topSkills must contain 3 to 5 strong professional or technical skills supported by the resume. Prefer skills demonstrated in work experience and avoid generic traits when stronger skills exist.
+- recommendedCourses must contain 3 to 5 realistic next-step learning topics related to the candidate's current role, field of study, strongest skills, and likely growth areas.
+- Return only valid JSON.
+- Do not include markdown, explanations, or code fences.`;
 
-RULES:
-1. Extract only information explicitly stated or strongly implied in the resume.
-2. Do not invent degrees, grades, skills, roles, or years of experience.
-3. If no degree is found, set hasDegree to false.
-4. If no grade average / GPA is explicitly found, set gradeAverage to null.
-5. totalYearsOfExperience should be estimated from the experience timeline as accurately as possible.
-6. lastRoleTitle must be a short professional job title based on the most recent work experience.
-7. Do not put responsibilities, descriptions, summaries, or long sentences in lastRoleTitle.
-8. If the exact job title is not stated, infer a concise professional title from the most recent role responsibilities.
-9. topSkills must contain the strongest and best-supported skills in the resume.
-10. recommendedCourses must be realistic learning topics based on missing depth, likely next-step growth areas, or gaps implied by the resume.
-11. Return only valid JSON.
+export function buildProfileAnalysisUserMessage(resumeText: string, referenceDate: string): string {
+  return `Today's date is ${referenceDate}. Treat it as "today" when interpreting "Present" or ongoing roles.
 
-Output contract:
-- No markdown
-- No explanations
-- No code fences
-- Follow the exact schema from the user message`;
-
-export function buildProfileAnalysisUserMessage(resumeText: string): string {
-  return `## Resume Text
+Resume:
 """
 ${resumeText}
 """
 
-## Required JSON Output
+Return a JSON object with exactly this structure:
+
 {
-  "candidateName": "<full name or null>",
-  "candidateEmail": "<email or null>",
+  "candidateName": "<string or null>",
+  "candidateEmail": "<string or null>",
   "profileSummary": {
     "hasDegree": <boolean>,
-    "highestDegree": "<degree type or null>",
-    "fieldOfStudy": "<field of study or null>",
-    "institution": "<institution or null>",
+    "highestDegree": "<string or null>",
+    "fieldOfStudy": "<string or null>",
+    "institution": "<string or null>",
     "gradeAverage": <number or null>,
     "totalYearsOfExperience": <number or null>,
-    "lastRoleTitle": "<short most recent job title or null>",
-    "lastRoleCompany": "<most recent company or organization or null>",
-    "topSkills": ["<top skill>", "<top skill>", "<top skill>"],
+    "lastRoleTitle": "<string or null>",
+    "lastRoleCompany": "<string or null>",
+    "topSkills": ["<skill>", "<skill>", "<skill>"],
     "recommendedCourses": ["<course/topic>", "<course/topic>", "<course/topic>"]
   }
-}
-
-Guidelines:
-- lastRoleTitle should contain only the most recent professional title.
-- lastRoleTitle must be short, usually 2 to 6 words.
-- lastRoleTitle must not include a full sentence, responsibility description, achievement, or paragraph.
-- Good examples for lastRoleTitle: "Training Program Coordinator", "Frontend Developer", "Data Analyst", "Learning Systems Manager".
-- Bad examples for lastRoleTitle: "responsible for managing training schedules and implementation of learning systems".
-- lastRoleCompany should contain only the company or organization name, if available.
-- If the exact latest title is not clearly written, infer a concise title from the most recent role responsibilities.
-- topSkills should contain 3 to 5 items maximum.
-- recommendedCourses should contain 3 to 5 items maximum.
-- gradeAverage should preserve the numeric value as it appears in the resume.
-- If the resume does not contain enough evidence for a field, return null or an empty array as appropriate.`;
+}`;
 }

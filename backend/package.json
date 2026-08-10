@@ -22,6 +22,7 @@
     "eval:resume": "tsx src/features/resume/eval/runEval.ts",
     "eval:assignment": "tsx src/features/assignment/eval/runEval.ts",
     "verify:pdf": "tsx src/features/assignment/scripts/verifyPdfExtraction.ts",
+    "eval:profile": "tsx src/features/profile-analysis/eval/profile-analysis.eval.ts",
     "eval:interview": "tsx src/features/interview/eval/runEval.ts",
     "db:ensure-indexes": "tsx src/scripts/ensureIndexes.ts",
     "prod": "tsc -p tsconfig_prod.json && node ./dist/server.js"
