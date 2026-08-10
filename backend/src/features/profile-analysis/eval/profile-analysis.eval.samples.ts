@@ -258,7 +258,10 @@ React Native: Mobile App Development, Udemy.
         fieldOfStudy: "Computer Science and Entrepreneurship",
         institution: "Reichman University",
         gradeAverage: null,
-        totalYearsOfExperience: 4,
+        // vs EVAL_REFERENCE_DATE (2026-08-11): military police service excluded
+        // (unrelated to software/entrepreneurship); tutor 2020-2022 (2y) +
+        // Sublet Me/web-dev business 2023-present (~3.6y, overlapping, counted once).
+        totalYearsOfExperience: 5.5,
         lastRoleTitle: "Co-Founder & App Developer",
         lastRoleCompany: "Sublet Me",
         topSkills: [
@@ -338,7 +341,10 @@ Completed 10 academic units including a final project in operations and producti
         fieldOfStudy: "Computer Science",
         institution: "The College of Management Academic Studies",
         gradeAverage: null,
-        totalYearsOfExperience: 4,
+        // vs EVAL_REFERENCE_DATE (2026-08-11): Navy simulator-trainer service
+        // included (instructing role, relevant to her instructional career),
+        // sequential with Technology Instructor and Instructional Project Manager.
+        totalYearsOfExperience: 5.5,
         lastRoleTitle: "Instructional Project Manager",
         lastRoleCompany: "IAI – Israel Aerospace Industries",
         topSkills: [

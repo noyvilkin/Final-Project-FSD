@@ -5,64 +5,17 @@ import type {
   FieldScore,
   ProfileAnalysisExpectedOutput
 } from "./profile-analysis.eval.types.js";
-import { createLLMClient } from "../../../common/services/llmClientFactory.js";
 import { resolveModelForModule } from "../../../common/services/llmModuleConfig.js";
-import type { LLMPayload } from "../../../common/types/llmTypes.js";
+import { ProfileAnalysisService } from "../services/profileAnalysis.service.js";
 
 const profileAnalysisModel = resolveModelForModule("profileAnalysis");
 
-const profileAnalysisClient = createLLMClient({
-  model: profileAnalysisModel,
-  temperature: 0.1,
-  maxOutputTokens: 2048
-});
-
-const PROFILE_ANALYSIS_SYSTEM_INSTRUCTION = `You are an expert resume profile analyzer.
-
-Extract only the fields required for the candidate profile.
-
-Rules:
-- Use only information supported by the resume.
-- candidateName and candidateEmail must come directly from the resume.
-- hasDegree is true only when an academic degree is clearly stated.
-- highestDegree should contain the degree type only.
-- fieldOfStudy should contain the academic field only.
-- institution should contain the academic institution name only.
-- gradeAverage must use only an explicitly stated overall degree GPA or academic average. Never use a course grade, high-school grade, or number of study units. If no overall degree GPA or average is stated, return null.
-- totalYearsOfExperience should prefer an explicit years-of-experience statement. Otherwise estimate from professional work dates without double-counting overlapping periods. Do not count education.
-- lastRoleTitle and lastRoleCompany must represent the most recent professional role.
-- topSkills must contain 3 to 5 strong professional or technical skills supported by the resume. Prefer skills demonstrated in work experience and avoid generic traits when stronger skills exist.
-- recommendedCourses must contain 3 to 5 realistic next-step learning topics related to the candidate's current role, field of study, strongest skills, and likely growth areas.
-- Return only valid JSON.
-- Do not include markdown, explanations, or code fences.`;
+// Pinned so "Present"/ongoing roles resolve the same way no matter when the
+// eval is actually run — the expected totalYearsOfExperience values in
+// profile-analysis.eval.samples.ts were computed against this date.
+const EVAL_REFERENCE_DATE = "2026-08-11";
 
 type ActualProfileOutput = ProfileAnalysisExpectedOutput;
-
-function buildProfileAnalysisUserMessage(resumeText: string): string {
-  return `Resume:
-"""
-${resumeText}
-"""
-
-Return a JSON object with exactly this structure:
-
-{
-  "candidateName": "<string or null>",
-  "candidateEmail": "<string or null>",
-  "profileSummary": {
-    "hasDegree": <boolean>,
-    "highestDegree": "<string or null>",
-    "fieldOfStudy": "<string or null>",
-    "institution": "<string or null>",
-    "gradeAverage": <number or null>,
-    "totalYearsOfExperience": <number or null>,
-    "lastRoleTitle": "<string or null>",
-    "lastRoleCompany": "<string or null>",
-    "topSkills": ["<skill>", "<skill>", "<skill>"],
-    "recommendedCourses": ["<course/topic>", "<course/topic>", "<course/topic>"]
-  }
-}`;
-}
 
 function normalize(value: unknown): string {
   return String(value ?? "")
@@ -226,6 +179,15 @@ function scoreListOverlap(
   for (const item of expectedSet) {
     if (actualSet.has(item)) {
       matches += 1;
+      continue;
+    }
+
+    const hasPartialMatch = [...actualSet].some(
+      (actualItem) => actualItem.includes(item) || item.includes(actualItem)
+    );
+
+    if (hasPartialMatch) {
+      matches += 0.5;
     }
   }
 
@@ -254,6 +216,20 @@ function scoreListOverlap(
   };
 }
 
+// Boilerplate words that show up in almost any course title regardless of
+// subject ("Advanced X", "X Development", "X Fundamentals") — matching on
+// these alone lets unrelated recommendations pass the relevance threshold.
+// Excluded by name rather than by length, since length was previously used
+// as the filter and it backfired: it kept "advanced"/"with"/"development"
+// while dropping meaningful short acronyms like "AWS", "SQL", "API".
+const COURSE_RELEVANCE_STOPWORDS = new Set([
+  "advanced", "introduction", "introductory", "fundamentals", "fundamental",
+  "basics", "basic", "essentials", "essential", "development", "training",
+  "course", "courses", "program", "programs", "skills", "certification",
+  "professional", "practical", "comprehensive", "complete", "mastery",
+  "with", "and", "for", "the", "of", "in", "to", "on", "using"
+]);
+
 function scoreCourseRelevance(
   field: string,
   actual: string[],
@@ -267,10 +243,13 @@ function scoreCourseRelevance(
     return { field, score: 0, reason: "No recommended courses returned" };
   }
 
-  const expectedKeywords = expected
-    .flatMap((course) => normalize(course).split(" "))
-    .filter((word) => word.length > 3);
+  const expectedWordsByCourse = expected.map((course) =>
+    normalize(course)
+      .split(" ")
+      .filter((word) => word.length > 1 && !COURSE_RELEVANCE_STOPWORDS.has(word))
+  );
 
+  const expectedKeywords = expectedWordsByCourse.flat();
   const actualText = normalize(actual.join(" "));
 
   const matchedKeywords = expectedKeywords.filter((keyword) =>
@@ -280,8 +259,21 @@ function scoreCourseRelevance(
   const uniqueExpectedKeywords = new Set(expectedKeywords);
   const uniqueMatchedKeywords = new Set(matchedKeywords);
 
+  // Consecutive-word phrases (e.g. "cloud architecture") are a much stronger
+  // relevance signal than one shared word, so a bigram hit counts double.
+  const expectedBigrams = new Set(
+    expectedWordsByCourse.flatMap((words) =>
+      words.slice(0, -1).map((word, i) => `${word} ${words[i + 1]}`)
+    )
+  );
+
+  const matchedBigrams = [...expectedBigrams].filter((bigram) =>
+    actualText.includes(bigram)
+  );
+
   const ratio =
-    uniqueMatchedKeywords.size / Math.max(uniqueExpectedKeywords.size, 1);
+    (uniqueMatchedKeywords.size + matchedBigrams.length * 2) /
+    Math.max(uniqueExpectedKeywords.size, 1);
 
   if (ratio >= 0.3) {
     return {
@@ -394,85 +386,25 @@ function evaluateOutput(
 }
 
 async function analyzeResumeProfileForEval(
-  resumeText: string
+  resumeText: string,
+  model: string
 ): Promise<ActualProfileOutput> {
-  const payload: LLMPayload = {
-    system_instruction: {
-      parts: [{ text: PROFILE_ANALYSIS_SYSTEM_INSTRUCTION }]
-    },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: buildProfileAnalysisUserMessage(resumeText)
-          }
-        ]
-      }
-    ]
-  };
-
-  const rawResponse = await profileAnalysisClient.generate(payload);
-
-  const cleaned = rawResponse
-    .replace(/```json\s*/gi, "")
-    .replace(/```\s*/g, "");
-
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
-
-  return {
-    candidateName: parsed.candidateName ?? null,
-    candidateEmail: parsed.candidateEmail ?? null,
-    profileSummary: {
-      hasDegree: Boolean(parsed.profileSummary?.hasDegree),
-      highestDegree: parsed.profileSummary?.highestDegree ?? null,
-      fieldOfStudy: parsed.profileSummary?.fieldOfStudy ?? null,
-      institution: parsed.profileSummary?.institution ?? null,
-      gradeAverage:
-        typeof parsed.profileSummary?.gradeAverage === "number"
-          ? parsed.profileSummary.gradeAverage
-          : null,
-      totalYearsOfExperience:
-        typeof parsed.profileSummary?.totalYearsOfExperience === "number"
-          ? parsed.profileSummary.totalYearsOfExperience
-          : null,
-      lastRoleTitle: parsed.profileSummary?.lastRoleTitle ?? null,
-      lastRoleCompany: parsed.profileSummary?.lastRoleCompany ?? null,
-      topSkills: Array.isArray(parsed.profileSummary?.topSkills)
-        ? parsed.profileSummary.topSkills
-        : [],
-      recommendedCourses: Array.isArray(
-        parsed.profileSummary?.recommendedCourses
-      )
-        ? parsed.profileSummary.recommendedCourses
-        : []
-    }
-  };
+  return ProfileAnalysisService.extractProfileFromText(resumeText, {
+    model,
+    referenceDate: EVAL_REFERENCE_DATE
+  });
 }
 
-async function runEvaluation(): Promise<void> {
-  const only = process.env.EVAL_ONLY?.split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const samples = only?.length
-    ? PROFILE_ANALYSIS_EVAL_SAMPLES.filter((sample) =>
-        only.includes(sample.id)
-      )
-    : PROFILE_ANALYSIS_EVAL_SAMPLES;
-
-  if (samples.length === 0) {
-    console.log("No evaluation samples matched EVAL_ONLY filter.");
-    return;
-  }
-
+async function runEvaluationForModel(
+  model: string,
+  samples: typeof PROFILE_ANALYSIS_EVAL_SAMPLES
+): Promise<EvalResult[]> {
   const results: EvalResult[] = [];
 
   for (const sample of samples) {
     const startTime = performance.now();
 
-    const actual = await analyzeResumeProfileForEval(sample.resumeText);
+    const actual = await analyzeResumeProfileForEval(sample.resumeText, model);
 
     const durationMs = Math.round(performance.now() - startTime);
 
@@ -492,7 +424,7 @@ async function runEvaluation(): Promise<void> {
     results.push({
       sampleId: sample.id,
       description: sample.description,
-      modelUsed: profileAnalysisModel ?? "default",
+      modelUsed: model,
       durationMs,
       totalScore,
       maxScore,
@@ -502,7 +434,7 @@ async function runEvaluation(): Promise<void> {
     });
   }
 
-  console.log("\nResume Profile Analysis Evaluation\n");
+  console.log(`\nResume Profile Analysis Evaluation — ${model}\n`);
 
   for (const result of results) {
     console.log(`${result.sampleId} - ${result.description}`);
@@ -542,7 +474,63 @@ async function runEvaluation(): Promise<void> {
   console.log(
     `Average response time: ${(averageDurationMs / 1000).toFixed(2)}s`
   );
-  console.log(`Model evaluated: ${profileAnalysisModel ?? "default"}`);
+  console.log(`Model evaluated: ${model}`);
+
+  return results;
+}
+
+function printModelComparisonTable(allResults: Map<string, EvalResult[]>): void {
+  console.log("\nModel Comparison\n");
+  console.log(
+    `  ${"Model".padEnd(20)} ${"Avg Score".padStart(10)} ${"Avg Time".padStart(10)}`
+  );
+  console.log(`  ${"-".repeat(42)}`);
+
+  for (const [model, results] of allResults) {
+    const avg =
+      results.reduce((sum, result) => sum + result.percentage, 0) /
+      Math.max(results.length, 1);
+
+    const averageDurationMs =
+      results.reduce((sum, result) => sum + result.durationMs, 0) /
+      Math.max(results.length, 1);
+
+    console.log(
+      `  ${model.padEnd(20)} ${`${Math.round(avg)}%`.padStart(10)} ${`${(averageDurationMs / 1000).toFixed(2)}s`.padStart(10)}`
+    );
+  }
+}
+
+async function runEvaluation(): Promise<void> {
+  const only = process.env.EVAL_ONLY?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const samples = only?.length
+    ? PROFILE_ANALYSIS_EVAL_SAMPLES.filter((sample) =>
+        only.includes(sample.id)
+      )
+    : PROFILE_ANALYSIS_EVAL_SAMPLES;
+
+  if (samples.length === 0) {
+    console.log("No evaluation samples matched EVAL_ONLY filter.");
+    return;
+  }
+
+  const models = process.env.EVAL_MODELS?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean) ?? [profileAnalysisModel ?? "default"];
+
+  const allResults = new Map<string, EvalResult[]>();
+
+  for (const model of models) {
+    const results = await runEvaluationForModel(model, samples);
+    allResults.set(model, results);
+  }
+
+  if (models.length > 1) {
+    printModelComparisonTable(allResults);
+  }
 }
 
 runEvaluation().catch((error) => {
