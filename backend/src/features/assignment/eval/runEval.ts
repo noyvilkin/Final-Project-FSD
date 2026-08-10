@@ -99,10 +99,13 @@ async function evalPackage(fixture: PackageFixture): Promise<PackageEvalRow> {
       ` (${(noise.noiseReductionRate * 100).toFixed(1)}% filtered)`
   );
 
-  const pdfBuffer = fs.readFileSync(pdfPath);
+  // Grade from assignment.pdf — the same path the product upload pipeline uses. The
+  // committed requirements.txt is only the editable source used to regenerate this PDF
+  // (see the faulty-packages README). Extraction reliability is covered by PdfProcessor
+  // unit tests (mocked renderer) and `npm run verify:pdf` (real renderer, all fixtures).
   const analysis = await AssignmentAnalysisService.analyzeAssignment({
     zipScanResult: scan,
-    pdfBuffer,
+    pdfBuffer: fs.readFileSync(pdfPath),
   });
 
   if (!analysis.success) {

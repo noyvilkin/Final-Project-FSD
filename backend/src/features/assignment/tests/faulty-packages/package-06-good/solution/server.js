@@ -5,8 +5,12 @@ const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-// In production JWT_SECRET must come from the environment; the fallback only exists
-// so the app/tests can boot locally without extra setup.
+
+// Secrets are configuration, never literals. Production must supply JWT_SECRET; the
+// development fallback exists only so local runs and tests boot without extra setup.
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be set in production');
+}
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
 
 // PostgreSQL connection pool
@@ -25,7 +29,10 @@ const DEMO_USER = {
 // Middleware
 app.use(express.json());
 
-// JWT authentication middleware
+/**
+ * Verifies the Bearer token on protected routes.
+ * Responds 401 when no token is supplied and 403 when the token is invalid.
+ */
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -39,12 +46,12 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Health check endpoint
+/** GET /health — liveness probe returning 200 with the service status. */
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Public endpoint: login (verifies credentials before issuing a JWT)
+/** POST /auth/login — verifies credentials and issues a signed JWT valid for one hour. */
 app.post('/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
 
@@ -68,7 +75,7 @@ app.post('/auth/login', async (req, res) => {
   res.json({ token });
 });
 
-// Protected endpoint: get user
+/** GET /api/users/:id — returns a single user from PostgreSQL. Requires a valid JWT. */
 app.get('/api/users/:id', authenticateToken, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -84,7 +91,7 @@ app.get('/api/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Protected endpoint: create item
+/** POST /api/items — persists a new item in PostgreSQL. Requires a valid JWT. */
 app.post('/api/items', authenticateToken, async (req, res) => {
   const { name } = req.body || {};
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
