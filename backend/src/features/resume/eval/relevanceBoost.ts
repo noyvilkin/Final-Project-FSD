@@ -16,9 +16,15 @@
 import type { ResumeOptimizationPayload } from '../types/resumeOptimization.types.js';
 import type { OptimizationDashboardData } from '../types/aiOptimization.types.js';
 import type { IExperience } from '../types/professionalDNA.types.js';
+import { splitBullets } from '../utils/bulletText.js';
 
 function normalize(text: string): string {
   return text.toLowerCase();
+}
+
+/** Unicode-aware normalization for matching a rewrite back to its source bullet. */
+function normalizeBullet(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -43,8 +49,15 @@ export function countKeywordIncorporation(
 }
 
 /**
- * Builds a copy of the original payload where each experience.description
- * has been replaced with the optimized bullet returned by the AI.
+ * Builds a copy of the original payload where every accepted rewrite is
+ * spliced into its job's description IN PLACE of the specific original
+ * bullet it rewrote. Bullets the optimizer didn't touch are kept verbatim.
+ *
+ * Rewrites are matched back to their source bullet by (normalized) text,
+ * not by the model-reported experience index — the index is unreliable
+ * (smaller models number bullets sequentially), and matching by index
+ * used to overwrite a whole multi-bullet job description with a single
+ * bullet, destroying content and deflating the "after" measurement.
  *
  * Used to recompute the hybrid score "AFTER" optimization without touching
  * the database.
@@ -53,10 +66,29 @@ export function applyOptimizedBulletsToPayload(
   payload: ResumeOptimizationPayload,
   optimization: OptimizationDashboardData
 ): ResumeOptimizationPayload {
-  const updatedExperience = payload.professionalDNA.experience.map((exp, idx) => {
-    const optimized = optimization.bullets.find((b) => b.index === idx);
-    if (!optimized) return exp;
-    return { ...exp, description: optimized.optimizedBullet };
+  const rewriteByOriginal = new Map<string, string>();
+  for (const b of optimization.bullets) {
+    const key = normalizeBullet(b.originalBullet);
+    if (key && !rewriteByOriginal.has(key)) {
+      rewriteByOriginal.set(key, b.optimizedBullet);
+    }
+  }
+
+  const updatedExperience = payload.professionalDNA.experience.map((exp) => {
+    const bullets = splitBullets(exp.description || '');
+    if (bullets.length === 0) return exp;
+
+    let changed = false;
+    const merged = bullets.map((original) => {
+      const rewrite = rewriteByOriginal.get(normalizeBullet(original));
+      if (rewrite) {
+        changed = true;
+        return rewrite;
+      }
+      return original;
+    });
+
+    return changed ? { ...exp, description: merged.join('\n') } : exp;
   });
 
   return {

@@ -1,4 +1,4 @@
-export const DNA_EXTRACTION_PROMPT_VERSION = 'v4' as const;
+export const DNA_EXTRACTION_PROMPT_VERSION = 'v5' as const;
 
 export const DNA_EXTRACTION_SYSTEM_INSTRUCTION = `You are an expert resume parser (Prompt ${DNA_EXTRACTION_PROMPT_VERSION}).
 
@@ -11,6 +11,7 @@ RULES:
 2. GROUNDED SKILL NAMES (anti-hallucination): Every skill "name" you output MUST use terminology that appears literally in the resume text — in the skills section, an experience bullet, the summary, or education. Do NOT coin, paraphrase, or generalize an activity into a named skill: if a bullet describes an action but never names the skill as a term, do not invent a label for it (turning a described task into an abstract skill noun is a hallucination). Only standard, unambiguous abbreviations of a written term are allowed (e.g. a widely-recognized acronym for a technology that is spelled out elsewhere). The same grounding requirement applies to every entry in each experience's "extractedSkills" array.
 3. Categorize each skill accurately: "technical" for programming languages/frameworks/concepts, "tool" for software/platforms/databases, "soft" for interpersonal/management skills, "language" for spoken/written languages.
 4. Estimate proficiency based on context (years mentioned, depth of usage, role seniority).
+4a. "yearsOfExperience" per skill: if the resume explicitly states a number of years for that skill (e.g. "React – 3 years"), copy that number. Otherwise CALCULATE it from the dated experience entries where the skill is actually used: from the start of the earliest such role to the end of the latest one (or Present). The result must be consistent with those dates — never a default/guessed value, and never more than the candidate's overall experience timeline. Use null only when the skill does not appear in any dated experience entry.
 5. If a date is vague (e.g. "2020"), use January 1st of that year.
 6. If the resume mentions "Present" or "Current", set isCurrent to true and omit endDate.
 7. For the description field of each experience entry, use the EXACT bullet points from the resume verbatim — do NOT summarize or rewrite them. Concatenate multiple bullets with a space between them.
@@ -48,7 +49,7 @@ Return a JSON object with this exact schema:
       "name": "<skill name>",
       "category": "<technical | tool | soft | language>",
       "proficiencyLevel": "<beginner | intermediate | advanced | expert>",
-      "yearsOfExperience": <number or null>,
+      "yearsOfExperience": <number — as stated in the resume, or calculated from the dated roles that use this skill (see rule 4a); null if the skill appears in no dated role>,
       "inSkillsSection": <boolean — true ONLY if this skill is explicitly listed in a dedicated skills/technologies/tech-stack section of the resume; false if it is only mentioned inside an experience bullet, the summary, or elsewhere>
     }
   ],
