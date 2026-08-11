@@ -1,0 +1,382 @@
+{
+  "text": "Hi Alex, thanks for coming in. I'm Jamie, and I'll be your interviewer today. Hi Jamie, thanks for having me. Glad to be here. Let's jump right in. Can you describe a time you had to optimize a slow API endpoint? Sure, um, yeah. So, I was working on a user profile service, and retrieving a user's full profile was taking upwards of 5 seconds. It was like a bottleneck. We traced it back to several joins on a large PostgreSQL database. What steps did you take to improve its performance? Well, first, we identified the slowest queries using the PostgreSQL query analyzer. Then, we added indexes to the most frequently queried columns in the joins. That helped a little, but not enough. We also started caching frequently accessed profiles in Redis, which significantly reduced latency for those requests. Ok, let's say we need to design a system for tracking user activity on a social media platform. How would you approach that? Hmm, ok. We'd need to handle a very high volume of events. I'd probably use a message queue like Kafka to ingest the events asynchronously. Then, consumers could process those events and store them in a data warehouse optimized for analytical queries, like BigQuery or Snowflake. What kind of data would you store for each activity event? We'd need the user ID, the type of activity, e.g., post, like, comment, the timestamp, and any relevant metadata, such as the post ID or comment ID. We'd also want to include information about the user's device and location for analytics. What are some trade-offs you considered when choosing Kafka for message queuing? Well, Kafka provides high throughput and fault tolerance, which are crucial for this use case. The trade-off is that it introduces some complexity in terms of setup and maintenance compared to, say, a simpler queue like RabbitMQ. But the scale justifies it. Let's switch gears. Imagine you're debugging an issue where a GraphQL query returns incorrect data for a specific user. Where do you start? I would start by looking at the GraphQL resolvers for the specific fields being queried. I'd add logging statements to track the data being fetched from the database or other data sources within those resolvers. And, you know, make sure I could replicate the incorrect data for that specific user consistently. What if the resolvers are calling a REST API that you suspect might be returning incorrect data? Then I would definitely focus on the REST API endpoint. I would use tools like Postman or Insomnia to make direct calls to the API with the same parameters that the resolvers are using. I would inspect the response carefully to see if the data is indeed incorrect there. How would you handle pagination for a large list of users in a REST API? I'd use cursor-based pagination. Instead of offset-based pagination, which can become inefficient with large datasets, cursor-based uses a unique identifier, like a timestamp or user ID, to mark the starting point for the next page of results. What are the benefits of cursor-based pagination versus offset-based? Cursor-based pagination avoids issues like skipped or duplicate records when the underlying data is changing frequently. Offset-based pagination can become problematic if records are inserted or deleted while the user is paging through the results. In a Node.js application, how do you handle potential memory leaks? Memory leaks can be tricky. I'd use tools like the Node.js Inspector or Heapdump to take snapshots of the heap and identify objects that are not being garbage collected. Common causes include unclosed connections, event listeners that are not properly removed, and closures that are holding onto large objects. How do you ensure data consistency between your application and your PostgreSQL database? Transactions are key. I would always wrap database operations in transactions to ensure that either all operations succeed or none do, using the ACID properties to our advantage, particularly atomicity and consistency. For more complex scenarios, I might use techniques like two-phase commit, but that's more rare. What considerations do you keep in mind when designing database indexes? It's a balance. Indexes speed up read operations, but they can slow down write operations because the index also needs to be updated. I would only create indexes on columns that are frequently used in WHERE clauses or JOIN conditions. Too many indexes can hurt performance. Let's say you need to choose between using Redis as a cache versus memcached. What factors influence your decision? Redis offers more advanced features like data persistence, pub, sub, and more complex data structures. If I need those features, Redis is the clear choice. If I just need a simple in-memory key value store for caching and data loss is acceptable, memcached might be simpler and faster. But Redis is probably the better choice. How do you approach writing unit tests for a complex function in TypeScript? I'd start by breaking the function down into smaller, testable units. I'd use mocking frameworks to isolate the function from its dependencies. I'd write tests for all the different input scenarios and edge cases to ensure that the function behaves correctly under all circumstances. That's great, Alex. Thanks for your time. Do you have any questions for me? Yes, what are some of the biggest challenges the team is currently facing? Right now we are working on scaling our recommendation engine. That sounds like a fun challenge. Thanks again for the interview, Jamie.",
+  "segments": [
+    {
+      "start": 0,
+      "end": 4.960000038146973,
+      "text": "Hi Alex, thanks for coming in. I'm Jamie, and I'll be your interviewer today."
+    },
+    {
+      "start": 4.960000038146973,
+      "end": 8.15999984741211,
+      "text": "Hi Jamie, thanks for having me. Glad to be here."
+    },
+    {
+      "start": 8.15999984741211,
+      "end": 14.15999984741211,
+      "text": "Let's jump right in. Can you describe a time you had to optimize a slow API endpoint?"
+    },
+    {
+      "start": 14.15999984741211,
+      "end": 18.239999771118164,
+      "text": "Sure, um, yeah. So, I was working on a user profile service,"
+    },
+    {
+      "start": 18.239999771118164,
+      "end": 23.600000381469727,
+      "text": "and retrieving a user's full profile was taking upwards of 5 seconds. It was like a bottleneck."
+    },
+    {
+      "start": 23.600000381469727,
+      "end": 27.920000076293945,
+      "text": "We traced it back to several joins on a large PostgreSQL database."
+    },
+    {
+      "start": 27.920000076293945,
+      "end": 31.1200008392334,
+      "text": "What steps did you take to improve its performance?"
+    },
+    {
+      "start": 31.1200008392334,
+      "end": 36.47999954223633,
+      "text": "Well, first, we identified the slowest queries using the PostgreSQL query analyzer."
+    },
+    {
+      "start": 36.47999954223633,
+      "end": 40.880001068115234,
+      "text": "Then, we added indexes to the most frequently queried columns in the joins."
+    },
+    {
+      "start": 40.880001068115234,
+      "end": 44.79999923706055,
+      "text": "That helped a little, but not enough. We also started caching frequently"
+    },
+    {
+      "start": 44.79999923706055,
+      "end": 50,
+      "text": "accessed profiles in Redis, which significantly reduced latency for those requests."
+    },
+    {
+      "start": 50,
+      "end": 55.91999816894531,
+      "text": "Ok, let's say we need to design a system for tracking user activity on a social media platform."
+    },
+    {
+      "start": 55.91999816894531,
+      "end": 57.68000030517578,
+      "text": "How would you approach that?"
+    },
+    {
+      "start": 57.68000030517578,
+      "end": 61.279998779296875,
+      "text": "Hmm, ok. We'd need to handle a very high volume of events."
+    },
+    {
+      "start": 61.279998779296875,
+      "end": 65.83999633789062,
+      "text": "I'd probably use a message queue like Kafka to ingest the events asynchronously."
+    },
+    {
+      "start": 65.83999633789062,
+      "end": 69.83999633789062,
+      "text": "Then, consumers could process those events and store them in a data warehouse"
+    },
+    {
+      "start": 69.83999633789062,
+      "end": 73.83999633789062,
+      "text": "optimized for analytical queries, like BigQuery or Snowflake."
+    },
+    {
+      "start": 73.83999633789062,
+      "end": 77.19999694824219,
+      "text": "What kind of data would you store for each activity event?"
+    },
+    {
+      "start": 77.19999694824219,
+      "end": 83.5199966430664,
+      "text": "We'd need the user ID, the type of activity, e.g., post, like, comment, the timestamp,"
+    },
+    {
+      "start": 83.5199966430664,
+      "end": 87.44000244140625,
+      "text": "and any relevant metadata, such as the post ID or comment ID."
+    },
+    {
+      "start": 87.44000244140625,
+      "end": 92.55999755859375,
+      "text": "We'd also want to include information about the user's device and location for analytics."
+    },
+    {
+      "start": 92.55999755859375,
+      "end": 97.12000274658203,
+      "text": "What are some trade-offs you considered when choosing Kafka for message queuing?"
+    },
+    {
+      "start": 97.12000274658203,
+      "end": 102.16000366210938,
+      "text": "Well, Kafka provides high throughput and fault tolerance, which are crucial for this use case."
+    },
+    {
+      "start": 102.16000366210938,
+      "end": 106.55999755859375,
+      "text": "The trade-off is that it introduces some complexity in terms of setup and maintenance"
+    },
+    {
+      "start": 106.55999755859375,
+      "end": 111.91999816894531,
+      "text": "compared to, say, a simpler queue like RabbitMQ. But the scale justifies it."
+    },
+    {
+      "start": 111.91999816894531,
+      "end": 113.36000061035156,
+      "text": "Let's switch gears."
+    },
+    {
+      "start": 113.36000061035156,
+      "end": 119.5199966430664,
+      "text": "Imagine you're debugging an issue where a GraphQL query returns incorrect data for a specific user."
+    },
+    {
+      "start": 119.5199966430664,
+      "end": 120.95999908447266,
+      "text": "Where do you start?"
+    },
+    {
+      "start": 120.95999908447266,
+      "end": 125.5999984741211,
+      "text": "I would start by looking at the GraphQL resolvers for the specific fields being queried."
+    },
+    {
+      "start": 125.5999984741211,
+      "end": 129.52000427246094,
+      "text": "I'd add logging statements to track the data being fetched from the database"
+    },
+    {
+      "start": 129.52000427246094,
+      "end": 131.9199981689453,
+      "text": "or other data sources within those resolvers."
+    },
+    {
+      "start": 131.9199981689453,
+      "end": 137.27999877929688,
+      "text": "And, you know, make sure I could replicate the incorrect data for that specific user consistently."
+    },
+    {
+      "start": 137.27999877929688,
+      "end": 143.1199951171875,
+      "text": "What if the resolvers are calling a REST API that you suspect might be returning incorrect data?"
+    },
+    {
+      "start": 143.1199951171875,
+      "end": 146.16000366210938,
+      "text": "Then I would definitely focus on the REST API endpoint."
+    },
+    {
+      "start": 146.16000366210938,
+      "end": 151.27999877929688,
+      "text": "I would use tools like Postman or Insomnia to make direct calls to the API with the same"
+    },
+    {
+      "start": 151.27999877929688,
+      "end": 155.36000061035156,
+      "text": "parameters that the resolvers are using. I would inspect the response carefully"
+    },
+    {
+      "start": 155.36000061035156,
+      "end": 157.9199981689453,
+      "text": "to see if the data is indeed incorrect there."
+    },
+    {
+      "start": 157.9199981689453,
+      "end": 162.72000122070312,
+      "text": "How would you handle pagination for a large list of users in a REST API?"
+    },
+    {
+      "start": 162.72000122070312,
+      "end": 166.9600067138672,
+      "text": "I'd use cursor-based pagination. Instead of offset-based pagination,"
+    },
+    {
+      "start": 166.9600067138672,
+      "end": 172.16000366210938,
+      "text": "which can become inefficient with large datasets, cursor-based uses a unique identifier,"
+    },
+    {
+      "start": 172.16000366210938,
+      "end": 177.1199951171875,
+      "text": "like a timestamp or user ID, to mark the starting point for the next page of results."
+    },
+    {
+      "start": 177.1199951171875,
+      "end": 181.67999267578125,
+      "text": "What are the benefits of cursor-based pagination versus offset-based?"
+    },
+    {
+      "start": 181.67999267578125,
+      "end": 186.72000122070312,
+      "text": "Cursor-based pagination avoids issues like skipped or duplicate records when the underlying"
+    },
+    {
+      "start": 186.72000122070312,
+      "end": 191.83999633789062,
+      "text": "data is changing frequently. Offset-based pagination can become problematic if records"
+    },
+    {
+      "start": 191.83999633789062,
+      "end": 195.60000610351562,
+      "text": "are inserted or deleted while the user is paging through the results."
+    },
+    {
+      "start": 195.60000610351562,
+      "end": 200.8800048828125,
+      "text": "In a Node.js application, how do you handle potential memory leaks?"
+    },
+    {
+      "start": 200.8800048828125,
+      "end": 206.39999389648438,
+      "text": "Memory leaks can be tricky. I'd use tools like the Node.js Inspector or Heapdump to"
+    },
+    {
+      "start": 206.39999389648438,
+      "end": 210.8800048828125,
+      "text": "take snapshots of the heap and identify objects that are not being garbage collected."
+    },
+    {
+      "start": 210.8800048828125,
+      "end": 216,
+      "text": "Common causes include unclosed connections, event listeners that are not properly removed,"
+    },
+    {
+      "start": 216,
+      "end": 218.8000030517578,
+      "text": "and closures that are holding onto large objects."
+    },
+    {
+      "start": 218.8000030517578,
+      "end": 224.47999572753906,
+      "text": "How do you ensure data consistency between your application and your PostgreSQL database?"
+    },
+    {
+      "start": 224.47999572753906,
+      "end": 229.44000244140625,
+      "text": "Transactions are key. I would always wrap database operations in transactions to ensure"
+    },
+    {
+      "start": 229.44000244140625,
+      "end": 234.9600067138672,
+      "text": "that either all operations succeed or none do, using the ACID properties to our advantage,"
+    },
+    {
+      "start": 234.9600067138672,
+      "end": 237.44000244140625,
+      "text": "particularly atomicity and consistency."
+    },
+    {
+      "start": 237.44000244140625,
+      "end": 242.8800048828125,
+      "text": "For more complex scenarios, I might use techniques like two-phase commit, but that's more rare."
+    },
+    {
+      "start": 242.8800048828125,
+      "end": 247.52000427246094,
+      "text": "What considerations do you keep in mind when designing database indexes?"
+    },
+    {
+      "start": 247.52000427246094,
+      "end": 250.63999938964844,
+      "text": "It's a balance. Indexes speed up read operations,"
+    },
+    {
+      "start": 250.63999938964844,
+      "end": 254.9600067138672,
+      "text": "but they can slow down write operations because the index also needs to be updated."
+    },
+    {
+      "start": 254.9600067138672,
+      "end": 258.0799865722656,
+      "text": "I would only create indexes on columns that are frequently"
+    },
+    {
+      "start": 258.0799865722656,
+      "end": 263.1199951171875,
+      "text": "used in WHERE clauses or JOIN conditions. Too many indexes can hurt performance."
+    },
+    {
+      "start": 263.1199951171875,
+      "end": 267.67999267578125,
+      "text": "Let's say you need to choose between using Redis as a cache versus memcached."
+    },
+    {
+      "start": 267.67999267578125,
+      "end": 270.0799865722656,
+      "text": "What factors influence your decision?"
+    },
+    {
+      "start": 270.0799865722656,
+      "end": 273.9200134277344,
+      "text": "Redis offers more advanced features like data persistence, pub,"
+    },
+    {
+      "start": 273.9200134277344,
+      "end": 279.20001220703125,
+      "text": "sub, and more complex data structures. If I need those features, Redis is the clear choice."
+    },
+    {
+      "start": 279.20001220703125,
+      "end": 284.6400146484375,
+      "text": "If I just need a simple in-memory key value store for caching and data loss is acceptable,"
+    },
+    {
+      "start": 284.6400146484375,
+      "end": 289.5199890136719,
+      "text": "memcached might be simpler and faster. But Redis is probably the better choice."
+    },
+    {
+      "start": 289.5199890136719,
+      "end": 294.0799865722656,
+      "text": "How do you approach writing unit tests for a complex function in TypeScript?"
+    },
+    {
+      "start": 294.0799865722656,
+      "end": 298,
+      "text": "I'd start by breaking the function down into smaller, testable units."
+    },
+    {
+      "start": 298,
+      "end": 301.8399963378906,
+      "text": "I'd use mocking frameworks to isolate the function from its dependencies."
+    },
+    {
+      "start": 301.8399963378906,
+      "end": 304.7200012207031,
+      "text": "I'd write tests for all the different input scenarios and"
+    },
+    {
+      "start": 304.7200012207031,
+      "end": 309.20001220703125,
+      "text": "edge cases to ensure that the function behaves correctly under all circumstances."
+    },
+    {
+      "start": 309.20001220703125,
+      "end": 314.32000732421875,
+      "text": "That's great, Alex. Thanks for your time. Do you have any questions for me?"
+    },
+    {
+      "start": 314.3999938964844,
+      "end": 318.32000732421875,
+      "text": "Yes, what are some of the biggest challenges the team is currently facing?"
+    },
+    {
+      "start": 318.32000732421875,
+      "end": 322,
+      "text": "Right now we are working on scaling our recommendation engine."
+    },
+    {
+      "start": 322,
+      "end": 326.1600036621094,
+      "text": "That sounds like a fun challenge. Thanks again for the interview, Jamie."
+    }
+  ],
+  "language": "english",
+  "durationSeconds": 325.9599914550781
+}

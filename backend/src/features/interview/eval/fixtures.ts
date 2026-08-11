@@ -36,13 +36,6 @@ export interface FillerWordsSummary {
   examples: FillerWordTruth[];
 }
 
-// ── Sentiment / pacing ground truth ────────────────────────────────
-
-export interface SentimentTruth {
-  overallTone: 'confident' | 'neutral' | 'hesitant';
-  clarityScore: number;
-}
-
 // ── Full fixture ───────────────────────────────────────────────────
 
 export interface InterviewFixture {
@@ -50,15 +43,41 @@ export interface InterviewFixture {
   description: string;
   /** The "ground truth" reference transcript (manually verified). */
   referenceTranscript: string;
-  /** Ground-truth STAR segment map. */
+  /** Ground-truth STAR segment map. Labels absent here are expected to be
+   *  weak/unclear in the transcript — used by the live-mode STAR check
+   *  (see liveEval.ts) as "this component should score low", since there's
+   *  no word-boundary ground truth to compare against real LLM output
+   *  (that needs real Whisper timestamps, which these text fixtures don't
+   *  have — see the file header in runEval.ts). */
   starMap: StarSegment[];
-  /** Ground-truth filler word counts. */
+  /**
+   * Ground truth for the prompt's "Candidate vs. Team Actions" rule — should
+   * the live LLM set teamOnlyLanguageDetected=true for the Action component?
+   * Only iv-02 is deliberately written with heavy "we" language and no
+   * individual ownership; the others use "I" throughout.
+   */
+  expectedTeamOnlyLanguage: boolean;
+  /**
+   * Ground-truth filler word counts — restricted to words FillerWordService
+   * actually detects (see fillerWordService.ts's FILLER_PHRASES). Words like
+   * "so"/"yeah" are common disfluency markers too, but they're also
+   * extremely common as genuine sentence connectors/acknowledgements, so
+   * FillerWordService deliberately doesn't flag them (same false-positive
+   * risk as bare "like" — see fillerWordService.ts). Ground truth here must
+   * match what the real service can safely detect, not an idealized human
+   * count, or every fixture would show a permanent, uninformative mismatch.
+   */
   fillerWords: FillerWordsSummary;
-  /** Ground-truth sentiment / pacing. */
-  sentiment: SentimentTruth;
   /** Expected overall confidence score range [min, max] (0-100). */
   expectedScoreRange: { min: number; max: number };
-  /** Words per minute (ground truth). */
+  /**
+   * Words per minute (ground truth) — must equal
+   * PacingService.calculate(referenceTranscript, [], durationSec).wordsPerMinute
+   * exactly, i.e. word count of referenceTranscript / durationSec * 60. Kept
+   * as an explicit field (rather than computed inline) so a fixture typo in
+   * durationSec or the transcript is caught by scoreCalibration's checks
+   * instead of silently reflecting whatever the code currently computes.
+   */
   pacingWpm: number;
   /** Duration of the clip in seconds (for rate calculations). */
   durationSec: number;
@@ -84,14 +103,15 @@ export const INTERVIEW_FIXTURES: InterviewFixture[] = [
       { label: 'action', startWord: 41, endWord: 68 },
       { label: 'result', startWord: 69, endWord: 90 },
     ],
+    expectedTeamOnlyLanguage: false,
     fillerWords: {
       totalCount: 0,
       ratePerMinute: 0,
       examples: [],
     },
-    sentiment: { overallTone: 'confident', clarityScore: 92 },
     expectedScoreRange: { min: 80, max: 100 },
-    pacingWpm: 145,
+    // 94 words / 45s * 60 = 125 (see the pacingWpm field doc above)
+    pacingWpm: 125,
     durationSec: 45,
   },
 
@@ -111,17 +131,20 @@ export const INTERVIEW_FIXTURES: InterviewFixture[] = [
       { label: 'action', startWord: 31, endWord: 56 },
       { label: 'result', startWord: 57, endWord: 72 },
     ],
+    expectedTeamOnlyLanguage: true,
+    // The transcript also has one "so" — a genuine disfluency here, but not
+    // ground-truthed since FillerWordService can't safely flag bare "so"
+    // (see the fillerWords field doc above).
     fillerWords: {
-      totalCount: 3,
-      ratePerMinute: 4.5,
+      totalCount: 2,
+      ratePerMinute: 3.0,
       examples: [
         { word: 'um', count: 2 },
-        { word: 'so', count: 1 },
       ],
     },
-    sentiment: { overallTone: 'neutral', clarityScore: 72 },
     expectedScoreRange: { min: 55, max: 80 },
-    pacingWpm: 130,
+    // 75 words / 40s * 60 = 113
+    pacingWpm: 113,
     durationSec: 40,
   },
 
@@ -140,19 +163,21 @@ export const INTERVIEW_FIXTURES: InterviewFixture[] = [
       { label: 'action', startWord: 30, endWord: 52 },
       // No proper result — the last sentence is vague
     ],
+    expectedTeamOnlyLanguage: false,
+    // The transcript also has two "so" — not ground-truthed, see the
+    // fillerWords field doc above.
     fillerWords: {
       totalCount: 10,
       ratePerMinute: 15.0,
       examples: [
-        { word: 'um', count: 3 },
+        { word: 'um', count: 4 },
         { word: 'like', count: 4 },
-        { word: 'so', count: 2 },
-        { word: 'basically', count: 1 },
+        { word: 'basically', count: 2 },
       ],
     },
-    sentiment: { overallTone: 'hesitant', clarityScore: 45 },
     expectedScoreRange: { min: 25, max: 50 },
-    pacingWpm: 155,
+    // 68 words / 40s * 60 = 102
+    pacingWpm: 102,
     durationSec: 40,
   },
 
@@ -172,14 +197,15 @@ export const INTERVIEW_FIXTURES: InterviewFixture[] = [
       { label: 'action', startWord: 36, endWord: 67 },
       { label: 'result', startWord: 68, endWord: 93 },
     ],
+    expectedTeamOnlyLanguage: false,
     fillerWords: {
       totalCount: 0,
       ratePerMinute: 0,
       examples: [],
     },
-    sentiment: { overallTone: 'confident', clarityScore: 95 },
     expectedScoreRange: { min: 85, max: 100 },
-    pacingWpm: 140,
+    // 89 words / 50s * 60 = 107
+    pacingWpm: 107,
     durationSec: 50,
   },
 
@@ -198,22 +224,23 @@ export const INTERVIEW_FIXTURES: InterviewFixture[] = [
       { label: 'action', startWord: 32, endWord: 51 },
       // Result is vague / not quantified
     ],
+    expectedTeamOnlyLanguage: false,
+    // The transcript also has one "so", one "yeah", and one "I guess" — not
+    // ground-truthed, see the fillerWords field doc above.
     fillerWords: {
-      totalCount: 14,
-      ratePerMinute: 21.0,
+      totalCount: 12,
+      ratePerMinute: 18.0,
       examples: [
         { word: 'um', count: 3 },
         { word: 'uh', count: 3 },
         { word: 'like', count: 3 },
         { word: 'you know', count: 2 },
-        { word: 'so', count: 1 },
-        { word: 'yeah', count: 1 },
-        { word: 'I guess', count: 1 },
+        { word: 'kind of', count: 1 },
       ],
     },
-    sentiment: { overallTone: 'hesitant', clarityScore: 30 },
     expectedScoreRange: { min: 10, max: 35 },
-    pacingWpm: 160,
+    // 68 words / 40s * 60 = 102
+    pacingWpm: 102,
     durationSec: 40,
   },
 ];
