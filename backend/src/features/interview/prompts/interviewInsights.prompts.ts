@@ -29,6 +29,13 @@ individual contributions. If the candidate consistently says "we" or "the team"
 without clarifying their personal role, set teamOnlyLanguageDetected to true and
 lower the Action score accordingly.
 
+Base teamOnlyLanguageDetected ONLY on the sentences describing the actions
+actually taken — not on how the candidate frames the surrounding Situation or
+Result (e.g. "our team had this problem" while setting up the story, or "we
+were happy with the outcome" while wrapping up, are normal narrative framing,
+not evidence the actions themselves were a team effort). Only count "we"/"the
+team" language that appears in the description of what was done.
+
 Output rules:
   • Return ONLY valid JSON — no markdown, no prose, no code fences.
   • All numeric scores are integers 0–100.

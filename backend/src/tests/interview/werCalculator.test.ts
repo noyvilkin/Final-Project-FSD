@@ -69,10 +69,15 @@ describe('calculateWer', () => {
     expect(result.wer).toBeCloseTo(1.0);
   });
 
-  it('handles empty reference (returns Infinity)', () => {
+  it('handles empty reference (returns 1, not Infinity)', () => {
+    // Infinity is mathematically "honest" here (division by zero reference
+    // words) but JSON.stringify silently turns it into null, which would
+    // make a saved eval report look like this field was never computed
+    // instead of "totally wrong". 1 (100% error) stays JSON-safe.
     const result = calculateWer('', 'some words');
-    expect(result.wer).toBe(Infinity);
+    expect(result.wer).toBe(1);
     expect(result.referenceLength).toBe(0);
+    expect(JSON.parse(JSON.stringify(result)).wer).toBe(1);
   });
 
   it('handles both empty (returns 0)', () => {
