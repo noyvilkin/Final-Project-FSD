@@ -1,8 +1,6 @@
 # SkillUp (Final-Project-FSD) Deployment Guide
 
-This guide provides instructions for deploying the SkillUp application (formerly CareerPilot) on the college's Linux server. It covers process management with PM2, SSL certificate configuration, and deployment automation.
-
-> **Note:** PM2 process names in the snippets below may still say `careerpilot-backend` if that is what is already running on the server. Rename in PM2 when convenient (`pm2 delete` / `pm2 start` under `skillup-backend`), or keep the existing name — it does not affect the product brand.
+This guide provides instructions for deploying the SkillUp application on the college's Linux server. It covers process management with PM2, SSL certificate configuration, and deployment automation.
 
 ## 🏗 Network & Server Architecture
 
