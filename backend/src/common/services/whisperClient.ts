@@ -69,6 +69,16 @@ interface VerboseJsonResponse {
  * Optional env vars:
  *   WHISPER_LANGUAGE — BCP-47 hint (e.g. "en"). Omit to let Whisper auto-detect.
  */
+// Retryable OpenAI HTTP status codes — rate limiting and transient
+// server-side failures. Mirrors ColmanLLMClient's retry classification.
+const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 1_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export class WhisperClient {
   private static openai: OpenAI | null = null;
 
@@ -98,17 +108,29 @@ export class WhisperClient {
    * Transcribe an audio file given its absolute local path.
    *
    * Uses `verbose_json` response format so we receive per-segment timestamps.
-   * The file is streamed — it is not read fully into memory.
+   * The file is streamed — it is not read fully into memory. Retries
+   * transient failures (rate limits, 5xx, network errors) with exponential
+   * backoff, mirroring ColmanLLMClient — transcription is the first, most
+   * expensive step of the pipeline, so a single dropped connection
+   * shouldn't discard the whole run.
    */
   static async transcribe(audioPath: string): Promise<WhisperTranscribeResult> {
+    return WhisperClient.transcribeWithRetry(audioPath, 0);
+  }
+
+  private static async transcribeWithRetry(
+    audioPath: string,
+    attempt: number
+  ): Promise<WhisperTranscribeResult> {
     const client = WhisperClient.getClient();
     const model  = WhisperClient.getModel();
     const lang   = WhisperClient.getLanguageHint();
 
-    appLogger.info('[WhisperClient] Starting transcription', { model, audioPath, lang });
+    appLogger.info('[WhisperClient] Starting transcription', { model, audioPath, lang, attempt });
 
     try {
-      // OpenAI SDK accepts a ReadStream as the file parameter
+      // A fresh stream per attempt — a stream already consumed (or errored
+      // mid-upload) by a previous attempt can't be replayed for a retry.
       const fileStream = createReadStream(audioPath);
 
       const createParams: Record<string, unknown> = {
@@ -155,6 +177,26 @@ export class WhisperClient {
       return result;
 
     } catch (err: unknown) {
+      const isRetryableApiError =
+        err instanceof OpenAI.APIError &&
+        typeof err.status === 'number' &&
+        RETRYABLE_STATUS_CODES.includes(err.status);
+      const isRetryableNetworkError =
+        err instanceof Error && !(err instanceof OpenAI.APIError) && /fetch|network|ECONNRESET|ETIMEDOUT/i.test(err.message);
+      const isRetryable = isRetryableApiError || isRetryableNetworkError;
+
+      if (isRetryable && attempt < MAX_RETRIES) {
+        const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+        appLogger.warn('[WhisperClient] Retrying after transient failure', {
+          attempt: attempt + 1,
+          maxRetries: MAX_RETRIES,
+          delayMs: delay,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await sleep(delay);
+        return WhisperClient.transcribeWithRetry(audioPath, attempt + 1);
+      }
+
       if (err instanceof OpenAI.APIError) {
         appLogger.error('[WhisperClient] OpenAI API error', {
           status:  err.status,

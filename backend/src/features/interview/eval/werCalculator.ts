@@ -113,8 +113,14 @@ export function calculateWer(reference: string, hypothesis: string): WerDetail {
   const hypTokens = normaliseTranscript(hypothesis);
 
   if (refTokens.length === 0) {
+    // Mathematically WER is undefined here (division by zero reference
+    // words); Infinity would be the "honest" value, but JSON.stringify
+    // silently turns Infinity into null, which would make a report showing
+    // this case look like the field was never computed instead of "totally
+    // wrong". 1 (100% error) stays JSON-safe and still fails any real
+    // threshold check.
     return {
-      wer: hypTokens.length === 0 ? 0 : Infinity,
+      wer: hypTokens.length === 0 ? 0 : 1,
       substitutions: 0,
       insertions: hypTokens.length,
       deletions: 0,

@@ -39,6 +39,10 @@ export interface EvalPassFail {
   fillerPassed: boolean;
   /** Number of fixtures within filler tolerance. */
   fillerWithinTolerance: number;
+  /** Did PacingService's real output match fixture ground truth for all fixtures? */
+  pacingPassed: boolean;
+  /** Number of fixtures within pacing tolerance. */
+  pacingWithinTolerance: number;
   /** Was calibration aligned across all fixtures? */
   calibrationAligned: boolean;
 }
@@ -51,6 +55,7 @@ export interface FixtureResult {
   starAccuracy: number;
   fillerWithinTolerance: boolean;
   fillerDelta: number;
+  pacingWithinTolerance: boolean;
   calibrationAligned: boolean;
 }
 
@@ -76,10 +81,14 @@ export function determinePassFail(results: FixtureResult[]): EvalPassFail {
   const fillerWithinTolerance = results.filter((r) => r.fillerWithinTolerance).length;
   const fillerPassed = fillerWithinTolerance === total;
 
+  // Pacing: all fixtures within tolerance (real PacingService output)
+  const pacingWithinTolerance = results.filter((r) => r.pacingWithinTolerance).length;
+  const pacingPassed = pacingWithinTolerance === total;
+
   // Calibration: all fixtures aligned
   const calibrationAligned = results.every((r) => r.calibrationAligned);
 
-  const passed = werPassed && starActionPassed && fillerPassed;
+  const passed = werPassed && starActionPassed && fillerPassed && pacingPassed;
 
   return {
     passed,
@@ -91,6 +100,8 @@ export function determinePassFail(results: FixtureResult[]): EvalPassFail {
     starAccuracy,
     fillerPassed,
     fillerWithinTolerance,
+    pacingPassed,
+    pacingWithinTolerance,
     calibrationAligned,
   };
 }
