@@ -2,8 +2,6 @@
 
 Career-readiness platform for students and job seekers: **resume / Professional DNA**, **CV optimization**, **programming-assignment grading**, and **interview readiness** (Whisper + STAR feedback).
 
-> Formerly named **CareerPilot**. Product name is now **SkillUp**. Some legacy identifiers (local bucket names, tmp dirs, seed emails) may still say `careerpilot` in code or older env files — override via env where needed.
-
 ## Repo layout
 
 | Path | Role |
@@ -78,7 +76,7 @@ mc cp --attr "content-type=application/x-directory" /dev/null local/skillup-uplo
 
 Console UI: http://localhost:9001 (login: `minioadmin` / `minioadmin`)
 
-> **Note:** The bucket is also auto-created on first upload by the app. If you already have a local `careerpilot-uploads` bucket, either keep `S3_BUCKET_NAME=careerpilot-uploads` or rename/recreate as `skillup-uploads`.
+> **Note:** The bucket is also auto-created on first upload by the app.
 
 ### Scripts (`backend/`)
 
