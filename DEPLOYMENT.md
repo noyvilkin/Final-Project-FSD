@@ -1,6 +1,6 @@
-# CareerPilot (Final-Project-FSD) Deployment Guide
+# SkillUp (Final-Project-FSD) Deployment Guide
 
-This guide provides instructions for deploying the CareerPilot application on the college's Linux server. It covers process management with PM2, SSL certificate configuration, and deployment automation.
+This guide provides instructions for deploying the SkillUp application on the college's Linux server. It covers process management with PM2, SSL certificate configuration, and deployment automation.
 
 ## 🏗 Network & Server Architecture
 
