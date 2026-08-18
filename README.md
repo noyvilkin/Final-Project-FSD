@@ -249,11 +249,3 @@ npm run lint
 ```
 
 Set `VITE_API_URL` to the backend origin (default local: `http://localhost:4000`).
-
----
-
-## Further reading
-
-- `DEPLOYMENT.md` — PM2 / college server deployment
-- `backend/src/features/assignment/tests/faulty-packages/README.md` — assignment eval fixtures
-- `Presentation-Prep-Guide.md` (local notes, outside this repo) — presentation cheat sheet
