@@ -196,18 +196,31 @@ curl -X POST http://localhost:4000/api/uploads \
   -F "resumes=@./cv.pdf"
 ```
 
-### Assignment analysis pipeline
+### Feature modules
 
-When an assignment is uploaded, the upload request returns immediately and the backend runs
-the full pipeline in the background (the client polls for status):
+Each feature owns its own routes/services/models under `backend/src/features/`. All AI text
+work flows through the shared `LLMClient`; Whisper handles speech-to-text for interviews.
 
-1. **Upload** — files stored in MinIO under `assignments/{userId}/{assignmentId}/`
-2. **Scan** — ZIP extracted; noise filtered; source files parsed
-3. **Analyse** — project structure, language, and frameworks detected; PDF requirements extracted
-4. **AI feedback** — source + requirements sent to Colman LLM (`llama3.1:8b` typical; temp 0 + JSON schema)
-5. **Results** — structured feedback saved on the assignment record
+| Module | What it does | AI |
+| --- | --- | --- |
+| **Auth** | Email/password + Google sign-in; JWT access/refresh cookies | — |
+| **Resume** | PDF → Professional DNA; JD keyword extraction; hybrid match score; honest bullet rewrite; `.docx` export | LLM |
+| **Profile analysis** | Analysed profile dashboard (top skills, strengths, gaps) | LLM |
+| **Assignments** | ZIP solution + PDF requirements → structured grade, requirement coverage, feedback, history | LLM |
+| **Interviews** | Audio/video → transcript → STAR / filler-word / pace insights, synced to the recording | Whisper + LLM |
 
-Status machine: `pending` → `scanning` → `processing` → `completed` | `failed`
+### Background processing
+
+The longer media/AI pipelines (**assignments** and **interviews**) run as background jobs:
+the upload request returns immediately and the client polls a status endpoint until the work
+reaches a terminal state.
+
+- **Assignments:** `pending → scanning → processing → completed | failed`
+  (download → ZIP scan + noise filter → language/framework detect + PDF requirement extraction
+  → LLM grading with temp 0 + JSON schema → saved feedback).
+- **Interviews:** upload → transcribe (Whisper) → analyse (LLM insights) → poll status → results.
+
+Shorter requests (resume optimization, profile analysis, hybrid score) respond synchronously.
 
 ### API routes (summary)
 
